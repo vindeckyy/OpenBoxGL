@@ -60,7 +60,7 @@ dev-venv:
 	python3 -m venv .venv-dev
 	.venv-dev/bin/pip install --disable-pip-version-check -r requirements-dev.txt
 
-# Full verification gate: ruff, runtime_modules, v1_contract, version_sync,
+# Full verification gate: ruff, runtime_modules, api_contract, state_schema, version_sync,
 # frontend, i18n, py_compile, tests under coverage, coverage floors
 # (total + web_app + changed-line + new-module), tokens.
 # Dev-only dependencies live in .venv-dev; the runtime app stays dep-free.

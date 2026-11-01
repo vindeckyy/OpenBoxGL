@@ -637,9 +637,9 @@ OpenBox/
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
 ├── webapp_state.py         SSE/event bus facade over the canonical state owner
-├── routes.py               GET/POST route tables (frozen v1 surface + additive v2 routes)
+├── routes.py               GET/POST route tables (v2 aliases + opt-in v1 bridge)
 ├── routes/                 `@route` decorator registry only (handlers are imported by web_app.py)
-├── contracts.py            Frozen v1 API contract (v1_contracts.json); legacy `/api/library` + `/api/launch` aliases live in handlers/library.py, handlers/sessions.py via routes.py
+├── contracts.py            Documented v1 response shapes for the generated API reference
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots

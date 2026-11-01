@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Performance no-regression gate (plan W7-04).
 
-Compares two `scripts/perf_bench.py` reports (p95 milliseconds) and fails when a measurement
-regressed against the baseline. A regression needs two conditions: the relative change is above
---max-regression percent, and the absolute change is above --min-delta-ms. The absolute floor
-matters: a metric that moves from 0.3 ms to 0.4 ms is 33% worse and completely irrelevant, so a
-ratio alone would fail builds on timer noise.
+Compares two `scripts/perf_bench.py` reports (median milliseconds, with p95 as the fallback)
+and fails when a measurement regressed against the baseline. The median is the gate statistic:
+a p95 from five runs on a shared runner is one scheduler stall away from a false failure, while
+a sustained regression moves every run. A regression needs two conditions: the relative change
+is above --max-regression percent, and the absolute change is above --min-delta-ms. The absolute
+floor matters: a metric that moves from 0.3 ms to 0.4 ms is 33% worse and completely irrelevant,
+so a ratio alone would fail builds on timer noise.
 
     python3 -B scripts/check_perf_regression.py --baseline base.json --current current.json
 """
@@ -29,13 +31,13 @@ def load(path: Path) -> dict:
     return payload
 
 
-def p95(report: dict, size: str, key: str):
+def measured(report: dict, size: str, key: str):
     section = report.get(size)
     if not isinstance(section, dict):
         return None
     value = section.get(key)
     if isinstance(value, dict):
-        value = value.get("p95_ms")
+        value = value.get("median_ms", value.get("p95_ms"))
     return value if isinstance(value, (int, float)) else None
 
 
@@ -44,8 +46,8 @@ def compare(baseline: dict, current: dict) -> list[dict]:
     for size in SIZES:
         keys = set(baseline.get(size) or {}) & set(current.get(size) or {})
         for key in sorted(keys):
-            before = p95(baseline, size, key)
-            after = p95(current, size, key)
+            before = measured(baseline, size, key)
+            after = measured(current, size, key)
             if not isinstance(before, (int, float)) or not isinstance(after, (int, float)) or before <= 0:
                 continue
             delta = after - before
