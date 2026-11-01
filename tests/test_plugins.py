@@ -404,6 +404,40 @@ def test_sandbox_process_group_isolation():
     print("  sandbox process group isolation: ok")
 
 
+def _process_alive(pid):
+    """True while the process is still running.
+
+    Windows keeps a terminated process object alive until its handles close, so
+    os.kill(pid, 0) is not a liveness test there. WaitForSingleObject reports
+    the exit instead.
+    """
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def test_sandbox_process_group_cleanup():
     """A timed-out plugin's process is killed and reaped — nothing lingers."""
     with TemporaryDirectory() as directory:
@@ -416,19 +450,7 @@ def test_sandbox_process_group_cleanup():
         with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):
             run_plugins(root, "before_launch", {"args": [], "pid_file": str(pid_file)})
         pid = int(pid_file.read_text(encoding="utf-8"))
-        try:
-            os.kill(pid, 0)
-        except PermissionError:
-            # Process exists but we cannot signal it: still alive.
-            cleaned = False
-        except OSError:
-            # No such process. POSIX raises ProcessLookupError (an OSError
-            # subclass) for a dead PID; Windows raises OSError [WinError 87]
-            # ("The parameter is incorrect") instead.
-            cleaned = True
-        else:
-            cleaned = False
-        assert cleaned, "timed-out plugin left a live process behind"
+        assert not _process_alive(pid), "timed-out plugin left a live process behind"
         # And once disabled, it is never spawned again.
         set_plugin_enabled(root, "linger.plugin", False)
         with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}, clear=True):

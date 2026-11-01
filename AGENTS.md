@@ -5,12 +5,12 @@ Read this before writing code. A convention that lives only in a human's head is
 ## Where things go
 - `openbox.py` is the shared core library for data paths, state, and launch helpers, and stays at root. Launch paths are `openbox.sh`, `openbox-native.sh`, and `web_app.py` on Linux; `openbox.cmd`, `openbox.ps1`, and `openbox-native.ps1` on Windows; `OpenBox.app` (built by `scripts/build_macos_app.sh`), `openbox.sh`, and `openbox-native.sh` on macOS, with the native window in `native_host_mac.m`. Platform seams live in `pkg/platform_compat.py` (ADR 0048, ADR 0085). Feature gates that hide platform-specific controls come from its `platform_features()` contract (ADR 0086).
 - `handlers/` - HTTP handlers, one module per domain or feature surface (library, imports, media, party, picker, etc.). Shared helpers live in `_shared.py`.
-- `pkg/parity/` - parity_* modules (clear names, cohesive cluster) plus the shared `launch_tokens.py` helper. New parity code goes there. Flat `import parity_x` still resolves via the MetaPathFinder in `pkg/parity/__init__.py`; entry points (`openbox.py`, `web_app.py`) must `import pkg.parity` before any flat `parity_*` import.
+- `pkg/parity/` - parity_* modules (clear names, cohesive cluster) plus the shared `launch_tokens.py` helper. New parity code goes there, imported as `pkg.parity.*`; flat `parity_*` imports are removed and `scripts/check_flat_imports.py` enforces it.
 - `static/` - Frontend JavaScript modules, the search worker, and app.css.
 - `themes/` - theme CSS files, each overrides `:root` tokens only.
 - `emulator_defs/` - YAML definitions.
 - `tests/` - standalone `test_*.py` scripts run via `./run_all_tests.sh` (`python3 -B file.py` style). Tests are feature/module-scoped, not a strict 1:1 mirror; every new runtime module still needs a covering test file.
-- `scripts/` - check_tests.py, check_tokens.py, check_v1_contract.py, etc.
+- `scripts/` - check_tests.py, check_tokens.py, check_api_contract.py, etc.
 - `docs/` - all markdown except README.md and LICENSE. ADR in `docs/adr/`. Superseded plans and old release notes go in `docs/archive/`, never deleted.
 - `build/`, `native_host`, `.venv-dev/`, `.coverage` - generated, never commit.
 
@@ -24,7 +24,7 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 
 ## Non-negotiables
 - Runtime stays dependency-free. `pyproject.toml` dev deps are not installed in AppImage.
-- v1 route surface is frozen (`scripts/check_v1_contract.py` + `v1_contracts.json`). Drift fails the gate.
+- The public surface is ratcheted: `/api/v2` and `/api/host` (`scripts/check_api_contract.py` + `api_contracts.json`). Drift fails the gate.
 - **The whole feature surface is ratcheted** (ADR 0060, `scripts/contracts/`).
   Routes, `KNOWN_SETTINGS`, emulator definitions, frontend modules, and the
   reliability catalog may **grow freely** and may only **shrink** by moving
@@ -43,7 +43,7 @@ New integration goes in `pkg/parity/` or `handlers/` as appropriate, never at ro
 ## Tests
 - One `test_*.py` per module, standalone-script style.
 - Run all with `./run_all_tests.sh` (walks `tests/` preferentially; root `test_*.py` only run when `tests/` has none).
-- Full gate with `make check` → `scripts/check_tests.py`: ruff, runtime_modules, v1_contract, version_sync, frontend, i18n, py_compile, tests under coverage, coverage floors (total + web_app), changed-line, new-module, tokens.
+- Full gate with `make check` → `scripts/check_tests.py`: ruff, runtime_modules, api_contract, state_schema, version_sync, frontend, i18n, py_compile, tests under coverage, coverage floors (total + web_app), changed-line, new-module, tokens.
 
 ## Before opening a PR
 - `make check` must pass locally.
