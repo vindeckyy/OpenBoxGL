@@ -808,6 +808,7 @@ jobs:
             OpenBox-x86_64-windows.zip.sha256
             OpenBox-x86_64-windows.zip.sig
             OpenBox-x86_64-windows-native-host.exe
+            OpenBox-x86_64-windows-native-host.exe.sha256
             OpenBox-x86_64-windows-native-host.exe.sig
             OpenBox-arm64-windows.zip
             OpenBox-arm64-windows.zip.sha256
