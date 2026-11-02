@@ -122,6 +122,23 @@ def _start_server(data_dir):
     return process, origin, token
 
 
+def _process_rss_mb(pid):
+    """Return resident set size in MiB for a process, or None when unavailable."""
+    try:
+        if sys.platform.startswith("linux"):
+            status = Path(f"/proc/{pid}/status").read_text(encoding="utf-8")
+            for line in status.splitlines():
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+        elif sys.platform == "darwin":
+            output = subprocess.check_output(["ps", "-o", "rss=", "-p", str(pid)], text=True).strip()
+            if output:
+                return round(int(output) / 1024, 1)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return None
+
+
 def _request(origin, token, path, method="GET", body=None, timeout=120, gzip=False):
     headers = {"X-OpenBox-Token": token}
     if gzip:
@@ -232,28 +249,33 @@ def _safe_request(origin, token, path, method="GET", body=None, gzip=False, runs
     return stats, last_bytes, last_payload
 
 
-def benchmark(data_dir, runs=5):
+def benchmark(data_dir, runs=5, memory=False):
     """Run the full Days 0-14 benchmark suite against one synthetic library."""
     process, origin, token = _start_server(data_dir)
     try:
         # Warm-up: let the server populate its probe cache.
         try:
-            _request(origin, token, "/api/library")
+            _request(origin, token, "/api/v2/library")
         except Exception:
             pass
 
         result = {}
+        if memory:
+            result["memory"] = {
+                "start_rss_mb": _process_rss_mb(process.pid),
+                "measurement": "server process RSS after warm-up and after the benchmark",
+            }
 
         # 1) Summary / full library response (plain and gzip)
-        lib_stats, _, _ = _safe_request(origin, token, "/api/library", runs=runs)
+        lib_stats, _, _ = _safe_request(origin, token, "/api/v2/library", runs=runs)
         if lib_stats is not None:
             result["library"] = lib_stats
-        gz_stats, _, _ = _safe_request(origin, token, "/api/library", gzip=True, runs=runs)
+        gz_stats, _, _ = _safe_request(origin, token, "/api/v2/library", gzip=True, runs=runs)
         if gz_stats is not None:
             result["library_gzip"] = gz_stats
 
         # 2) Paginated library query response time
-        page_stats, _, _ = _safe_request(origin, token, "/api/library?offset=0&limit=500", runs=runs)
+        page_stats, _, _ = _safe_request(origin, token, "/api/v2/library?offset=0&limit=500", runs=runs)
         if page_stats is not None:
             page_stats["operation"] = "library_page"
             page_stats["note"] = "GET /api/library?offset=0&limit=500"
@@ -261,48 +283,48 @@ def benchmark(data_dir, runs=5):
             result["library_page"] = page_stats
 
         # 3) Explorer facets response time
-        facet_stats, _, _ = _safe_request(origin, token, "/api/explorer/facets?field=genre", runs=runs)
+        facet_stats, _, _ = _safe_request(origin, token, "/api/v2/explorer/facets?field=genre", runs=runs)
         if facet_stats is not None:
             result["facet"] = facet_stats
 
         # 4) Single-game mutation time (favorite toggle)
-        mut_stats, _, _ = _safe_request(origin, token, "/api/favorite", method="POST", body={"id": 0}, runs=runs)
+        mut_stats, _, _ = _safe_request(origin, token, "/api/v2/favorite", method="POST", body={"id": 0}, runs=runs)
         if mut_stats is not None and mut_stats.get("runs", 0) == 0:
-            mut_stats, _, _ = _safe_request(origin, token, "/api/favorite", method="POST", body={"game_id": "game-00000"}, runs=runs)
+            mut_stats, _, _ = _safe_request(origin, token, "/api/v2/favorite", method="POST", body={"game_id": "game-00000"}, runs=runs)
         if mut_stats is not None:
             result["single_mutation"] = mut_stats
             result["favorite_mutation"] = mut_stats
 
         # 5) Bulk metadata mutation time
         bulk_body = {"ids": ["game-00000", "game-00001", "game-00002"], "changes": {"favorite": True}}
-        bulk_stats, _, _ = _safe_request(origin, token, "/api/games/bulk", method="POST", body=bulk_body, runs=runs)
+        bulk_stats, _, _ = _safe_request(origin, token, "/api/v2/games/bulk", method="POST", body=bulk_body, runs=runs)
         if bulk_stats is not None:
             result["bulk_mutation"] = bulk_stats
 
         # 6) Import check with an isolated empty folder
         empty_import_dir = Path(data_dir) / ".bench-empty-import"
         empty_import_dir.mkdir(parents=True, exist_ok=True)
-        imp_stats, _, _ = _safe_request(origin, token, "/api/import", method="POST", body={"folder": str(empty_import_dir)}, runs=runs)
+        imp_stats, _, _ = _safe_request(origin, token, "/api/v2/import", method="POST", body={"folder": str(empty_import_dir)}, runs=runs)
         if imp_stats is not None:
             result["import_empty_folder"] = imp_stats
             result["import_apply"] = imp_stats
 
         # 7) Media index refresh proxy
-        media_stats, _, _ = _safe_request(origin, token, "/api/media?id=0&kind=cover", runs=runs)
+        media_stats, _, _ = _safe_request(origin, token, "/api/v2/media?id=0&kind=cover", runs=runs)
         if media_stats is not None:
             result["media_index"] = media_stats
             result["media"] = media_stats
 
         # 8) Title indexed / delta query response time
-        search_stats, _, _ = _safe_request(origin, token, "/api/library/delta?ids=game-00000,game-00001", runs=runs)
+        search_stats, _, _ = _safe_request(origin, token, "/api/v2/library/delta?ids=game-00000,game-00001", runs=runs)
         if search_stats is None or search_stats.get("runs", 0) == 0:
-            search_stats, _, _ = _safe_request(origin, token, "/api/discovery", runs=runs)
+            search_stats, _, _ = _safe_request(origin, token, "/api/v2/discovery", runs=runs)
         if search_stats is not None:
             result["title_indexed_search"] = search_stats
             result["search"] = search_stats
 
         # 9) BigBox CoverFlow render / mode toggle response time
-        coverflow_stats, _, _ = _safe_request(origin, token, "/api/bigbox/mode", method="POST", body={"mode": "coverflow"}, runs=runs)
+        coverflow_stats, _, _ = _safe_request(origin, token, "/api/v2/bigbox/mode", method="POST", body={"mode": "coverflow"}, runs=runs)
         if coverflow_stats is not None:
             result["bigbox_coverflow"] = coverflow_stats
             result["coverflow"] = coverflow_stats
@@ -326,6 +348,9 @@ def benchmark(data_dir, runs=5):
             const_stats["operation"] = "constellation_build"
             const_stats["note"] = "GET /api/v2/library/constellation?limit=400"
             result["constellation_build"] = const_stats
+
+        if memory:
+            result["memory"]["end_rss_mb"] = _process_rss_mb(process.pid)
 
         # 10) Archive inspection time
         arch_times = []
@@ -377,18 +402,18 @@ def benchmark_write_path(data_dir, runs=5):
     try:
         # Warm-up request so the server loads the library into memory.
         try:
-            _request(origin, token, "/api/library")
+            _request(origin, token, "/api/v2/library")
         except Exception:
             pass
 
         # Measure favorite toggle on game-00000.
         stats, _, _ = _safe_request(
-            origin, token, "/api/favorite", method="POST",
+            origin, token, "/api/v2/favorite", method="POST",
             body={"id": 0}, runs=runs,
         )
         if stats is not None and stats.get("runs", 0) == 0:
             stats, _, _ = _safe_request(
-                origin, token, "/api/favorite", method="POST",
+                origin, token, "/api/v2/favorite", method="POST",
                 body={"game_id": "game-00000"}, runs=runs,
             )
         return stats or {"runs": 0, "error": "favorite toggle failed"}
@@ -495,6 +520,7 @@ def main():
     parser.add_argument("--runs", type=int, default=5, help="runs per operation for median/p95 (default 5)")
     parser.add_argument("--browser", action="store_true", help="also measure browser first-render when Chrome is available (opt-in)")
     parser.add_argument("--no-gate", action="store_true", help="do not enforce non-regression gates; always exit 0")
+    parser.add_argument("--memory", action="store_true", help="record server process RSS at each measured size")
     args = parser.parse_args()
     base = Path(args.base_dir)
     results = {}
@@ -504,7 +530,7 @@ def main():
         print(f"generating {size} games in {data_dir} ...", flush=True)
         generate(size, data_dir)
         print(f"benchmarking {size} games ({args.runs} runs per op) ...", flush=True)
-        results[str(size)] = benchmark(data_dir, runs=args.runs)
+        results[str(size)] = benchmark(data_dir, runs=args.runs, memory=args.memory)
         generated_sizes.append(size)
 
     # Write-path benchmark: measure favorite mutation at 10k and 20k.
@@ -536,7 +562,7 @@ def main():
     try:
         import scripts.gen_api_docs as gad
         t0 = time.perf_counter()
-        gad.handlers_for("/api/v1/library")
+        gad.v2_routes()
         gen_docs_ms = round((time.perf_counter() - t0) * 1000, 2)
     except Exception:
         gen_docs_ms = 0.0

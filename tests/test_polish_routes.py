@@ -1,7 +1,7 @@
 """HTTP contract tests for the engineering-gate routes.
 
 Covers the surfaces added by the polish program: static assets, gzip
-library encoding, /api/jobs, /api/diagnostic, and /api/state/recover.
+library encoding, /api/jobs, /api/diagnostic, and /api/v2/state/recover.
 """
 
 import gzip
@@ -74,17 +74,17 @@ class PolishRouteTests(unittest.TestCase):
         self.assertEqual(json.loads(payload)["code"], "ROUTE_NOT_FOUND")
 
     def test_library_gzip_round_trip(self):
-        status, headers, body = self.request("/api/library", {"Accept-Encoding": "gzip"})
+        status, headers, body = self.request("/api/v2/library", {"Accept-Encoding": "gzip"})
         self.assertEqual(status, 200)
         self.assertEqual(headers.get("Content-Encoding"), "gzip")
         payload = json.loads(gzip.decompress(body))
         self.assertEqual(payload["games"][0]["name"], "Fixture")
 
     def test_library_pagination_ignores_full_library_etag(self):
-        status, headers, _ = self.request("/api/library")
+        status, headers, _ = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         status, _, body = self.request(
-            "/api/library?offset=0&limit=0",
+            "/api/v2/library?offset=0&limit=0",
             {"If-None-Match": headers["ETag"]},
         )
         self.assertEqual(status, 200)
@@ -93,23 +93,24 @@ class PolishRouteTests(unittest.TestCase):
         self.assertEqual(payload["total_count"], 1)
 
     def test_library_delta_accepts_stable_game_ids(self):
-        status, _, body = self.request("/api/library")
+        status, _, body = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         game_id = json.loads(body)["games"][0]["game_id"]
-        status, _, body = self.request(f"/api/library/delta?ids={game_id}")
+        status, _, body = self.request(f"/api/v2/library/delta?ids={game_id}")
         self.assertEqual(status, 200)
         payload = json.loads(body)
         self.assertEqual([game["game_id"] for game in payload["games"]], [game_id])
 
     def test_jobs_route_lists_jobs(self):
-        status, _, payload = self.request("/api/jobs")
+        status, _, payload = self.request("/api/v2/jobs")
         self.assertEqual(status, 200)
         data = json.loads(payload)
         self.assertIn("jobs", data)
-        self.assertIn("history", data)
+        self.assertIn("cursor", data)
+        self.assertIn("next_cursor", data)
 
     def test_diagnostic_route_returns_report(self):
-        status, _, payload = self.request("/api/diagnostic")
+        status, _, payload = self.request("/api/v2/diagnostic")
         self.assertEqual(status, 200)
         data = json.loads(payload)
         # The endpoint returns the report text; parse its JSON envelope.
@@ -119,7 +120,7 @@ class PolishRouteTests(unittest.TestCase):
 
     def test_state_recover_dry_run(self):
         request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/api/state/recover",
+            f"http://127.0.0.1:{self.port}/api/v2/state/recover",
             data=json.dumps({"dry_run": True}).encode(),
             headers={"X-OpenBox-Token": "polish-token", "Content-Type": "application/json"},
             method="POST",

@@ -982,11 +982,11 @@ class JobsAdapterTests(unittest.TestCase):
                 parsed = {"error": body}
             return error.code, parsed
 
-    def test_legacy_jobs_shape(self):
+    def test_legacy_jobs_path_is_gone(self):
         status, payload = self.request("GET", "/api/jobs")
-        self.assertEqual(status, 200)
-        self.assertIn("jobs", payload)
-        self.assertIn("history", payload)
+        self.assertEqual(status, 410)
+        self.assertEqual(payload["code"], "API_VERSION_REQUIRED")
+        self.assertEqual(payload["context"]["use"], "/api/v2/jobs")
 
     def test_v2_jobs_list_keys(self):
         service = get_operation_service()
@@ -1030,11 +1030,10 @@ class JobsAdapterTests(unittest.TestCase):
         self.assertEqual(payload["state"], "queued")
         self.assertEqual(payload["resume_of"], created["job_id"])
 
-    def test_v1_jobs_route_matches_legacy_shape(self):
-        status, payload = self.request("GET", "/api/jobs")
-        self.assertEqual(status, 200)
-        self.assertIn("jobs", payload)
-        self.assertIn("history", payload)
+    def test_v1_jobs_route_is_gone(self):
+        status, payload = self.request("GET", "/api/v1/jobs")
+        self.assertEqual(status, 410)
+        self.assertEqual(payload["code"], "V1_API_REMOVED")
 
     def test_v2_jobs_items_wire_contract(self):
         service = get_operation_service()
@@ -1121,9 +1120,9 @@ class JobsAdapterTests(unittest.TestCase):
 
         webapp_state.JOB_MANAGER.submit("library-backup", lambda _ctx: {"archive": "x.zip"})
         _wait_for(webapp_state.JOB_MANAGER, "library-backup", {"done"})
-        status, payload = self.request("GET", "/api/jobs")
+        status, payload = self.request("GET", "/api/v2/jobs?limit=100")
         self.assertEqual(status, 200)
-        snapshot = payload["jobs"]["library-backup"]
+        snapshot = next(job for job in payload["jobs"] if job["type"] == "library.backup")
         self.assertIn("job_id", snapshot)
         self.assertIn("type", snapshot)
         self.assertIn("can_cancel", snapshot)
@@ -1132,7 +1131,7 @@ class JobsAdapterTests(unittest.TestCase):
         from openbox import save_state
 
         save_state({"games": [], "profiles": {}, "history": [], "settings": {}, "playlists": []})
-        status, payload = self.request("POST", "/api/backup/create", {"items": ["library"], "keep": 1})
+        status, payload = self.request("POST", "/api/v2/backup/create", {"items": ["library"], "keep": 1})
         self.assertEqual(status, 202)
         self.assertIn("job_id", payload)
         op = get_operation_service().get(payload["job_id"])
@@ -1141,7 +1140,7 @@ class JobsAdapterTests(unittest.TestCase):
 
     def test_cloud_sync_wraps_operation(self):
         with mock.patch("handlers.health.sync_cloud", return_value={"synced": True}):
-            status, payload = self.request("POST", "/api/cloud/sync", {})
+            status, payload = self.request("POST", "/api/v2/cloud/sync", {})
         self.assertEqual(status, 202)
         self.assertIn("job_id", payload)
         op = get_operation_service().get(payload["job_id"])
@@ -1165,11 +1164,11 @@ class JobsAdapterTests(unittest.TestCase):
             "settings": {},
             "playlists": [],
         })
-        backup_status, backup_payload = self.request("POST", "/api/saves/backup", {"id": 0})
+        backup_status, backup_payload = self.request("POST", "/api/v2/saves/backup", {"id": 0})
         self.assertEqual(backup_status, 202)
         import webapp_state
         with mock.patch("handlers.data.scan_all_saves", return_value={0: ["/tmp/scan-save"]}):
-            scan_status, scan_payload = self.request("POST", "/api/saves/scan/apply", {})
+            scan_status, scan_payload = self.request("POST", "/api/v2/saves/scan/apply", {})
             self.assertEqual(scan_status, 202)
             self.assertIn("job_id", scan_payload)
             finished = _wait_for(webapp_state.JOB_MANAGER, "saves-scan", {"done"})
@@ -1184,9 +1183,9 @@ class JobsAdapterTests(unittest.TestCase):
             self.assertIsInstance(finished.get("updated"), int)
             self.assertIsInstance(finished.get("games"), int)
             # …and the job appears in the Activity Center listing.
-            list_status, listing = self.request("GET", "/api/jobs")
+            list_status, listing = self.request("GET", "/api/v2/jobs?limit=100")
             self.assertEqual(list_status, 200)
-            self.assertIn("saves-scan", listing["jobs"])
+            self.assertTrue(any(job["type"] == "saves.scan" for job in listing["jobs"]))
 
     def test_gameyfin_install_creates_operation(self):
         from openbox import save_state
@@ -1202,7 +1201,7 @@ class JobsAdapterTests(unittest.TestCase):
             "handlers.data.install_gameyfin_game",
             return_value={"gameyfin_id": "11", "store_installed": True, "path": "/tmp/x", "launch": "/tmp/x"},
         ):
-            status, payload = self.request("POST", "/api/gameyfin/install", {"gameyfin_id": "11"})
+            status, payload = self.request("POST", "/api/v2/gameyfin/install", {"gameyfin_id": "11"})
         self.assertEqual(status, 202)
         job_id = payload.get("job_id")
         self.assertTrue(job_id)
@@ -1252,7 +1251,7 @@ class JobsAdapterTests(unittest.TestCase):
         archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(b"PK")
         with mock.patch("handlers.health.restore_backup", return_value={"library": True}):
-            status, payload = self.request("POST", "/api/backup/restore", {"path": str(archive)})
+            status, payload = self.request("POST", "/api/v2/backup/restore", {"path": str(archive)})
         self.assertEqual(status, 202)
         self.assertIn("job_id", payload)
 
@@ -1265,29 +1264,29 @@ class JobsAdapterTests(unittest.TestCase):
         archive.write_bytes(b"PK")
         with mock.patch("handlers.health.restore_backup", return_value={"items": ["library", "media"], "files": []}), \
              mock.patch("handlers.health.bump_media_epoch") as bump:
-            status, payload = self.request("POST", "/api/backup/restore", {"path": str(archive)})
+            status, payload = self.request("POST", "/api/v2/backup/restore", {"path": str(archive)})
             self.assertEqual(status, 202)
             _wait_for(webapp_state.JOB_MANAGER, "library-restore", {"done"})
             bump.assert_called_once()
 
     def test_restore_library_backup_validation_errors(self):
         # Non-dict payload
-        status, payload = self.request("POST", "/api/backup/restore", "invalid-body")
+        status, payload = self.request("POST", "/api/v2/backup/restore", "invalid-body")
         self.assertEqual(status, 400)
         self.assertEqual(payload.get("code"), "BAD_REQUEST")
 
         # Empty path
-        status, payload = self.request("POST", "/api/backup/restore", {"path": ""})
+        status, payload = self.request("POST", "/api/v2/backup/restore", {"path": ""})
         self.assertEqual(status, 400)
         self.assertEqual(payload.get("code"), "BAD_REQUEST")
 
         # Non-existent zip
-        status, payload = self.request("POST", "/api/backup/restore", {"path": "/tmp/nonexistent_backup.zip"})
+        status, payload = self.request("POST", "/api/v2/backup/restore", {"path": "/tmp/nonexistent_backup.zip"})
         self.assertEqual(status, 400)
         self.assertEqual(payload.get("code"), "BAD_REQUEST")
 
         # Non-zip file
-        status, payload = self.request("POST", "/api/backup/restore", {"path": "/tmp/backup.tar.gz"})
+        status, payload = self.request("POST", "/api/v2/backup/restore", {"path": "/tmp/backup.tar.gz"})
         self.assertEqual(status, 400)
         self.assertEqual(payload.get("code"), "BAD_REQUEST")
 
@@ -1296,7 +1295,7 @@ class JobsAdapterTests(unittest.TestCase):
 
         with mock.patch("handlers.health.check_update", return_value={"version": "9.9.9"}), \
              mock.patch("handlers.health.install_update", return_value={"installed": True}):
-            status, payload = self.request("POST", "/api/update/install", {})
+            status, payload = self.request("POST", "/api/v2/update/install", {})
             self.assertEqual(status, 202)
             self.assertIn("job_id", payload)
             _wait_for(webapp_state.JOB_MANAGER, "updater-install", {"done"})
@@ -1330,58 +1329,58 @@ class JobsAdapterTests(unittest.TestCase):
         })
         (DATA.parent / "saves").mkdir(parents=True, exist_ok=True)
         routes = [
-            ("GET", "/api/saves?id=0", None),
-            ("GET", "/api/saves/discover?id=0", None),
-            ("GET", "/api/saves/scan", None),
-            ("GET", "/api/highscores?id=0", None),
-            ("GET", "/api/platform/documents?platform=NES", None),
-            ("GET", "/api/platform/documents", None),
-            ("GET", "/api/gameyfin/install/status?gameyfin_id=5", None),
-            ("GET", "/api/save-tools/status", None),
+            ("GET", "/api/v2/saves?id=0", None),
+            ("GET", "/api/v2/saves/discover?id=0", None),
+            ("GET", "/api/v2/saves/scan", None),
+            ("GET", "/api/v2/highscores?id=0", None),
+            ("GET", "/api/v2/platform/documents?platform=NES", None),
+            ("GET", "/api/v2/platform/documents", None),
+            ("GET", "/api/v2/gameyfin/install/status?gameyfin_id=5", None),
+            ("GET", "/api/v2/save-tools/status", None),
         ]
         for method, path, body in routes:
             status, payload = self.request(method, path, body)
             self.assertEqual(status, 200, path)
             self.assertIsInstance(payload, dict, path)
         with mock.patch("handlers.data.catalog_gameyfin", return_value=([], [])):
-            status, _payload = self.request("GET", "/api/gameyfin/providers", None)
+            status, _payload = self.request("GET", "/api/v2/gameyfin/providers", None)
             self.assertEqual(status, 200)
         with mock.patch("handlers.data.test_gameyfin_connection", return_value={"ok": True}):
-            status, _payload = self.request("POST", "/api/gameyfin/test", {"gameyfin_url": "http://x"})
+            status, _payload = self.request("POST", "/api/v2/gameyfin/test", {"gameyfin_url": "http://x"})
             self.assertEqual(status, 200)
         with mock.patch("handlers.data.run_ludusavi", return_value={"ok": True}):
-            status, _payload = self.request("POST", "/api/save-tools/ludusavi", {"action": "backup", "id": 0})
+            status, _payload = self.request("POST", "/api/v2/save-tools/ludusavi", {"action": "backup", "id": 0})
             self.assertEqual(status, 200)
         with mock.patch("handlers.data.run_hoard", return_value={"ok": True}):
-            status, _payload = self.request("POST", "/api/save-tools/hoard", {"action": "backup", "id": 0})
+            status, _payload = self.request("POST", "/api/v2/save-tools/hoard", {"action": "backup", "id": 0})
             self.assertEqual(status, 200)
         with mock.patch("handlers.data.export_highscores", return_value={"exported": 1}):
-            status, _payload = self.request("POST", "/api/highscores/export", {"id": 0})
+            status, _payload = self.request("POST", "/api/v2/highscores/export", {"id": 0})
             self.assertEqual(status, 200)
         with mock.patch("handlers.data.import_highscores", return_value=1):
-            status, _payload = self.request("POST", "/api/highscores/import", {"id": 0, "path": str(DATA.parent)})
+            status, _payload = self.request("POST", "/api/v2/highscores/import", {"id": 0, "path": str(DATA.parent)})
             self.assertEqual(status, 200)
-        status, _payload = self.request("POST", "/api/platform/documents", {"platform": "NES", "documents": []})
+        status, _payload = self.request("POST", "/api/v2/platform/documents", {"platform": "NES", "documents": []})
         self.assertEqual(status, 200)
-        status, _payload = self.request("POST", "/api/saves/add", {"id": 0, "path": str(DATA.parent / "saves")})
+        status, _payload = self.request("POST", "/api/v2/saves/add", {"id": 0, "path": str(DATA.parent / "saves")})
         self.assertEqual(status, 200)
         with mock.patch("handlers.data.restore_saves", return_value=Path("backup.zip")), \
              mock.patch("handlers.data.preview_restore", return_value={"conflict": False, "counts": {}}):
-            status, payload = self.request("POST", "/api/saves/restore", {"id": 0, "backup": "backup.zip"})
+            status, payload = self.request("POST", "/api/v2/saves/restore", {"id": 0, "backup": "backup.zip"})
             self.assertEqual(status, 202)
             self.assertIn("job_id", payload)
         with mock.patch("handlers.data.uninstall_gameyfin_game", return_value={"removed": True}):
-            status, _payload = self.request("POST", "/api/gameyfin/uninstall", {"id": 0})
+            status, _payload = self.request("POST", "/api/v2/gameyfin/uninstall", {"id": 0})
             self.assertEqual(status, 200)
 
     def test_data_handler_error_paths(self):
-        status, _payload = self.request("GET", "/api/saves?id=99", None)
+        status, _payload = self.request("GET", "/api/v2/saves?id=99", None)
         self.assertEqual(status, 404)
-        status, _payload = self.request("GET", "/api/saves/discover?id=99", None)
+        status, _payload = self.request("GET", "/api/v2/saves/discover?id=99", None)
         self.assertEqual(status, 404)
-        status, _payload = self.request("GET", "/api/highscores?id=99", None)
+        status, _payload = self.request("GET", "/api/v2/highscores?id=99", None)
         self.assertEqual(status, 404)
-        status, _payload = self.request("GET", "/api/gameyfin/install/status", None)
+        status, _payload = self.request("GET", "/api/v2/gameyfin/install/status", None)
         self.assertEqual(status, 400)
 
     def test_gameyfin_install_branches(self):
@@ -1455,10 +1454,10 @@ class DataHandlersStreamTests(unittest.TestCase):
         self.handler.send_header = mock.Mock()
         self.handler.end_headers = mock.Mock()
         with mock.patch("handlers.data.safe_document_file", return_value=self.doc):
-            self.handler._api_get_api_document(urlparse("/api/document?id=0&index=0"))
+            self.handler._api_get_api_document(urlparse("/api/v2/document?id=0&index=0"))
             self.assertTrue(self.handler.wfile.getvalue())
             self.handler.wfile = io.BytesIO()
-            self.handler._api_get_api_platform_document(urlparse("/api/platform/document?platform=NES&index=0"))
+            self.handler._api_get_api_platform_document(urlparse("/api/v2/platform/document?platform=NES&index=0"))
             self.assertTrue(self.handler.wfile.getvalue())
 
     def test_document_routes_byte_range_and_caching(self):
@@ -1472,7 +1471,7 @@ class DataHandlersStreamTests(unittest.TestCase):
         self.handler.send_header = mock.Mock()
         self.handler.end_headers = mock.Mock()
         with mock.patch("handlers.data.safe_document_file", return_value=self.doc):
-            self.handler._api_get_api_document(urlparse("/api/document?id=0&index=0"))
+            self.handler._api_get_api_document(urlparse("/api/v2/document?id=0&index=0"))
             self.handler.send_response.assert_called_with(206)
             self.assertEqual(self.handler.wfile.getvalue(), b"%PDF")
 
@@ -1483,7 +1482,7 @@ class DataHandlersStreamTests(unittest.TestCase):
         self.handler.send_header = mock.Mock()
         self.handler.end_headers = mock.Mock()
         with mock.patch("handlers.data.safe_document_file", return_value=self.doc):
-            self.handler._api_get_api_platform_document(urlparse("/api/platform/document?platform=NES&index=0"))
+            self.handler._api_get_api_platform_document(urlparse("/api/v2/platform/document?platform=NES&index=0"))
             self.handler.send_response.assert_called_with(206)
             self.assertEqual(self.handler.wfile.getvalue(), b"PDF-")
 

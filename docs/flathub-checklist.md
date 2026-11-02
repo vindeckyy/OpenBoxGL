@@ -1,17 +1,17 @@
 # Flathub submission checklist
 
-OpenBox 2.0.0 keeps the release-gated x86_64 Flatpak path and maintains the
+OpenBox 2.1.0 keeps the release-gated x86_64 Flatpak path and maintains the
 manifest/AppStream metadata ready for a future Flathub submission. **Submission
 itself remains a maintainer decision** (ADR 0013); this list tracks the manual
 steps that remain when that decision is made.
 
 ## Complete in 1.11.0 (prep and release gate)
 
-- [x] Manifest runtime bumped `org.gnome.Platform 46` → `49` (GNOME 48 EOL'd 2026-03-24; 49 rides freedesktop 25.08 and still ships `webkit2gtk-4.1`).
+- [x] Manifest runtime bumped `org.gnome.Platform 46` → `49` in 1.11.0, and `49` → `51` in 2.1.0; runtime 51 ships `webkit2gtk-4.1` (verified 2026-11-01).
 - [x] `scripts/validate_flatpak_manifest.py` and `tests/test_packaging.py::test_flatpak_manifest` updated to `'49'`.
 - [x] AppStream `<content_rating type="oars-1.1">` added (`social-info=mild`; the launcher itself ships no mature content).
 - [x] AppStream `<developer id="io.openboxgl">` and `<screenshots>` block added (four 1920×1080 16:9 screenshots).
-- [x] `openbox.metainfo.xml` release history current through 2.0.0.
+- [x] `openbox.metainfo.xml` release history current through 2.1.0.
 - [x] `scripts/capture_readme_screenshots.py` already produces 1920×1080 16:9 screenshots (no extension needed).
 - [x] The v1.11.0 release workflow established the x86_64 bundle gate against GNOME Platform/SDK 49.
 
@@ -19,12 +19,24 @@ steps that remain when that decision is made.
 
 - [x] **Screenshot hosting.** `openbox.metainfo.xml` points all four `<screenshot>` entries at immutable raw GitHub URLs pinned to a **released** tag (`v1.15.0`), so they resolve today and never rot. The docs-site mirror is useful for the README but is not the Flathub submission source of truth; keep these raw URLs or move the images into the Flathub metadata repository when submitting.
      **Invariant:** the tag in those URLs must always be a tag that already exists. When the artwork is regenerated (`scripts/capture_readme_screenshots.py`), repoint the four URLs **in the same commit that changes the images**, at a tag that exists at that moment — which means after the release is cut, not before. Do not pre-point them at an unreleased tag: the images would 404 and `appstreamcli validate --no-net` would not catch it. The URLs are currently pinned at `v1.15.0`, which exists, and the images at that tag are byte-identical to the current working tree — so nothing is stale today. The four referenced images were last re-captured in the 1.15.0 cycle (the logo rebrand `c5053ac` and the picker/wrapped/mastery/game-night captures both predate the tag), but they do **not** cover the 1.12+ UI additions, so regenerating them is optional polish rather than a broken link. The capture script writes **eight** 1920×1080 screenshots — `openbox-screenshot.png`, `openbox-game-detail.png`, `openbox-bigbox.png`, `openbox-constellation.png`, `openbox-picker.png`, `openbox-wrapped.png`, `openbox-mastery.png`, `openbox-game-night.png`; the four currently referenced are the Flathub submission set. (`assets/` also holds `openbox-logo.png`, a 512×512 brand mark written by `scripts/render_branding.sh`, not a screenshot.)
-- [ ] **Runtime re-verify.** Re-confirm `org.gnome.Platform//49` still ships `webkit2gtk-4.1` (the native host builds with `pkg-config webkit2gtk-4.1`). The CI `flatpak-validate` job's `flatpak-builder --dry-run` is the gate; if a future GNOME runtime drops the GTK3 WebKit, either pin the last runtime that has it or build webkit2gtk-4.1 in the manifest.
+- [x] **Runtime re-verify.** Re-confirm `org.gnome.Platform//51` still ships `webkit2gtk-4.1` (the native host builds with `pkg-config webkit2gtk-4.1`). The CI `flatpak-validate` job's `flatpak-builder --dry-run` is the gate; if a future GNOME runtime drops the GTK3 WebKit, either pin the last runtime that has it or build webkit2gtk-4.1 in the manifest.
 - [ ] **Flathub repo setup.** Create `flathub/io.openbox.GameLauncher`, add the maintainers, transfer the manifest + screenshots.
 - [ ] **flathubbot PR.** Open the initial submission PR; flathubbot runs validation and review.
 - [ ] **AppStream review.** Address reviewer notes on screenshots, metadata, and branding (the "unrelated to the Openbox window manager" disclaimer is already in the description).
 - [ ] **First submission cadence.** Agree on a release cadence with Flathub (AppImage remains the canonical artifact channel per ADR 0013).
 - [x] **Flatpak bundle gating for 1.11.0.** `release-flatpak.yml` built and published the x86_64 bundle against runtime 49. Repeat this check for each future release tag.
+
+## 2.1 status (2026-11-01)
+
+The 2.1 release keeps the submission-ready path. The manifest and AppStream
+metadata are unchanged except for the 2.1.0 release entry. The runtime pinned in
+`io.openbox.GameLauncher.yml` is re-verified by the `flatpak-validate` job on
+every change; if it no longer ships `webkit2gtk-4.1`, the manifest or the
+channel decision must change before the Flatpak artifact is claimed.
+
+- [x] Runtime 51 installed and checked: `libwebkit2gtk-4.1.so.0` is present; `flatpak-builder` built, bundled, and installed the app, and the server started in the sandbox.
+- [ ] Keep the screenshots pointed at a tag that already exists.
+- [ ] Submission steps stay with the maintainer.
 
 ## 2.0 status (2026-10-29)
 
@@ -32,7 +44,7 @@ The manifest, AppStream metadata, and the validation script are unchanged by 2.0
 `python3 -B scripts/validate_flatpak_manifest.py` reports `flatpak manifest validation: ok`.
 
 - [x] Manifest validator passes on the current tree (`scripts/validate_flatpak_manifest.py`), and `tests/test_packaging.py` covers the manifest.
-- [x] `openbox.metainfo.xml` release history ends at 2.0.0 — the entry is already in place (added with the version bump) and its date is finalized at the tag.
+- [x] `openbox.metainfo.xml` release history ends at 2.1.0 — the entry is already in place (added with the version bump) and its date is finalized at the tag.
 - [x] The Flatpak keeps the x86_64 bundle only. The Windows ARM64 artifact (plan W5-03) is not a Flatpak target, and the runtime re-verify below still covers the WebKit dependency.
 - [ ] **Runtime re-verify for the 2.0 tag.** Re-run the CI `flatpak-validate` job (`flatpak-builder --dry-run`) against runtime 49; the manifest is unchanged, but the release candidate is what the job must build.
 - [ ] **Submission steps stay with the maintainer.** Repo setup, the flathubbot PR, the AppStream review, and the release cadence are unchanged from the list above and remain open.

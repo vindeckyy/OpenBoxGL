@@ -27,6 +27,14 @@ from pkg.parity.parity_premium import apply_media_pack, download_gog_media, down
 from webapp_state import DATA, JOB_MANAGER, MEDIA_JOB, MEDIA_TYPES_ALL, METADATA_DATABASE, PROCESS_LOCK, approved_media_path, bump_media_epoch, download_image, game_from_payload, game_from_query, load_state_view, public_settings, transact_state
 
 
+def _record_media_manifest(path: Path, source: str) -> None:
+    """Record a file only while the library's media manifest is enabled."""
+    settings = load_state_view().get("settings") or {}
+    if bool(settings.get("media_manifest_enabled", True)):
+        media_manifest.record(DATA.parent / "media", path, source)
+
+
+
 # EmuMovies media type -> library game field.  Unknown types are rejected so a
 # download can never silently overwrite ``cover`` with the wrong asset.
 EMUMOVIES_TYPE_FIELDS = {
@@ -514,7 +522,7 @@ class MediaHandlers:
         target = copy.deepcopy(game_from_payload(state, payload))
         path = download_steam_trailer(target, DATA.parent / "media")
         if path:
-            media_manifest.record(DATA.parent / "media", Path(path), "steam-trailer")
+            _record_media_manifest(Path(path), "steam-trailer")
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
@@ -558,7 +566,7 @@ class MediaHandlers:
             target, credentials, DATA.parent / "media", media_type,
         )
         if path:
-            media_manifest.record(DATA.parent / "media", Path(path), f"emumovies-{field}")
+            _record_media_manifest(Path(path), f"emumovies-{field}")
         def mutate(state):
             game = game_from_payload(state, {"game_id": target.get("game_id")})
             game.update(target)
@@ -602,7 +610,7 @@ class MediaHandlers:
         destination = DATA.parent / "media" / "captures" / f"{Path(game.get('path', 'game')).stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         path = capture_screenshot(destination)
         if path:
-            media_manifest.record(DATA.parent / "media", Path(path), "capture")
+            _record_media_manifest(Path(path), "capture")
         def mutate(state):
             screenshots = game_from_payload(state, {"game_id": stable_game_id}).setdefault("screenshots", [])
             if path not in screenshots:

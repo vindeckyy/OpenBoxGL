@@ -80,14 +80,14 @@ All native routes are authenticated like every other route: unauthenticated call
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/native/dialog` | folder/file/save picker |
-| POST | `/api/native/open-external` | open a path or URL |
-| POST | `/api/native/reveal` | reveal a file in the file manager |
-| POST | `/api/native/window` | window chrome actions |
-| GET | `/api/native/capabilities` | report host capabilities |
-| GET | `/api/native/battery` | battery presence, percentage, and charging state |
+| POST | `/api/v2/native/dialog` | folder/file/save picker |
+| POST | `/api/v2/native/open-external` | open a path or URL |
+| POST | `/api/v2/native/reveal` | reveal a file in the file manager |
+| POST | `/api/v2/native/window` | window chrome actions |
+| GET | `/api/v2/native/capabilities` | report host capabilities |
+| GET | `/api/v2/native/battery` | battery presence, percentage, and charging state |
 
-`GET /api/native/capabilities` returns:
+`GET /api/v2/native/capabilities` returns:
 
 ```json
 {
@@ -98,7 +98,7 @@ All native routes are authenticated like every other route: unauthenticated call
   "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "platform": "linux",
   "data_dir": "/home/user/.local/share/openbox-game-launcher",
   "features": {
@@ -130,7 +130,7 @@ object (an older server, or a failed fetch) means every key is false and every
 gated control stays hidden. Feature keys and the controls they gate are listed
 in [ADR 0086](adr/0086-platform-capability-contract.md).
 
-`GET /api/native/battery` reads the first `BAT*` entry under
+`GET /api/v2/native/battery` reads the first `BAT*` entry under
 `/sys/class/power_supply` on Linux, reads `pmset -g batt` on macOS, and
 reads `GetSystemPowerStatus` on Windows. It returns
 `{"present": bool, "percent": 0-100, "charging": bool}`, where `charging`
@@ -155,7 +155,7 @@ The native window talks to the server on the host channel, separate from the pub
 | POST | `/api/host/shutdown` | stop running sessions and the server |
 | GET | `/api/host/capabilities` | report host capabilities |
 
-Every host request carries `X-OpenBox-Token` and `X-OpenBox-API-Version: 2`. The server refuses a host that advertises another major version with `HOST_API_UNSUPPORTED` (HTTP 409) before any route runs. The unversioned `/api/launch`, `/api/shutdown`, `/api/native/capabilities`, and `/api/v2/resume` paths remain as internal aliases for hosts built before 2.0, until 2.1.
+Every host request carries `X-OpenBox-Token` and `X-OpenBox-API-Version: 2`. The server refuses a host that advertises another major version with `HOST_API_UNSUPPORTED` (HTTP 409) before any route runs. The native hosts call `/api/host/*`; the page fallback calls `/api/v2/native/*`. The legacy names `/api/launch`, `/api/shutdown`, and `/api/native/capabilities` were removed in 2.1 and return `410 HOST_CHANNEL_RETIRED`; a pre-2.0 host must be updated.
 
 ## Deeplinks
 
@@ -208,15 +208,15 @@ through the capability resolver with a browser fallback.
 | `localStorage` (UI prefs) | server-persisted `ui_state` when native; `localStorage` in browser |
 | `navigator.clipboard` | host clipboard; browser fallback |
 | `document.fullscreenElement` / request/exit | `windowAction("set-fullscreen"/"unset-fullscreen")` |
-| `navigator.getBattery` | `GET /api/native/battery` (Linux sysfs, macOS `pmset`, Windows `GetSystemPowerStatus`); hide status when `present` is false |
+| `navigator.getBattery` | `GET /api/v2/native/battery` (Linux sysfs, macOS `pmset`, Windows `GetSystemPowerStatus`); hide status when `present` is false |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
-| `beforeunload` (shutdown) | page requests `/api/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
+| `beforeunload` (shutdown) | page requests `/api/v2/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
 
 ## Server lifecycle
 
 - The host is the parent; it owns the Python child.
-- On window close, the page requests `POST /api/shutdown` when tracked games
+- On window close, the page requests `POST /api/v2/shutdown` when tracked games
   remain, while the native host signals the Python child as the lifecycle
   owner: on Linux and macOS it sends `SIGTERM` to the child process group; on
   Windows (`native_host_win.c`) it sends `CTRL_BREAK` to the
@@ -239,7 +239,7 @@ there is no x/y — on Wayland absolute window position is WM-controlled and nev
 persisted. `state_store.py` owns the `ui_state` schema default (`{}`), which carries
 UI prefs such as the last session (`view`, `selected_id`, `platform`, `playlist`),
 never the native window frame. `single_instance` is a capability reported by
-`GET /api/native/capabilities` (`handlers/native.py`), not stored state.
+`GET /api/v2/native/capabilities` (`handlers/native.py`), not stored state.
 
 Two more host-owned files sit beside the geometry file:
 

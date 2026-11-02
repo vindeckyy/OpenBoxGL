@@ -10,7 +10,7 @@ OpenBox is maintained part-time. This page sets expectations so reports get usef
 
 ## How we triage
 
-1. Reproduce or mark `needs-info`: a report without version, distro, and steps to reproduce gets a `needs-info` label and a request for the diagnostic report (Settings -> Library Audit, or `/api/diagnostic`).
+1. Reproduce or mark `needs-info`: a report without version, distro, and steps to reproduce gets a `needs-info` label and a request for the diagnostic report (Settings -> Library Audit, or `/api/v2/diagnostic`).
 2. Confirm or close: unreproducible reports stay open for 14 days, then close with an invitation to reopen with more detail.
 3. Severity: `critical` (data loss, launch breakage for everyone), `major` (broken feature for many), `minor` (edge case), `polish` (cosmetic).
 

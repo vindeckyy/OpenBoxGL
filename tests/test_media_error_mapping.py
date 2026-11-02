@@ -117,7 +117,7 @@ class MediaRouteMappingTests(unittest.TestCase):
         patches = self._patch_media({"cover": "/tmp/cover.png"})
         with patches[0], patches[1], patches[2]:
             with self.assertRaises(MediaNotFound):
-                handler._api_get_api_media(urlparse("/api/media?kind=cover"))
+                handler._api_get_api_media(urlparse("/api/v2/media?kind=cover"))
         handler._send_range_unsatisfiable.assert_not_called()
 
     def test_media_route_malformed_range_is_416(self):
@@ -125,7 +125,7 @@ class MediaRouteMappingTests(unittest.TestCase):
         handler.send_file.side_effect = RangeParseError("Invalid byte range.")
         patches = self._patch_media({"cover": "/tmp/cover.png"})
         with patches[0], patches[1], patches[2]:
-            handler._api_get_api_media(urlparse("/api/media?kind=cover"))
+            handler._api_get_api_media(urlparse("/api/v2/media?kind=cover"))
         handler._send_range_unsatisfiable.assert_called_once()
 
     def test_memories_route_missing_file_is_404(self):

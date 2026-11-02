@@ -11,8 +11,8 @@ Stages:
   3. py_compile over all runtime modules, test files, and scripts
   4. full test suite under coverage, run serially (gamescope/X tests collide
      in parallel workers)
-  5. coverage floor checks (83.0 total + 58.0 web_app.py + 95 changed-line +
-     85 new-module) and design-token hygiene
+  5. coverage floor checks (85.0 total + 62.0 web_app.py + 95 changed-line +
+     88 new-module) and design-token hygiene
 
 Exits non-zero when any stage fails. Used by `make check` and CI.
 
@@ -186,7 +186,7 @@ def main() -> int:
         failures.append("dependencies")
 
     # Stage 2.4: the public API surface must match api_contracts.json
-    # (/api/v2 + /api/host + the opt-in v1 bridge); drift fails the gate.
+    # (/api/v2 + /api/host); drift fails the gate.
     api_contract = run([sys.executable, "-B", str(ROOT / "scripts" / "check_api_contract.py")])
     if api_contract.returncode != 0:
         if api_contract.stdout.strip():
@@ -237,7 +237,7 @@ def main() -> int:
 
     # Stage 2.85: docs/api-v2.md is generated from the route registry; a stale copy fails here
     # instead of drifting until someone notices a route the reference does not list.
-    api_docs = run([sys.executable, "-B", str(ROOT / "scripts" / "gen_api_docs.py"), "--v2", "--check"])
+    api_docs = run([sys.executable, "-B", str(ROOT / "scripts" / "gen_api_docs.py"), "--check"])
     if api_docs.stdout.strip():
         print(api_docs.stdout.strip())
     if api_docs.stderr.strip():

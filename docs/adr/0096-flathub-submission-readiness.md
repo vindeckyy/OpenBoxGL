@@ -1,6 +1,6 @@
 # ADR 0096: Flathub submission readiness
 
-Status: Accepted as policy. The submission is prepared, not opened.
+Status: Accepted as policy. The submission is prepared, not opened; 2.1 keeps the runtime re-verify and the submission decision with the maintainer (ADR 0106).
 
 ## Context
 

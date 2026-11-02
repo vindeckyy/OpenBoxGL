@@ -1,4 +1,4 @@
-"""Backup format 2 (ADR 0093): manifest hashes, refusal before any write, v1 reads, 1.19-compatible export."""
+"""Backup format 2 (ADR 0093, ADR 0104): hashes, refusal before any write, v1 reads, v1 write retired."""
 
 import hashlib
 import json
@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from api_errors import BackupFormatUnsupported  # noqa: E402
+from api_errors import BackupFormatRetired, BackupFormatUnsupported  # noqa: E402
 from pkg.parity import parity_backup as backup  # noqa: E402
 from state_store import STATE_SCHEMA_VERSION, default_state  # noqa: E402
 
@@ -121,16 +121,11 @@ class BackupFormatV2Tests(unittest.TestCase):
         backup.restore_backup(v1, target, force=True)
         self.assertEqual(json.loads((target / "settings.json").read_text(encoding="utf-8")), {"theme": "legacy"})
 
-    def test_one_point_nine_compatible_export_writes_the_1_19_layout(self):
-        archive = backup.create_backup(self.root, _state(), ["library", "settings"], format_version=1)
-        manifest, members = _read_archive(archive)
-        self.assertNotIn("format", manifest)
-        self.assertNotIn("files", manifest)
-        library = json.loads(members["library.json"])
-        self.assertEqual(library["schema_version"], 6)
-        for key in ("format", "library_id", "path_mode", "library_root", "created_with"):
-            self.assertNotIn(key, library)
-        self.assertEqual(library["games"][0]["game_id"], "game-a")
+    def test_one_point_nine_compatible_export_is_no_longer_written(self):
+        with self.assertRaises(BackupFormatRetired) as raised:
+            backup.create_backup(self.root, _state(), ["library", "settings"], format_version=1)
+        self.assertEqual(raised.exception.code, "BACKUP_FORMAT_RETIRED")
+        self.assertEqual(raised.exception.detail["writable"], [2])
 
     def test_unknown_export_format_is_refused(self):
         with self.assertRaises(BackupFormatUnsupported):

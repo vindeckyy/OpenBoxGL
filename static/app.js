@@ -195,7 +195,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const endpoint = shelf && AppState.editingId !== null
           ? '/api/v2/library/manual-entry/update'
-          : shelf ? '/api/v2/library/manual-entry' : '/api/game';
+          : shelf ? '/api/v2/library/manual-entry' : '/api/v2/game';
         await api(endpoint,{method:'POST',body:JSON.stringify({id:AppState.editingId,...(AppState.editingGameId ? {game_id:AppState.editingGameId} : {}),game})});
         $('gameDialog').close();
         await refresh();

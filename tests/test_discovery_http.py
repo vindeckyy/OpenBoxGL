@@ -288,7 +288,7 @@ class DiscoveryHttpTests(unittest.TestCase):
         # a missing index is built lazily by search/status).
         self.request("/api/v2/library/dna/search", {"query": "cozy"})
         status, _payload = self.request(
-            "/api/games/bulk",
+            "/api/v2/games/bulk",
             {
                 "ids": [self.ids["DOOM"]],
                 "changes": {"tags": ["fps", "cozy"]},
@@ -302,7 +302,7 @@ class DiscoveryHttpTests(unittest.TestCase):
 
     def test_delete_removes_from_index(self):
         self.request("/api/v2/library/dna/search", {"query": "cozy"})
-        status, _payload = self.request("/api/game/delete", {"game_id": self.ids["DOOM"]})
+        status, _payload = self.request("/api/v2/game/delete", {"game_id": self.ids["DOOM"]})
         self.assertEqual(status, 200)
         index_path = os.path.join(self.tempdir.name, "dna_index.json")
         with open(index_path, encoding="utf-8") as handle:

@@ -588,7 +588,7 @@ def test_flatpak_manifest():
     content = manifest.read_text(encoding="utf-8")
     assert "app-id: io.openbox.GameLauncher" in content
     assert "runtime: org.gnome.Platform" in content
-    assert "runtime-version: '49'" in content
+    assert "runtime-version: '51'" in content
     assert "command: openbox" in content
     assert "openbox.sh" in content
     runtime_modules = (ROOT / "runtime_modules.txt").read_text(encoding="utf-8")

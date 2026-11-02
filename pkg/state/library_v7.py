@@ -525,6 +525,11 @@ def _check_game_path(
         findings.add("game_path_unreadable", f"{game_id}: {resolved}")
 
 
+def _media_manifest_enabled(raw: dict[str, Any]) -> bool:
+    settings = raw.get("settings") if isinstance(raw.get("settings"), dict) else {}
+    return bool(settings.get("media_manifest_enabled", True))
+
+
 def check_library(data_dir: Path) -> dict[str, Any]:
     """Read-only integrity report. Exit codes: 0 healthy, 1 warnings, 2 errors."""
     data_dir = Path(data_dir)
@@ -582,13 +587,23 @@ def check_library(data_dir: Path) -> dict[str, Any]:
         path = game.get("path")
         if isinstance(path, str) and path.strip():
             _check_game_path(findings, game_id, path, library_root, windows, folded)
-    media = media_manifest.verify(data_dir / "media")
-    for relative in media["missing"]:
-        findings.add("media_missing", relative)
-    for relative in media["changed"]:
-        findings.add("media_changed", relative)
-    for relative in media["untracked"]:
-        findings.add("media_untracked", relative)
+    if _media_manifest_enabled(raw):
+        media = media_manifest.verify(data_dir / "media")
+        report["media_manifest"] = {"enabled": True, **media}
+        for relative in media["missing"]:
+            findings.add("media_missing", relative)
+        for relative in media["changed"]:
+            findings.add("media_changed", relative)
+        for relative in media["untracked"]:
+            findings.add("media_untracked", relative)
+    else:
+        report["media_manifest"] = {
+            "enabled": False,
+            "tracked": 0,
+            "missing": [],
+            "changed": [],
+            "untracked": [],
+        }
     return findings.finish(report)
 
 
@@ -622,8 +637,12 @@ def repair_library(data_dir: Path, *, refresh_backup: bool = False) -> dict[str,
     read_model.unlink(missing_ok=True)
     if refresh_backup:
         atomic_write_bytes(data_dir / f"{PRIMARY_NAME}.bak", primary.read_bytes())
-    media = media_manifest.rebuild(data_dir / "media")
-    media_changed = bool(media["added"] or media["refreshed"] or media["dropped"])
+    if _media_manifest_enabled(state):
+        media = media_manifest.rebuild(data_dir / "media")
+        media_changed = bool(media["added"] or media["refreshed"] or media["dropped"])
+    else:
+        media = {"enabled": False, "added": 0, "refreshed": 0, "dropped": 0}
+        media_changed = False
     status = "repaired" if (changed or read_model_removed or refresh_backup or media_changed) else "nothing_to_repair"
     return {
         "status": status,

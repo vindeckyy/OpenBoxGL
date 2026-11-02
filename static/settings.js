@@ -1,4 +1,4 @@
-import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs, applyFontFamily } from './util.js';
+import { $, escapeHtml, formatBytes, defaultBadges, defaultControllerMap, fact, motionMs, applyFontFamily, apiPath } from './util.js';
 import { AppState, api, notify, token, nativeCaps, selectedIds, playlistFor, applySidebarVisibility, nativePickFile, nativePickFolder, nativeReveal, nativeOpenExternal } from './state.js';
 import { refresh, render, renderGrid, openRepairWizard, openDuplicatesDialog } from './library.js';
 import { applyLibraryMusic, syncPointerNavigator } from './bigbox.js';
@@ -409,6 +409,7 @@ import { initCompatReport } from './compat.js';
         health_rescan:$('healthRescanCadence')?.value || 'weekly',
         save_management_enabled:$('saveManagementEnabled')?.checked !== false,
         save_backup_limit:Number($('saveBackupLimit').value),
+        media_manifest_enabled:$('mediaManifestEnabled')?.checked !== false,
         media_download_limit:Number($('mediaDownloadLimit').value),
         media_download_limit_per_group:Number($('mediaDownloadLimitPerGroup').value),
         metadata_provider_priority:$('metadataProviderPriority').value.split(/[\n,]/).map(value => value.trim()).filter(Boolean),
@@ -540,7 +541,7 @@ import { initCompatReport } from './compat.js';
       shuttingDown = true;
       $('shutdownOverlay').hidden = false;
       $('shutdownMessage').textContent = force ? 'Force closing running games...' : 'Closing running games before exit...';
-      try { await api('/api/shutdown',{method:'POST',body:JSON.stringify({force})}); } catch(error) {}
+      try { await api('/api/v2/shutdown',{method:'POST',body:JSON.stringify({force})}); } catch(error) {}
       $('shutdownMessage').textContent = 'Running shutdown applications...';
       window.close();
     }
@@ -656,6 +657,7 @@ import { initCompatReport } from './compat.js';
         if ($('applyPerf')) $('applyPerf').value = AppState.appSettings.apply_perf || 'auto';
         if ($('autoCloseStoreClients')) $('autoCloseStoreClients').checked = Boolean(AppState.appSettings.auto_close_store_clients);
         $('saveBackupLimit').value = AppState.appSettings.save_backup_limit ?? 10;
+        if ($('mediaManifestEnabled')) $('mediaManifestEnabled').checked = AppState.appSettings.media_manifest_enabled !== false;
         $('mediaDownloadLimit').value = AppState.appSettings.media_download_limit ?? 0;
         $('mediaDownloadLimitPerGroup').value = AppState.appSettings.media_download_limit_per_group ?? 0;
         $('metadataProviderPriority').value = (AppState.appSettings.metadata_provider_priority || []).join(', ');
@@ -1062,7 +1064,7 @@ import { initCompatReport } from './compat.js';
       }
       AppState.appSettings.theme = result.selected || '';
       const link = $('themeStylesheet');
-      const href = result.selected ? `/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}` : '';
+      const href = result.selected ? apiPath(`/api/theme.css?name=${encodeURIComponent(result.selected)}&token=${encodeURIComponent(token)}`) : '';
       if (link.getAttribute('href') !== href) {
         const root = document.documentElement;
         // Cross-fade a live theme switch (not the first paint); reduced motion zeroes the token so it is skipped.
@@ -1093,7 +1095,7 @@ import { initCompatReport } from './compat.js';
     async function loadThemePalettes(names) {
       const palettes = {};
       await Promise.all(['', ...names].map(async name => {
-        const url = name ? `/api/theme.css?name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}` : '/static/app.css';
+        const url = name ? apiPath(`/api/theme.css?name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`) : '/static/app.css';
         try {
           const response = await fetch(url);
           const css = response.ok ? await response.text() : '';
@@ -1347,14 +1349,16 @@ import { initCompatReport } from './compat.js';
     }
     async function renderJobsPanel() {
       try {
-        const result = await api('/api/jobs');
-        const active = Object.entries(result.jobs || {}).filter(([, job]) => job.state === 'running' || job.state === 'queued');
-        const finished = (result.history || []).slice(0, 5);
+        const result = await api('/api/v2/jobs?limit=50');
+        const jobs = Array.isArray(result.jobs) ? result.jobs : [];
+        const active = jobs.filter(job => ['running', 'queued', 'cancelling'].includes(job.state));
+        const finished = jobs.filter(job => ['done', 'partial', 'error', 'cancelled', 'interrupted'].includes(job.state)).slice(0, 5);
         if (!active.length && !finished.length) { $('jobsPanel').hidden = true; return; }
-        const stateClass = state => state === 'error' ? 'danger' : (state === 'running' || state === 'queued') ? 'active' : '';
+        const stateClass = state => state === 'error' ? 'danger' : (state === 'running' || state === 'queued' || state === 'cancelling') ? 'active' : '';
+        const label = job => job.title || job.type || job.job_id;
         const rows = [
-          ...active.map(([name, job]) => `<div class="job-row"><strong>${escapeHtml(name)}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span>${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
-          ...finished.map(job => `<div class="job-row"><strong>${escapeHtml(job.name)}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span><small>${job.duration_seconds}s ago-finish</small>${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
+          ...active.map(job => `<div class="job-row"><strong>${escapeHtml(label(job))}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span>${job.message ? `<small>${escapeHtml(job.message)}</small>` : ''}${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
+          ...finished.map(job => `<div class="job-row"><strong>${escapeHtml(label(job))}</strong><span class="badge ${stateClass(job.state)}">${escapeHtml(job.state)}</span>${job.error ? `<small>${escapeHtml(job.error)}</small>` : ''}</div>`),
         ];
         $('jobsPanel').innerHTML = `<h3>Background jobs</h3><div class="facts">${rows.join('')}</div>`;
         $('jobsPanel').hidden = false;
@@ -1648,7 +1652,7 @@ import { initCompatReport } from './compat.js';
         });
         if (!ok) return;
         try {
-            const result = await api('/api/backup/restore',{method:'POST',body:JSON.stringify({path})});
+            const result = await api('/api/v2/backup/restore',{method:'POST',body:JSON.stringify({path})});
             clearBackupPreview();
             await refresh();
             openBackups();
@@ -1665,12 +1669,8 @@ import { initCompatReport } from './compat.js';
         if (!$('backupDialog').open) $('backupDialog').showModal();
       } catch(error) { notify(error.message); }
     }
-    // Format 1 is the 1.19-compatible export (no per-file hash manifest); 2 is the default.
-    function backupFormatChoice() {
-      return Number($('backupFormat')?.value) === 1 ? 1 : 2;
-    }
     async function createNamedBackup() {
-      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7,format:backupFormatChoice()})}); notify(t('notify.settings.backup_saved', {name: result.name})); openBackups(); } catch(error) { notify(error.message); }
+      try { const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})}); notify(t('notify.settings.backup_saved', {name: result.name})); openBackups(); } catch(error) { notify(error.message); }
     }
     async function deletePlaylist(name) {
       const ok = await confirmAction({
@@ -1687,7 +1687,7 @@ import { initCompatReport } from './compat.js';
     }
     async function backup() {
       try {
-        const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7,format:backupFormatChoice()})});
+        const result = await api('/api/backup/create',{method:'POST',body:JSON.stringify({items:['library','settings','media','plugins','themes'],keep:7})});
         notify(t('notify.settings.backup_saved', {name: result.name}));
       } catch(error) { notify(error.message); }
     }
@@ -1767,8 +1767,8 @@ import { initCompatReport } from './compat.js';
     async function waitForExportJob(jobId) {
       for (let attempt = 0; attempt < 40; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 750));
-        const jobs = await api('/api/jobs');
-        const entry = Object.values(jobs || {}).find(job => job && job.job_id === jobId);
+        const page = await api('/api/v2/jobs?limit=100');
+        const entry = (Array.isArray(page.jobs) ? page.jobs : []).find(job => job && job.job_id === jobId);
         if (!entry) continue;
         if (entry.state === 'done') return entry.result || {};
         if (entry.state === 'error') throw new Error(entry.error || 'Export failed');

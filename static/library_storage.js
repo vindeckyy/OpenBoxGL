@@ -32,15 +32,18 @@ function exampleText(examples) {
 }
 
 export function renderIntegrityReport(report) {
+  const disabled = report?.media_manifest?.enabled === false
+    ? `<p class="description">${escapeHtml(t('library_storage.manifest_disabled'))}</p>`
+    : '';
   const categories = Object.entries(report?.categories || {});
-  if (!categories.length) return `<p>${escapeHtml(t('library_storage.integrity_clean'))}</p>`;
+  if (!categories.length) return `${disabled}<p>${escapeHtml(t('library_storage.integrity_clean'))}</p>`;
   const rows = categories.map(([name, info]) => {
     const label = CATEGORY_KEYS[name] ? t(CATEGORY_KEYS[name]) : t('library_storage.cat_other', { name });
     const examples = exampleText(info?.examples);
     const detail = examples ? ` <span class="muted">${escapeHtml(t('library_storage.integrity_examples', { examples }))}</span>` : '';
     return `<li><strong>${escapeHtml(label)}</strong>: ${escapeHtml(String(info?.count ?? 0))}${detail}</li>`;
   });
-  return `<ul>${rows.join('')}</ul>`;
+  return `${disabled}<ul>${rows.join('')}</ul>`;
 }
 
 export async function checkLibraryIntegrity() {

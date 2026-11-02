@@ -59,16 +59,16 @@ class FourFeatureApiTests(unittest.TestCase):
             return response.status, json.loads(response.read())
 
     def test_queue_and_tags_round_trip(self):
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game_id = library["games"][0]["game_id"]
-        status, payload = self.request("/api/queue", {"action": "enqueue", "game_ids": [game_id], "note": "first"})
+        status, payload = self.request("/api/v2/queue", {"action": "enqueue", "game_ids": [game_id], "note": "first"})
         self.assertEqual(status, 200)
         self.assertEqual(payload["queue"][0]["game_id"], game_id)
         self.assertEqual(payload["queue"][0]["note"], "first")
-        status, payload = self.request("/api/tags", {"ids": [game_id], "tags": ["RPG", "rpg"]})
+        status, payload = self.request("/api/v2/tags", {"ids": [game_id], "tags": ["RPG", "rpg"]})
         self.assertEqual(status, 200)
         self.assertEqual(payload["updated"], 1)
-        status, library = self.request("/api/library")
+        status, library = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         self.assertEqual(library["games"][0]["tags"], ["RPG"])
 
@@ -78,11 +78,11 @@ class FourFeatureApiTests(unittest.TestCase):
             "profiles": {}, "history": [], "settings": {"webhooks": []}, "playlists": [],
             "queue": [], "notifications": [{"id": "n1", "title": "Notice", "body": "Body", "read": False}],
         })
-        status, payload = self.request("/api/notifications")
+        status, payload = self.request("/api/v2/notifications")
         self.assertEqual((status, payload["unread"]), (200, 1))
-        status, payload = self.request("/api/notifications", {"action": "read", "ids": ["n1"]})
+        status, payload = self.request("/api/v2/notifications", {"action": "read", "ids": ["n1"]})
         self.assertEqual((status, payload["unread"]), (200, 0))
-        status, payload = self.request("/api/webhooks")
+        status, payload = self.request("/api/v2/webhooks")
         self.assertEqual(status, 200)
         self.assertIn("events", payload)
         self.assertEqual(payload["webhooks"], [])

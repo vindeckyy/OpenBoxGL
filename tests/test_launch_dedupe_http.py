@@ -248,7 +248,7 @@ class RealLaunchHttpTests(unittest.TestCase):
 
     def request(self, payload, token="launch-http-token"):
         request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/api/launch",
+            f"http://127.0.0.1:{self.port}/api/v2/launch",
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json", **({"X-OpenBox-Token": token} if token else {})},
             method="POST",

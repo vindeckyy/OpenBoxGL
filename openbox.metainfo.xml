@@ -41,6 +41,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.1.0" date="2026-12-09">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.1.0</url>
+      <description>
+        <p>OpenBox 2.1 makes the 2.0 contracts the only contracts: /api/v1 and unversioned public API paths are gone, the native windows use /api/host, backups write format 2 only (format 1 still restores), and the library schema stays at 7 with no migration.</p>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-10-31">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0</url>
       <description>

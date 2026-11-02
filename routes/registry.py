@@ -15,8 +15,9 @@ class Route:
     spec: str
     func: Any = None
     public: bool = False
-    v1: bool = False
     visibility: str = "internal"
+    synthetic: bool = False
+    alias_of: str = ""
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -30,7 +31,9 @@ class Route:
             "path": self.path,
             "spec": self.spec,
             "public": self.public,
-            "v1": self.v1,
+            "visibility": self.visibility,
+            "synthetic": self.synthetic,
+            "alias_of": self.alias_of,
         }
 
 
@@ -50,13 +53,11 @@ def default_visibility(path: str) -> str:
     return "internal"
 
 
-def _check_visibility(path: str, visibility: str, *, v1: bool) -> None:
+def _check_visibility(path: str, visibility: str) -> None:
     if visibility not in VISIBILITIES:
         raise ValueError(f"Unknown route visibility {visibility!r} for {path}.")
     if visibility == "public" and not path.startswith("/api/v2/"):
         raise ValueError(f"Public route {path} must live under /api/v2/.")
-    if visibility == "public" and v1:
-        raise ValueError(f"Public route {path} cannot be a v1 alias.")
     if visibility == "host" and not path.startswith("/api/host/"):
         raise ValueError(f"Host route {path} must live under /api/host/.")
 
@@ -67,7 +68,6 @@ def register(
     spec: str | None = None,
     func: Any = None,
     public: bool = False,
-    v1: bool = False,
     visibility: str | None = None,
 ) -> Route:
     """Register a route in the central _REGISTRY."""
@@ -81,14 +81,13 @@ def register(
         else:
             raise ValueError("Either spec or func must be provided.")
     resolved_visibility = visibility or default_visibility(path)
-    _check_visibility(path, resolved_visibility, v1=v1)
+    _check_visibility(path, resolved_visibility)
     route_obj = Route(
         method=method_upper,
         path=path,
         spec=spec,
         func=func,
         public=public,
-        v1=v1,
         visibility=resolved_visibility,
     )
     key = (method_upper, path)
@@ -103,7 +102,6 @@ def route(
     path: str | Sequence[str],
     spec: str | None = None,
     public: bool = False,
-    v1: bool = False,
     visibility: str | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to register a handler method or function for an HTTP route."""
@@ -123,7 +121,6 @@ def route(
                 spec=resolved_spec,
                 func=func,
                 public=public,
-                v1=v1,
                 visibility=visibility,
             )
         return func
@@ -132,7 +129,18 @@ def route(
 
 
 def _ensure_handlers_loaded() -> None:
-    """Load all handler modules and web_app to trigger @route registrations."""
+    """Load all handler modules and web_app to trigger @route registrations.
+
+    When the app is started as ``python web_app.py``, the module is ``__main__``,
+    not ``web_app``. Importing ``web_app`` again would execute a second copy and
+    can fail partway through the handler list; skip it in that case, because its
+    decorators are already registered.
+    """
+    import sys
+
+    main = sys.modules.get("__main__")
+    main_file = str(getattr(main, "__file__", "") or "")
+    running_web_app = main_file.replace("\\", "/").endswith("/web_app.py") or main_file == "web_app.py"
     modules = (
         "handlers.library",
         "handlers.library_storage",
@@ -171,21 +179,59 @@ def _ensure_handlers_loaded() -> None:
         "web_app",
     )
     for mod in modules:
+        if mod == "web_app" and running_web_app:
+            continue
         importlib.import_module(mod)
 
 
+def _public_alias(path: str) -> str | None:
+    """Return the public /api/v2 name for a private /api base path, or None.
+
+    Base paths remain the implementation names used by handlers. The public
+    contract is the synthesized alias, which is what gates and docs describe.
+    """
+    if not path.startswith("/api/"):
+        return None
+    if path.startswith(("/api/v1/", "/api/v2/", "/api/host/")):
+        return None
+    return "/api/v2" + path[len("/api"):]
+
+
 def all_routes() -> list[Route]:
-    """Return all routes registered in the registry."""
+    """Return every registered route plus synthesized public /api/v2 aliases.
+
+    Explicit registrations always win. The synthesized entries exist so the
+    public surface can be ratcheted and documented without pretending the
+    private base path is public.
+    """
     _ensure_handlers_loaded()
-    return list(_REGISTRY.values())
+    explicit = list(_REGISTRY.values())
+    keys = {(route.method, route.path) for route in explicit}
+    synthesized = []
+    for route in explicit:
+        alias = _public_alias(route.path)
+        if alias is None or (route.method, alias) in keys:
+            continue
+        synthesized.append(
+            Route(
+                method=route.method,
+                path=alias,
+                spec=route.spec,
+                func=route.func,
+                public=True,
+                visibility="public",
+                synthetic=True,
+                alias_of=route.path,
+            )
+        )
+    return explicit + synthesized
 
 
 def get_routes_for_method(method: str) -> dict[str, str]:
-    """Return path -> spec mapping for a given HTTP method from registry."""
-    _ensure_handlers_loaded()
+    """Return path -> spec mapping for a given HTTP method, including aliases."""
     method_upper = method.upper()
     return {
-        r.path: r.spec
-        for (m, _), r in _REGISTRY.items()
-        if m == method_upper
+        route.path: route.spec
+        for route in all_routes()
+        if route.method == method_upper
     }

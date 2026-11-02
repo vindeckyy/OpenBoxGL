@@ -1,6 +1,6 @@
 # ADR 0100: 2.0 maintenance and 2.1 plan
 
-Status: Accepted (2026-10-29)
+Status: Accepted (2026-10-29); implemented by 2.1.0 (see ADRs 0102-0106)
 
 ## Context
 

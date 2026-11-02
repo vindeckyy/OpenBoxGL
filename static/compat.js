@@ -69,7 +69,7 @@ export function renderCompatReport(report) {
         prefix: apiInfo.public_prefix || '/api/v2',
         host: apiInfo.host_channel || '/api/host',
       }))),
-      item(escapeHtml(apiInfo.v1_bridge ? t('compat.api_v1_on') : t('compat.api_v1_off'))),
+      item(escapeHtml(t('compat.api_retired'))),
     ]),
     section('compat.section_sync', [item(escapeHtml(syncLine))]),
   ].join('');

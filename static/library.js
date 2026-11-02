@@ -2,7 +2,7 @@ import { subscribe } from './events.js';
 import { formatMoney, cycleFilterState, integerScale, facetCounts } from './pure.js';
 import { renderCoverModel, bindCoverModel } from './model3d.js';
 import { openDetailsPopup } from './details.js';
-import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams } from './util.js';
+import { $, escapeHtml, duration, fact, gameLinks, RATIO_BUCKETS, RATIO_REP, coverBucketOf, artworkKinds, trigramsOf, expandTrigrams, apiPath } from './util.js';
 import { token, AppState, gameIdOf, selectedIds, media, coverSource, badgeVisibility, renderBadges, api, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, notify, showToast, setButtonBusy, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, scheduleSearch, resetQuery, invalidateFilterCache } from './state.js';
 import { loadTheme, deletePlaylist } from './settings.js';
 import { importFolder, importDroppedFolder } from './imports.js';
@@ -1527,7 +1527,7 @@ function markFilterAria() {
           event.preventDefault();
           event.stopPropagation();
           try {
-            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id, user_rating: Number(button.dataset.star) }) });
+            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id, game_id: gameIdOf(id), user_rating: Number(button.dataset.star) }) });
             const game = AppState.games.find(item => item.id === id);
             if (game) game.user_rating = Number(button.dataset.star);
             renderGrid();
@@ -2027,7 +2027,7 @@ function markFilterAria() {
       const progressSelect = $('backlogProgress');
       if (progressSelect) progressSelect.onchange = async () => {
         try {
-          await api('/api/v2/library/progress/set', { method: 'POST', body: JSON.stringify({ id: game.id, progress: progressSelect.value || 'Unplayed' }) });
+          await api('/api/v2/library/progress/set', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, progress: progressSelect.value || 'Unplayed' }) });
           game.progress = progressSelect.value;
           // F1: `filteredGames()` is memoized against AppState._refreshCounter,
           // and `progress` is a filter field -- View = "Playing" kept reading the
@@ -2043,7 +2043,7 @@ function markFilterAria() {
       document.querySelectorAll('[data-star-detail]').forEach(wrap => {
         wrap.querySelectorAll('.star').forEach(button => button.onclick = async () => {
           try {
-            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id: game.id, user_rating: Number(button.dataset.star) }) });
+            await api('/api/v2/library/rating/set', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, user_rating: Number(button.dataset.star) }) });
             game.user_rating = Number(button.dataset.star);
             renderGrid();
             renderDetails();
@@ -2055,7 +2055,7 @@ function markFilterAria() {
       document.querySelectorAll('[data-session-edit]').forEach(button => button.onclick = () => openPlaytimeDialog(game, Number(button.dataset.sessionEdit)));
       document.querySelectorAll('[data-session-delete]').forEach(button => button.onclick = async () => {
         try {
-          await api('/api/v2/library/playtime/delete', { method: 'POST', body: JSON.stringify({ id: game.id, index: Number(button.dataset.sessionDelete) }) });
+          await api('/api/v2/library/playtime/delete', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, index: Number(button.dataset.sessionDelete) }) });
           await backlogRefresh();
           notify(t('backlog.playtime_deleted'));
         } catch(error) { notify(error.message); }
@@ -2064,7 +2064,7 @@ function markFilterAria() {
       document.querySelectorAll('[data-note-edit]').forEach(button => button.onclick = () => openNoteDialog(game, Number(button.dataset.noteEdit)));
       document.querySelectorAll('[data-note-delete]').forEach(button => button.onclick = async () => {
         try {
-          await api('/api/v2/library/notes/delete', { method: 'POST', body: JSON.stringify({ id: game.id, index: Number(button.dataset.noteDelete) }) });
+          await api('/api/v2/library/notes/delete', { method: 'POST', body: JSON.stringify({ id: game.id, game_id: game.game_id, index: Number(button.dataset.noteDelete) }) });
           await backlogRefresh();
           notify(t('backlog.note_deleted'));
         } catch(error) { notify(error.message); }
@@ -2180,8 +2180,9 @@ function markFilterAria() {
       } catch(error) {
         documents = AppState.appSettings.platform_documents?.[platformName] || [];
       }
+      const platformVideoUrl = apiPath(`/api/platform/video?platform=${encodeURIComponent(platformName)}&token=${encodeURIComponent(token)}`);
       const platformVideo = AppState.appSettings.platform_videos?.[platformName]
-        ? `<div class="detail-card"><h3>Platform video</h3><video class="platform-video" controls preload="metadata" src="/api/platform/video?platform=${encodeURIComponent(platformName)}&token=${encodeURIComponent(token)}"></video></div>`
+        ? `<div class="detail-card"><h3>Platform video</h3><video class="platform-video" controls preload="metadata" src="${platformVideoUrl}"></video></div>`
         : '';
       $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}${bigBoxHiddenControl('Platform', platformName)}<div class="detail-card"><h3>Platform</h3><div class="extras"><button type="button" class="icon-button" id="platformRename">Rename platform</button><button type="button" class="icon-button" id="platformDelete">Delete platform</button></div></div><div class="detail-card"><h3>Emulator settings for this platform</h3><label class="field"><span>Adapter id, blank uses detection</span><input id="platformEmulatorAdapter" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.adapter_id || '')}"></label><label class="field"><span>RetroArch core</span><input id="platformEmulatorCore" placeholder="snes9x_libretro.so" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.retroarch_core || '')}"></label><label class="field"><span>Extra arguments</span><input id="platformEmulatorArgs" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.extra_args || '')}"></label><div class="extras"><button type="button" class="icon-button" id="platformEmulatorSave">Save emulator settings</button></div></div><div class="detail-card"><h3>Presentation</h3><label class="field"><span>Cover model</span><select id="platformCoverModel"><option value="">Use global setting</option><option value="box">Box</option><option value="jewel">Jewel case</option><option value="long_jewel">Long jewel case</option><option value="double_jewel">Double jewel case</option><option value="cassette">Cassette</option><option value="none">Flat cover</option></select></label><label class="field"><span>Cassette back</span><select id="platformModelBack"><option value="">Use global setting</option><option value="straight">Straight</option><option value="angled">Angled</option></select></label><label class="field"><span>Cassette case</span><select id="platformModelCase"><option value="">Use global setting</option><option value="clear">Clear</option><option value="solid">Solid</option></select></label><label class="field"><span>3D rotation lock</span><select id="platformModelRotation"><option value="">Use global setting</option><option value="free">Free rotation</option><option value="horizontal">Lock horizontal</option><option value="vertical">Lock vertical</option></select></label><div class="platform-model-preview" id="platformModelPreview"></div><div class="extras"><button type="button" class="icon-button" id="platformVideoPick">Choose platform video</button><button type="button" class="icon-button" id="platformVideoClear">Clear platform video</button></div><p class="description" id="platformVideoStatus">${AppState.appSettings.platform_videos?.[platformName] ? 'A platform video is configured.' : 'No platform video configured.'}</p></div>${platformVideo}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<span class="extras"><button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button><button class="icon-button" data-platform-doc-up="${index}" aria-label="Move ${escapeHtml(item.name)} up">↑</button><button class="icon-button" data-platform-doc-down="${index}" aria-label="Move ${escapeHtml(item.name)} down">↓</button></span>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
       if ($('platformRename')) $('platformRename').onclick = async () => {
@@ -2308,7 +2309,7 @@ function markFilterAria() {
       document.querySelectorAll('[data-platform-doc]').forEach(button => button.onclick = () => {
         const doc = documents[Number(button.dataset.platformDoc)];
         if (!doc) return;
-        openReader({id:'platform', documents:[doc], name:platformName}, 0, `/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`);
+        openReader({id:'platform', documents:[doc], name:platformName}, 0, apiPath(`/api/platform/document?platform=${encodeURIComponent(platformName)}&index=${button.dataset.platformDoc}&token=${encodeURIComponent(token)}`));
       });
       document.querySelectorAll('[data-platform-doc-up]').forEach(button => button.onclick = () => movePlatformDocument(Number(button.dataset.platformDocUp), -1));
       document.querySelectorAll('[data-platform-doc-down]').forEach(button => button.onclick = () => movePlatformDocument(Number(button.dataset.platformDocDown), 1));

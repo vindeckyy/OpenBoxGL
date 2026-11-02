@@ -1,6 +1,6 @@
 {
-  "format": 1,
-  "app_version": "2.0.0",
+  "format": 2,
+  "app_version": "2.1.0",
   "public": [
     {
       "method": "GET",
@@ -1569,384 +1569,482 @@
       "path": "/api/host/shutdown"
     }
   ],
-  "v1_bridge": {
-    "enabled_by_default": false,
-    "env": "OPENBOX_ENABLE_V1_API",
-    "removal": "2.1.0",
-    "routes": [
-      {
-        "path": "/api/v1/backup",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/backup/create",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/backup/restore",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/backups",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/bigbox/mode",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/diagnostic",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/emulators",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/emulators/install",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/extra/launch",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/favorite",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/filter-presets",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/game",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/game/delete",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/games/bulk",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/games/bulk-wizard",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/gameyfin/test",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/health",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/health/dedupe",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/history",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/import",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/arcade",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/epic",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/heroic",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/lutris",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/rpcs3",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/scummvm",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/steam",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/import/vita3k",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/jobs",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/launch",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/library",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/log",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/media",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/media/audit",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/media/bulk",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/media/cleanup",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/metadata/apply",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/metadata/match",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/metadata/search",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/metadata/status",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/notifications",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/playlists",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/plugins",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/premium/media-packs",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/premium/media-packs/apply",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/profiles",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/queue",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/ra/inject",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/running",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/saves",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/saves/scan/apply",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/settings",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/shutdown",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/state/recover",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/storefront/import",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/tags",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/themes",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/themes/open-folder",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/update",
-        "methods": [
-          "GET"
-        ]
-      },
-      {
-        "path": "/api/v1/update/install",
-        "methods": [
-          "POST"
-        ]
-      },
-      {
-        "path": "/api/v1/webhooks",
-        "methods": [
-          "GET",
-          "POST"
-        ]
-      }
-    ]
-  }
+  "retired": [
+    {
+      "method": "GET",
+      "path": "/api/v1/backup",
+      "replacement": "/api/v2/backup",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/backup/create",
+      "replacement": "/api/v2/backup/create",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/backup/restore",
+      "replacement": "/api/v2/backup/restore",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/backups",
+      "replacement": "/api/v2/backups",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/bigbox/mode",
+      "replacement": "/api/v2/bigbox/mode",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/diagnostic",
+      "replacement": "/api/v2/diagnostic",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/emulators",
+      "replacement": "/api/v2/emulators",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/emulators/install",
+      "replacement": "/api/v2/emulators/install",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/extra/launch",
+      "replacement": "/api/v2/extra/launch",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/favorite",
+      "replacement": "/api/v2/favorite",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/filter-presets",
+      "replacement": "/api/v2/filter-presets",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/filter-presets",
+      "replacement": "/api/v2/filter-presets",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/game",
+      "replacement": "/api/v2/game",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/game/delete",
+      "replacement": "/api/v2/game/delete",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/games/bulk",
+      "replacement": "/api/v2/games/bulk",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/games/bulk-wizard",
+      "replacement": "/api/v2/games/bulk-wizard",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gameyfin/test",
+      "replacement": "/api/v2/gameyfin/test",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/health",
+      "replacement": "/api/v2/health",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/health/dedupe",
+      "replacement": "/api/v2/health/dedupe",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/history",
+      "replacement": "/api/v2/history",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import",
+      "replacement": "/api/v2/import",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/arcade",
+      "replacement": "/api/v2/import/arcade",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/epic",
+      "replacement": "/api/v2/import/epic",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/heroic",
+      "replacement": "/api/v2/import/heroic",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/lutris",
+      "replacement": "/api/v2/import/lutris",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/rpcs3",
+      "replacement": "/api/v2/import/rpcs3",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/scummvm",
+      "replacement": "/api/v2/import/scummvm",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/steam",
+      "replacement": "/api/v2/import/steam",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/import/vita3k",
+      "replacement": "/api/v2/import/vita3k",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/jobs",
+      "replacement": "/api/v2/jobs",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/launch",
+      "replacement": "/api/v2/launch",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/library",
+      "replacement": "/api/v2/library",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/log",
+      "replacement": "/api/v2/log",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/media",
+      "replacement": "/api/v2/media",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/media/audit",
+      "replacement": "/api/v2/media/audit",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/media/bulk",
+      "replacement": "/api/v2/media/bulk",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/media/cleanup",
+      "replacement": "/api/v2/media/cleanup",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/metadata/apply",
+      "replacement": "/api/v2/metadata/apply",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/metadata/match",
+      "replacement": "/api/v2/metadata/match",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metadata/search",
+      "replacement": "/api/v2/metadata/search",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metadata/status",
+      "replacement": "/api/v2/metadata/status",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "replacement": "/api/v2/notifications",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications",
+      "replacement": "/api/v2/notifications",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/playlists",
+      "replacement": "/api/v2/playlists",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/plugins",
+      "replacement": "/api/v2/plugins",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/premium/media-packs",
+      "replacement": "/api/v2/premium/media-packs",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/premium/media-packs/apply",
+      "replacement": "/api/v2/premium/media-packs/apply",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profiles",
+      "replacement": "/api/v2/profiles",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/profiles",
+      "replacement": "/api/v2/profiles",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/queue",
+      "replacement": "/api/v2/queue",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/queue",
+      "replacement": "/api/v2/queue",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ra/inject",
+      "replacement": "/api/v2/ra/inject",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/running",
+      "replacement": "/api/v2/running",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/saves",
+      "replacement": "/api/v2/saves",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/saves/scan/apply",
+      "replacement": "/api/v2/saves/scan/apply",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings",
+      "replacement": "/api/v2/settings",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings",
+      "replacement": "/api/v2/settings",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shutdown",
+      "replacement": "/api/v2/shutdown",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/state/recover",
+      "replacement": "/api/v2/state/recover",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/storefront/import",
+      "replacement": "/api/v2/storefront/import",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tags",
+      "replacement": "/api/v2/tags",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tags",
+      "replacement": "/api/v2/tags",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/themes",
+      "replacement": "/api/v2/themes",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/themes/open-folder",
+      "replacement": "/api/v2/themes/open-folder",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/update",
+      "replacement": "/api/v2/update",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/update/install",
+      "replacement": "/api/v2/update/install",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/webhooks",
+      "replacement": "/api/v2/webhooks",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks",
+      "replacement": "/api/v2/webhooks",
+      "retired_in": "2.1.0",
+      "reason": "Retired in 2.1.0: the /api/v1 bridge was removed (ADR 0103)."
+    }
+  ]
 }

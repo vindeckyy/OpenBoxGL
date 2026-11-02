@@ -1,8 +1,11 @@
 {
   "version": 1,
   "format": 2,
-  "supported_formats": [
+  "readable_formats": [
     1,
+    2
+  ],
+  "writable_formats": [
     2
   ],
   "manifest_fields_v2": [

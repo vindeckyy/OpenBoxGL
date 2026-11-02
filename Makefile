@@ -44,6 +44,9 @@ ratchets:
 	$(PYTHON) -B scripts/check_exec_modes.py
 	$(PYTHON) -B scripts/check_state_schema.py
 	$(PYTHON) -B scripts/check_api_contract.py
+	$(PYTHON) -B scripts/check_backup_format.py
+	$(PYTHON) -B scripts/check_deprecations.py
+	$(PYTHON) -B scripts/check_api_paths.py
 
 
 native-host:

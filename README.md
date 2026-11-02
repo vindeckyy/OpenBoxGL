@@ -17,11 +17,11 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python 3.10+"></a>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/Release-v2.0.0-0052CC?style=for-the-badge" alt="Release v2.0.0"></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/Release-v2.1.0-0052CC?style=for-the-badge" alt="Release v2.1.0"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/vindeckyy/OpenBoxGL/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
   <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Linux, Windows, and macOS"></a>
   <br>
-  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v2.0.0</strong></a>
+  <a href="https://github.com/vindeckyy/OpenBoxGL/releases/latest"><strong>Latest stable: v2.1.0</strong></a>
 </p>
 
 <p align="center">
@@ -118,7 +118,7 @@ The full capability matrix with acceptance checks lives in [PARITY.md](docs/PARI
 
 ## Features
 
-### Stable contracts (2.0.0)
+### Stable contracts (2.0+)
 
 **Your library can move, your integrations stop moving.** Game paths under one
 library folder are stored as `@library/...` tokens, so the folder can move to
@@ -127,11 +127,11 @@ Move library** previews the move and refuses a stale preview. The library
 upgrades to format 7 on first start with `library.v6.backup.json` kept and
 `openbox --rollback-library` to restore it, and **Settings > Library > Check
 integrity** reports missing, unreadable, or moved-behind-your-back files. The
-public API is `/api/v2` (retired `/api/v1` is an opt-in bridge through 2.0.x),
-errors are RFC 9457 problem documents, backups record a SHA-256 for every file
-as format 2 with a 1.19-compatible export, and plugins can declare API v2 with
-a JSON Lines runner and versioned host services. The Windows release now ships
-an ARM64 build next to x86_64; the macOS bundle stays ad-hoc signed.
+public API is `/api/v2` (the `/api/v1` bridge was removed in 2.1), errors are
+RFC 9457 problem documents, backups record a SHA-256 for every file as format 2
+(format 1 still restores), and plugins can declare API v2 with a JSON Lines
+runner and versioned host services. The Windows release ships an ARM64 build
+next to x86_64; the macOS bundle stays ad-hoc signed.
 
 ### Now on macOS (1.19.0)
 
@@ -397,7 +397,7 @@ REST API with token auth, Python plugins (`library`, `before_launch`, `after_ses
 Download the installer from a specific signed release, inspect it, then run it. The installer detects `uname -m` (override with `OPENBOX_ARCH=x86_64` or `OPENBOX_ARCH=aarch64`), selects the matching AppImage, and verifies the release public-key pin, SHA-256 checksum, and Ed25519 signature before installing to `~/.local/bin`:
 
 ```bash
-VERSION=2.0.0
+VERSION=2.1.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install.sh"
@@ -423,7 +423,7 @@ bundled installer from Windows PowerShell 5.1. Requires Python 3.10+ on `PATH`
 uses the same `updates.py` Ed25519 code path as the in-app updater:
 
 ```powershell
-$Version = '2.0.0'
+$Version = '2.1.0'
 Invoke-WebRequest -UseBasicParsing -OutFile OpenBox-x86_64-windows.zip `
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v$Version/OpenBox-x86_64-windows.zip"
 Expand-Archive OpenBox-x86_64-windows.zip -DestinationPath .
@@ -496,7 +496,7 @@ SHA-256 sidecar, and its Ed25519 signature, then installs `OpenBox.app` into
 `~/Applications` and links `openbox` into `~/.local/bin`:
 
 ```bash
-VERSION=2.0.0
+VERSION=2.1.0
 curl --proto '=https' --tlsv1.2 --fail --location \
   --output install-macos.sh \
   "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
@@ -654,9 +654,8 @@ OpenBox/
 ├── handlers/               Route handler mixins (library, media, imports, settings, ...)
 ├── web_app.py              Loopback server + REST API (shared core)
 ├── webapp_state.py         SSE/event bus facade over the canonical state owner
-├── routes.py               GET/POST route tables (public `/api/v2` surface, `/api/host` channel, retired `/api/v1` opt-in bridge)
+├── routes.py               GET/POST route tables (public `/api/v2` surface and `/api/host` channel)
 ├── routes/                 `@route` decorator registry only (handlers are imported by web_app.py)
-├── contracts.py            Public API contract (`api_contracts.json`); the frozen v1 route list lives in `docs/archive/v1_contracts.json` behind `OPENBOX_ENABLE_V1_API`
 ├── openbox.py              Shared core helpers (data paths, launch, profiles)
 ├── static/                 Frontend JavaScript modules, search worker, and app.css
 ├── state_store.py          Schema-versioned state, atomic writes, snapshots

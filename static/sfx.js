@@ -2,6 +2,7 @@
 // relative music/sounds paths; the server serves those through
 // /api/theme-asset. Missing sidecars are silent, never an error.
 import { api, token } from './state.js';
+import { apiPath } from './util.js';
 
 const state = {
   name: '',
@@ -14,7 +15,7 @@ const state = {
 
 function assetUrl(relative) {
   if (!relative) return '';
-  return `/api/theme-asset?name=${encodeURIComponent(state.name)}&path=${encodeURIComponent(relative)}&token=${encodeURIComponent(token)}`;
+  return apiPath(`/api/theme-asset?name=${encodeURIComponent(state.name)}&path=${encodeURIComponent(relative)}&token=${encodeURIComponent(token)}`);
 }
 
 export async function configureThemeSounds(name, { enabled = true } = {}) {
@@ -27,7 +28,7 @@ export async function configureThemeSounds(name, { enabled = true } = {}) {
   state.music = '';
   state.sounds = {};
   if (!theme) return;
-  state.loading = api(`/api/theme-sounds?name=${encodeURIComponent(theme)}`)
+  state.loading = api(`/api/v2/theme-sounds?name=${encodeURIComponent(theme)}`)
     .then(result => {
       if (state.name !== theme) return;
       state.music = result?.music || '';

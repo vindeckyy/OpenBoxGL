@@ -1,4 +1,4 @@
-"""JobsHandlers capability handlers. v2 jobs API and legacy /api/jobs adapter."""
+"""JobsHandlers capability handlers for the v2 jobs API."""
 
 from urllib.parse import parse_qs
 
@@ -35,13 +35,6 @@ def _operation_error(error: Exception):
 
 
 class JobsHandlers:
-    @route("GET", ["/api/jobs", "/api/v1/jobs"], v1=True)
-    def _api_get_api_jobs(self, parsed):
-        self.send_json(200, {
-            "jobs": JOB_MANAGER.snapshots(),
-            "history": JOB_MANAGER.history(),
-        })
-
     @route("GET", "/api/v2/jobs")
     def _api_get_api_v2_jobs(self, parsed):
         query = parse_qs(parsed.query)

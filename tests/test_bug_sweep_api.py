@@ -117,12 +117,12 @@ class ApiSweep(unittest.TestCase):
         return response.status, parsed_body, dict(response.getheaders())
 
     def assert_alive(self):
-        status, payload = self.request("/api/health", {})
+        status, payload = self.request("/api/v2/health", {})
         self.assertEqual(status, 200)
         self.assertIn("issues", payload)
 
     def test_fixture(self):
-        status, payload = self.request("/api/library")
+        status, payload = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"][0]["name"], "Fixture")
         self.assertTrue(payload["games"][0]["game_id"])
@@ -141,7 +141,7 @@ class ApiSweep(unittest.TestCase):
                 self.web_app._AUTH_FAILURES.clear()
             status, _ = self.request(route, token="wrong")
             self.assertEqual(status, 403, route)
-        status, _ = self.request("/api/library?token=sweep-token", token=None)
+        status, _ = self.request("/api/v2/library?token=sweep-token", token=None)
         self.assertEqual(status, 200)
         self.assert_alive()
 
@@ -159,7 +159,7 @@ class ApiSweep(unittest.TestCase):
 
     def test_host_filter(self):
         status, payload, _ = self.raw_request(
-            "/api/library",
+            "/api/v2/library",
             headers={"Host": "evil.example", "X-OpenBox-Token": "sweep-token"},
         )
         self.assertEqual(status, 403)
@@ -174,7 +174,7 @@ class ApiSweep(unittest.TestCase):
         last_status = None
         last_payload = {}
         for _ in range(15):
-            status, payload = self.request("/api/library", token="wrong")
+            status, payload = self.request("/api/v2/library", token="wrong")
             last_status = status
             last_payload = payload
             if status == 429:
@@ -182,7 +182,7 @@ class ApiSweep(unittest.TestCase):
         self.assertEqual(last_status, 429)
         self.assertEqual(last_payload.get("code"), "RATE_LIMITED")
         self.assertGreater(int(last_payload.get("retry_after", 0)), 0)
-        status, payload = self.request("/api/library", token="sweep-token")
+        status, payload = self.request("/api/v2/library", token="sweep-token")
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"][0]["name"], "Fixture")
         self.assert_alive()
@@ -191,8 +191,8 @@ class ApiSweep(unittest.TestCase):
         # compare_digest raises TypeError on non-ASCII str; that escaped as a
         # 400 BAD_REQUEST and never counted toward the auth rate limiter.
         for path, headers in (
-            ("/api/library", {"X-OpenBox-Token": "tést"}),
-            ("/api/library?token=%C3%A9", {}),
+            ("/api/v2/library", {"X-OpenBox-Token": "tést"}),
+            ("/api/v2/library?token=%C3%A9", {}),
         ):
             with self.web_app._AUTH_FAILURES_LOCK:
                 self.web_app._AUTH_FAILURES.clear()
@@ -201,7 +201,7 @@ class ApiSweep(unittest.TestCase):
             self.assertEqual(payload.get("error"), "Unauthorized")
             with self.web_app._AUTH_FAILURES_LOCK:
                 self.assertEqual(sum(len(v) for v in self.web_app._AUTH_FAILURES.values()), 1, path)
-        status, _, _ = self.raw_request("/api/settings", headers={"X-OpenBox-Token": "é"}, body={}, method="POST")
+        status, _, _ = self.raw_request("/api/v2/settings", headers={"X-OpenBox-Token": "é"}, body={}, method="POST")
         self.assertEqual(status, 403)
         with self.web_app._AUTH_FAILURES_LOCK:
             self.web_app._AUTH_FAILURES.clear()
@@ -230,48 +230,48 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
     def test_validation(self):
         for body in (b"{", b"[]", b"null", b'"text"'):
-            status, payload = self.request("/api/settings", body, raw=True)
+            status, payload = self.request("/api/v2/settings", body, raw=True)
             self.assertEqual(status, 400, body)
             self.assertIn("error", payload)
             self.assert_alive()
-        status, payload = self.request("/api/not-a-route", {})
+        status, payload = self.request("/api/v2/not-a-route", {})
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"], "Not found")
         self.assertEqual(payload["code"], "ROUTE_NOT_FOUND")
-        status, payload = self.request("/api/settings", b'{' + b'"x":"' + b'x' * 65537 + b'"}', raw=True)
+        status, payload = self.request("/api/v2/settings", b'{' + b'"x":"' + b'x' * 65537 + b'"}', raw=True)
         self.assertEqual(status, 400)
         self.assertIn("large", payload["error"].lower())
         self.assert_alive()
 
     def test_exceptions(self):
         with mock.patch("handlers.health.check_update", side_effect=AttributeError("missing tag")):
-            status, payload = self.request("/api/update")
+            status, payload = self.request("/api/v2/update")
         self.assertEqual(status, 400)
         self.assertIn("missing tag", payload["error"])
         with mock.patch("handlers.imports.storefront_catalog", side_effect=ValueError("bad source")):
-            status, payload = self.request("/api/storefront/catalog?source=fixture")
+            status, payload = self.request("/api/v2/storefront/catalog?source=fixture")
         self.assertEqual(status, 400)
         self.assertIn("bad source", payload["error"])
         with mock.patch(
             "handlers.imports.storefront_catalog",
             side_effect=subprocess.TimeoutExpired(cmd=["lutris"], timeout=30),
         ):
-            status, payload = self.request("/api/storefront/catalog?source=lutris")
+            status, payload = self.request("/api/v2/storefront/catalog?source=lutris")
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
         with mock.patch(
             "handlers.imports.import_lutris",
             side_effect=subprocess.CalledProcessError(1, ["lutris"]),
         ):
-            status, payload = self.request("/api/import/lutris", {})
+            status, payload = self.request("/api/v2/import/lutris", {})
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
         self.assert_alive()
 
     def test_settings(self):
-        status, _ = self.request("/api/settings", {"screensaver_seconds": 45})
+        status, _ = self.request("/api/v2/settings", {"screensaver_seconds": 45})
         self.assertEqual(status, 200)
-        status, settings = self.request("/api/settings")
+        status, settings = self.request("/api/v2/settings")
         self.assertEqual(status, 200)
         self.assertEqual(settings["watch_folders"], [self.tempdir.name])
         self.assertTrue(settings["storefront_auto_import"]["steam"])
@@ -294,7 +294,7 @@ class ApiSweep(unittest.TestCase):
 
             def worker(key, value, statuses=statuses, barrier=barrier):
                 barrier.wait()
-                status, _ = self.request("/api/settings", {key: value})
+                status, _ = self.request("/api/v2/settings", {key: value})
                 statuses[key] = status
 
             threads = [
@@ -306,7 +306,7 @@ class ApiSweep(unittest.TestCase):
             for thread in threads:
                 thread.join()
             self.assertEqual(set(statuses.values()), {200}, statuses)
-            status, settings = self.request("/api/settings")
+            status, settings = self.request("/api/v2/settings")
             self.assertEqual(status, 200)
             expected = {
                 "screensaver_seconds": values[0],
@@ -323,20 +323,20 @@ class ApiSweep(unittest.TestCase):
         self.assert_alive()
 
     def test_lifecycle(self):
-        for path in ("/api/saves?id=99", "/api/saves/discover?id=99"):
+        for path in ("/api/v2/saves?id=99", "/api/v2/saves/discover?id=99"):
             status, payload = self.request(path)
             self.assertEqual(status, 404)
             self.assertIn("error", payload)
-        status, payload = self.request("/api/gameyfin/install/status")
+        status, payload = self.request("/api/v2/gameyfin/install/status")
         self.assertEqual(status, 400)
         self.assertIn("gameyfin_id", payload["error"])
-        status, payload = self.request("/api/session/control", {"launch_id": "missing", "action": "stop"})
+        status, payload = self.request("/api/v2/session/control", {"launch_id": "missing", "action": "stop"})
         self.assertIn(status, (200, 400, 404))
         self.assertIsInstance(payload, dict)
         self.assert_alive()
 
     def test_bigbox_mode_switch(self):
-        status, payload = self.request("/api/bigbox/mode", {"entering": False})
+        status, payload = self.request("/api/v2/bigbox/mode", {"entering": False})
         self.assertEqual(status, 200)
         self.assertTrue(payload.get("ok"))
         self.assertFalse(payload.get("entering"))
@@ -350,38 +350,38 @@ class ApiSweep(unittest.TestCase):
             "playlists": [],
         })
         with mock.patch.object(sessions.subprocess, "Popen") as popen:
-            status, payload = self.request("/api/bigbox/mode", {"entering": False})
+            status, payload = self.request("/api/v2/bigbox/mode", {"entering": False})
             self.assertEqual(status, 200)
             self.assertEqual(payload.get("commands"), 0)
             popen.assert_not_called()
 
-            status, payload = self.request("/api/bigbox/mode", {"entering": True})
+            status, payload = self.request("/api/v2/bigbox/mode", {"entering": True})
             self.assertEqual(status, 200)
             popen.assert_not_called()
 
-            status, payload = self.request("/api/bigbox/mode", {"entering": False})
+            status, payload = self.request("/api/v2/bigbox/mode", {"entering": False})
             self.assertEqual(status, 200)
             self.assertEqual(payload.get("commands"), 1)
             popen.assert_called_once_with(["openbox-test-command"], **sessions.launch_kwargs())
 
     def test_related_rich_by_game_id(self):
-        status, library = self.request("/api/library")
+        status, library = self.request("/api/v2/library")
         self.assertEqual(status, 200)
         game_id = library["games"][0]["game_id"]
-        status, payload = self.request(f"/api/related/rich?game_id={game_id}")
+        status, payload = self.request(f"/api/v2/related/rich?game_id={game_id}")
         self.assertEqual(status, 200)
         self.assertIn("items", payload)
 
     def test_settings_preservation(self):
         hint = "A Play · B Back · M Menu"
-        status, _ = self.request("/api/settings", {
+        status, _ = self.request("/api/v2/settings", {
             "tracking_process_name": "custom_proc",
             "sidebar_sections": ["favorites", "recent"],
             "controller_prompt_hint": hint,
             "controller_prompt_pack": "playstation",
         })
         self.assertEqual(status, 200)
-        status, settings = self.request("/api/settings")
+        status, settings = self.request("/api/v2/settings")
         self.assertEqual(status, 200)
         self.assertEqual(settings.get("tracking_process_name"), "custom_proc")
         self.assertEqual(settings.get("sidebar_sections"), ["favorites", "recent"])
@@ -390,27 +390,27 @@ class ApiSweep(unittest.TestCase):
         self.assertEqual(settings.get("controller_prompt_pack"), "playstation")
 
     def test_controller_prompt_hint_bool_coerces_to_string(self):
-        status, _ = self.request("/api/settings", {"controller_prompt_hint": True})
+        status, _ = self.request("/api/v2/settings", {"controller_prompt_hint": True})
         self.assertEqual(status, 200)
-        status, settings = self.request("/api/settings")
+        status, settings = self.request("/api/v2/settings")
         self.assertEqual(settings.get("controller_prompt_hint"), "A Play · B Back · M Menu")
         self.assertIsInstance(settings.get("controller_prompt_hint"), str)
 
     def test_emulator_validation(self):
-        for path in ("/api/emulators/install", "/api/emulators/open", "/api/emulators/update"):
+        for path in ("/api/v2/emulators/install", "/api/v2/emulators/open", "/api/v2/emulators/update"):
             status, payload = self.request(path, {"app_id": ""})
             self.assertEqual(status, 400, f"Expected 400 for empty app_id on {path}")
 
     def test_import_validation(self):
         invalid_requests = (
-            ("/api/import", {"folder": ""}, "Folder path is required."),
-            ("/api/import/wizard", {"folder": ""}, "Folder path is required."),
-            ("/api/import/wizard", {"folder": "/tmp", "chosen_emulators": "invalid"}, "chosen_emulators must be an object."),
-            ("/api/import/xbox360", {"folder": ""}, "Folder path is required."),
-            ("/api/import/arcade", {"folder": ""}, "Folder path is required."),
-            ("/api/import/exclusions", {"source": ""}, "source and external_id are required."),
-            ("/api/import/exclusions/delete", {"source": ""}, "source and external_id are required."),
-            ("/api/storefront/import", {"source": "unsupported_store"}, "Storefront source must be steam, heroic, lutris, or gameyfin."),
+            ("/api/v2/import", {"folder": ""}, "Folder path is required."),
+            ("/api/v2/import/wizard", {"folder": ""}, "Folder path is required."),
+            ("/api/v2/import/wizard", {"folder": "/tmp", "chosen_emulators": "invalid"}, "chosen_emulators must be an object."),
+            ("/api/v2/import/xbox360", {"folder": ""}, "Folder path is required."),
+            ("/api/v2/import/arcade", {"folder": ""}, "Folder path is required."),
+            ("/api/v2/import/exclusions", {"source": ""}, "source and external_id are required."),
+            ("/api/v2/import/exclusions/delete", {"source": ""}, "source and external_id are required."),
+            ("/api/v2/storefront/import", {"source": "unsupported_store"}, "Storefront source must be steam, heroic, lutris, or gameyfin."),
         )
         for path, body, expected_error in invalid_requests:
             status, payload = self.request(path, body)
@@ -419,7 +419,7 @@ class ApiSweep(unittest.TestCase):
             self.assertEqual(payload.get("error"), expected_error)
         spaced_folder = Path(self.tempdir.name) / "roms "
         spaced_folder.mkdir(exist_ok=True)
-        status, payload = self.request("/api/import", {"folder": str(spaced_folder)})
+        status, payload = self.request("/api/v2/import", {"folder": str(spaced_folder)})
         self.assertEqual(status, 200)
         self.assertEqual(payload.get("found"), 0)
 

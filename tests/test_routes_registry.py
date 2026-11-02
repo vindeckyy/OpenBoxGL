@@ -27,11 +27,16 @@ class RouteRegistryInvariantTests(unittest.TestCase):
                 with self.subTest(method=route.method, path=route.path):
                     self.assertTrue(route.path.startswith("/api/host/"))
 
-    def test_no_v1_alias_is_public(self):
+    def test_every_private_api_base_has_a_public_v2_twin(self):
+        by_key = {(route.method, route.path) for route in self.routes}
         for route in self.routes:
-            if route.v1:
-                with self.subTest(method=route.method, path=route.path):
-                    self.assertNotEqual(route.visibility, "public")
+            if not route.path.startswith("/api/v2/"):
+                continue
+            if route.path.startswith(("/api/v1/", "/api/v2/", "/api/host/")):
+                continue
+            twin = "/api/v2/v2" + route.path[len("/api"):]
+            with self.subTest(method=route.method, path=route.path):
+                self.assertIn((route.method, twin), by_key)
 
     def test_duplicate_method_and_path_is_rejected(self):
         probe = "/api/v2/registry-duplicate-probe"

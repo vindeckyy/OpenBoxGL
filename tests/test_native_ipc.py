@@ -51,7 +51,7 @@ class NativeIpcTests(unittest.TestCase):
     def test_capabilities_reports_no_host(self):
         with mock.patch.dict(os.environ, {}):
             os.environ.pop("OPENBOX_NATIVE_HOST", None)
-            status, payload = self.request("/api/native/capabilities")
+            status, payload = self.request("/api/v2/native/capabilities")
         self.assertEqual(status, 200)
         self.assertFalse(payload["dialogs"])
         self.assertFalse(payload["webview"])
@@ -61,7 +61,7 @@ class NativeIpcTests(unittest.TestCase):
 
     def test_capabilities_reports_host_present(self):
         with mock.patch.dict(os.environ, {"OPENBOX_NATIVE_HOST": "1"}):
-            status, payload = self.request("/api/native/capabilities")
+            status, payload = self.request("/api/v2/native/capabilities")
         self.assertEqual(status, 200)
         self.assertTrue(payload["webview"])
         self.assertTrue(payload["dialogs"])
@@ -72,36 +72,36 @@ class NativeIpcTests(unittest.TestCase):
         self.assertTrue(payload["clipboard"])
 
     def test_capabilities_requires_auth(self):
-        req = urllib.request.Request(self.origin + "/api/native/capabilities")
+        req = urllib.request.Request(self.origin + "/api/v2/native/capabilities")
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req)
         self.assertEqual(ctx.exception.code, 403)
 
     def test_post_endpoints_require_auth(self):
-        for path in ("/api/native/dialog", "/api/native/open-external", "/api/native/reveal", "/api/native/window"):
+        for path in ("/api/v2/native/dialog", "/api/v2/native/open-external", "/api/v2/native/reveal", "/api/v2/native/window"):
             req = urllib.request.Request(self.origin + path, data=b"{}", headers={"Content-Type": "application/json"})
             with self.assertRaises(urllib.error.HTTPError) as ctx:
                 urllib.request.urlopen(req)
             self.assertEqual(ctx.exception.code, 403)
 
     def test_dialog_without_host_is_cancelled(self):
-        status, payload = self.request("/api/native/dialog", method="POST", body={"kind": "folder"})
+        status, payload = self.request("/api/v2/native/dialog", method="POST", body={"kind": "folder"})
         self.assertEqual(status, 200)
         self.assertIsNone(payload["path"])
         self.assertTrue(payload["cancelled"])
 
     def test_dialog_rejects_bad_kind(self):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
-            self.request("/api/native/dialog", method="POST", body={"kind": "nope"})
+            self.request("/api/v2/native/dialog", method="POST", body={"kind": "nope"})
         self.assertEqual(ctx.exception.code, 400)
 
     def test_open_external_without_host_is_not_ok(self):
-        status, payload = self.request("/api/native/open-external", method="POST", body={"url": "https://example.com"})
+        status, payload = self.request("/api/v2/native/open-external", method="POST", body={"url": "https://example.com"})
         self.assertEqual(status, 200)
         self.assertFalse(payload["ok"])
 
     def test_window_without_host_is_not_ok(self):
-        status, payload = self.request("/api/native/window", method="POST", body={"action": "minimize"})
+        status, payload = self.request("/api/v2/native/window", method="POST", body={"action": "minimize"})
         self.assertEqual(status, 200)
         self.assertFalse(payload["ok"])
 

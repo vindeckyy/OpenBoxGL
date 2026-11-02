@@ -1,7 +1,7 @@
 const fs = require('fs');
 const puppeteer = require('./node_modules/puppeteer');
 
-// Accessibility smoke for the Settings surfaces added in 2.0 (plan W7-08).
+// Accessibility smoke for the Settings surfaces added in 2.0/2.1 (plan W7-08).
 //
 // Checks the keyboard contract, not the mouse one: focus moves into the settings dialog,
 // every new control is reachable with Tab in document order, every new control has an
@@ -11,8 +11,7 @@ const puppeteer = require('./node_modules/puppeteer');
 const failures = [];
 
 const PANELS = [
-  { category: 'library', ids: ['libraryMoveFolder', 'libraryMoveBrowse', 'libraryIntegrityCheck', 'libraryMovePreview'] },
-  { category: 'sessions', ids: ['backupFormat'] },
+  { category: 'library', ids: ['mediaManifestEnabled', 'libraryMoveFolder', 'libraryMoveBrowse', 'libraryIntegrityCheck', 'libraryMovePreview'] },
   { category: 'about', ids: ['compatReportButton'] },
 ];
 

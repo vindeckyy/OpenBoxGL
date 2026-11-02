@@ -6,8 +6,8 @@
  * app utilities.  Later surfaces can use the exported controller or the
  * document events without knowing anything about the canvas implementation.
  */
-import { $, escapeHtml, duration, defaultControllerMap, prefersReducedMotion, reducedMotionQuery } from './util.js';
-import { AppState, media } from './state.js';
+import { $, escapeHtml, duration, defaultControllerMap, prefersReducedMotion, reducedMotionQuery, apiPath } from './util.js';
+import { AppState, media, token } from './state.js';
 import { registerGamepadSurface } from './gamepad.js';
 
 const MAX_TEXTURE_CACHE = 48;
@@ -552,7 +552,8 @@ class ArcadeRoom {
     if (index !== '') params.set('index', String(index));
     const epoch = this.state?.mediaEpoch;
     if (epoch !== undefined) params.set('v', String(epoch));
-    return `/api/media?${params.toString()}`;
+    params.set('token', token);
+    return apiPath(`/api/media?${params.toString()}`);
   }
 
   syncGames() {

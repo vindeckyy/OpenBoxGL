@@ -677,7 +677,7 @@ class TestMediaRangeStatus(unittest.TestCase):
                 raise RangeParseError("Invalid byte range.")
 
         handler = Handler()
-        parsed = urllib.parse.urlparse("/api/media?id=0&kind=cover")
+        parsed = urllib.parse.urlparse("/api/v2/media?id=0&kind=cover")
         with mock.patch(
             "handlers.media.load_state_view", return_value={"games": [{"name": "G", "cover": "/media/c.png"}]}
         ), mock.patch("handlers.media.approved_media_path", return_value=Path("/media/c.png")):
@@ -706,7 +706,7 @@ class TestMediaRangeStatus(unittest.TestCase):
         try:
             port = server.server_address[1]
             request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/media?id=0&kind=cover&token=sweep-residuals-token",
+                f"http://127.0.0.1:{port}/api/v2/media?id=0&kind=cover&token=sweep-residuals-token",
                 headers={"Range": "bytes=abc-"},
             )
             with self.assertRaises(urllib.error.HTTPError) as ctx:

@@ -38,3 +38,5 @@ Paths under the library folder are stored as `@library/<relative path>`. Anythin
 - media problems, from the media manifest in the data directory: `media_missing`, `media_changed` (size or mtime moved and the hash differs), `media_untracked` (a file the app did not record).
 
 Each category carries a count and the first examples. Nothing is repaired by a check. `openbox --repair-library` (or the repair action) rebuilds the media manifest and prunes expired trash after you confirm.
+
+**Settings > Library > Record media checksums** controls the manifest. With it on (the default), downloads and captures are recorded and changed files are hashed on demand. With it off, no manifest writes or media hashing happen, and the integrity report says the manifest is disabled.

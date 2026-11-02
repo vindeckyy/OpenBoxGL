@@ -12,315 +12,13 @@
       "methods": [
         "GET"
       ],
-      "path": "/api/backup"
+      "path": "/api/host/capabilities"
     },
     {
       "methods": [
         "POST"
       ],
-      "path": "/api/backup/create"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/backup/manifest"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/backup/restore"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/backups"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/bezels/download"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/bigbox/mode"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/bigbox/startup-video"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/cloud/sync"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/desktop/install"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/diagnostic"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/discovery"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/document"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/emulators"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/emulators/definitions"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/emulators/dependencies"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/install"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/install-all"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/open"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/emulators/recommend"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/scan"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/emulators/scan-configs"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/update"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emulators/update-all"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emumovies/download"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/emumovies/settings"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/events"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/explorer/facets"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/extra/launch"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/faugus/import"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/faugus/scan"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/faugus/status"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/favorite"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/filter-presets"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/filter-presets/delete"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/game"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/game/delete"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/game/store-action"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/games/bulk"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/games/bulk-wizard"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/games/delete-steam"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/gameyfin/install"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/gameyfin/install/status"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/gameyfin/providers"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/gameyfin/test"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/gameyfin/uninstall"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/health"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/health/dedupe"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/highscores"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/highscores/export"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/highscores/import"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/history"
+      "path": "/api/host/launch"
     },
     {
       "methods": [
@@ -332,671 +30,7 @@
       "methods": [
         "POST"
       ],
-      "path": "/api/image-group"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/arcade"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/epic"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/import/exclusions"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/exclusions/delete"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/heroic"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/loose-arcade"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/lutris"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/rpcs3"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/scummvm"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/steam"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/vita3k"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/watch"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/wizard"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/import/xbox360"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/jobs"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/launch"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/launcher/menu"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/library"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/library/delta"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/log"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/media"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/media/audit"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/bulk"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/media/bulk/status"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/cache/cleanup"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/cleanup"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/media/duplicates"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/media/queue"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/queue/cancel"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/queue/pause"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/queue/resume"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/media/queue/retry"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/apply"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/gog"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/igdb/apply"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/metadata/igdb/search"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/match"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/metadata/search"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/metadata/status"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/steam"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/sync"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/metadata/trailer"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/native/battery"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/native/capabilities"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/native/dialog"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/native/open-external"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/native/reveal"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/native/window"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/notifications"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/obs/attach"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/obs/status"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/perf_profiles"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/platform/document"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/platform/documents"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/platform/video"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/platform/videos"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/playlists"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/playlists/delete"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/plugins"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/plugins/catalog"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/plugins/catalog/install"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/plugins/install"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/plugins/remove"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/plugins/toggle"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/premium/media-packs"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/premium/media-packs/apply"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/premium/platform-categories"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/premium/strings"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/profiles"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/queue"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/ra/badge"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/ra/game"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/ra/inject"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/ra/settings"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/related"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/related/rich"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/running"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/save-tools/hoard"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/save-tools/ludusavi"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/save-tools/status"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/saves"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/saves/add"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/saves/backup"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/saves/discover"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/saves/manifest"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/saves/restore"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/saves/restore/preview"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/saves/scan"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/saves/scan/apply"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/screenshot"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/session/cleanup"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/session/control"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/settings"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/shutdown"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/state/recover"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/storefront/catalog"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/storefront/import"
-    },
-    {
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "path": "/api/tags"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/theme-asset"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/theme-sounds"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/theme.css"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/themes"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/themes/import"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/themes/open-folder"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/themes/select"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/update"
-    },
-    {
-      "methods": [
-        "POST"
-      ],
-      "path": "/api/update/install"
-    },
-    {
-      "methods": [
-        "GET"
-      ],
-      "path": "/api/v1/jobs"
+      "path": "/api/host/shutdown"
     },
     {
       "methods": [
@@ -1032,7 +66,55 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/backup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/backup/create"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/backup/diff"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/backup/manifest"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/backup/restore"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/backups"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/bezels/download"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/bigbox/mode"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/bigbox/startup-video"
     },
     {
       "methods": [
@@ -1051,6 +133,12 @@
         "POST"
       ],
       "path": "/api/v2/clips/capture"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/cloud/sync"
     },
     {
       "methods": [
@@ -1075,6 +163,42 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/desktop/install"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/diagnostic"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/discovery"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/document"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/emulators"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/emulators/definitions"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/emulators/defs/rollback"
     },
     {
@@ -1094,7 +218,50 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/emulators/dependencies"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/install"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/install-all"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/open"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/emulators/recommend"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/emulators/registry"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/scan"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/emulators/scan-configs"
     },
     {
       "methods": [
@@ -1105,9 +272,190 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/update"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emulators/update-all"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emumovies/download"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/emumovies/settings"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/events"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/explorer/facets"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/extra/launch"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/faugus/import"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/faugus/scan"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/faugus/status"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/favorite"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/filter-presets"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/filter-presets/delete"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/game"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/game/delete"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/game/store-action"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/games/bulk"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/games/bulk-wizard"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/games/delete-steam"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/gameyfin/install"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/gameyfin/install/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/gameyfin/providers"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/gameyfin/test"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/gameyfin/uninstall"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/health"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/health/dedupe"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/highscores"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/highscores/export"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/highscores/import"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/highscores/table"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/history"
     },
     {
       "methods": [
@@ -1179,7 +527,31 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/image-group"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/arcade"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/ea"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/epic"
     },
     {
       "methods": [
@@ -1195,9 +567,28 @@
     },
     {
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/import/exclusions"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/exclusions/delete"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/import/gog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/heroic"
     },
     {
       "methods": [
@@ -1215,6 +606,18 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/loose-arcade"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/lutris"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/msu1"
     },
     {
@@ -1227,13 +630,55 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/rpcs3"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/scummvm"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/steam"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/ubisoft"
     },
     {
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/import/vita3k"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/watch"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/import/whdload"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/wizard"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/import/xbox360"
     },
     {
       "methods": [
@@ -1359,6 +804,12 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/launch"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/launch/audit"
@@ -1421,7 +872,25 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/launcher/menu"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/library"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/library/constellation"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/library/delta"
     },
     {
       "methods": [
@@ -1698,6 +1167,84 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/log"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/media"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/media/audit"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/bulk"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/media/bulk/status"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/cache/cleanup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/cleanup"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/media/duplicates"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/media/queue"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/queue/cancel"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/queue/pause"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/queue/resume"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/media/queue/retry"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/memories"
     },
     {
@@ -1722,6 +1269,12 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/metadata/apply"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/metadata/auto-scrape"
     },
     {
@@ -1729,6 +1282,30 @@
         "POST"
       ],
       "path": "/api/v2/metadata/candidates/apply"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/gog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/igdb/apply"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/metadata/igdb/search"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/match"
     },
     {
       "methods": [
@@ -1770,6 +1347,36 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/metadata/search"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/metadata/status"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/steam"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/sync"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/metadata/trailer"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
@@ -1797,7 +1404,62 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/native/battery"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/native/capabilities"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/native/dialog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/native/open-external"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/native/reveal"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/native/window"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/netplay/lobby"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/notifications"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/obs/attach"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/obs/status"
     },
     {
       "methods": [
@@ -1827,15 +1489,60 @@
     },
     {
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/perf_profiles"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/platform/delete"
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/platform/document"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/platform/documents"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/platform/rename"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/platform/video"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/platform/videos"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/playlists"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/playlists/delete"
     },
     {
       "methods": [
@@ -1853,7 +1560,19 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/plugins"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/plugins/catalog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/plugins/catalog/install"
     },
     {
       "methods": [
@@ -1885,7 +1604,19 @@
       "methods": [
         "POST"
       ],
+      "path": "/api/v2/plugins/install"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
       "path": "/api/v2/plugins/permissions"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/plugins/remove"
     },
     {
       "methods": [
@@ -1902,10 +1633,79 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/plugins/toggle"
+    },
+    {
+      "methods": [
         "GET",
         "POST"
       ],
       "path": "/api/v2/plugins/trust"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/premium/media-packs"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/premium/media-packs/apply"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/premium/platform-categories"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/premium/strings"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/profiles"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/queue"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/ra/badge"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/ra/game"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/ra/inject"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/ra/settings"
     },
     {
       "methods": [
@@ -1918,6 +1718,18 @@
         "POST"
       ],
       "path": "/api/v2/reels/create"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/related"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/related/rich"
     },
     {
       "methods": [
@@ -1942,6 +1754,84 @@
         "GET"
       ],
       "path": "/api/v2/resume/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/running"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/save-tools/hoard"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/save-tools/ludusavi"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/save-tools/status"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/add"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/backup"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/discover"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/manifest"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/restore"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/restore/preview"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/scan"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/scan/apply"
     },
     {
       "methods": [
@@ -1981,9 +1871,34 @@
     },
     {
       "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/screenshot"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/session/cleanup"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/session/control"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/sessions/recap"
+    },
+    {
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/settings"
     },
     {
       "methods": [
@@ -2045,6 +1960,18 @@
         "GET"
       ],
       "path": "/api/v2/setup/summary"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/shutdown"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/state/recover"
     },
     {
       "methods": [
@@ -2138,6 +2065,18 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/storefront/catalog"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/storefront/import"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/storefront/scan"
@@ -2174,6 +2113,67 @@
     },
     {
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/tags"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/theme-asset"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/theme-sounds"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/theme.css"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/themes"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/themes/import"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/themes/open-folder"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/themes/select"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/update"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/update/install"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/version"
@@ -2183,31 +2183,31 @@
         "GET",
         "POST"
       ],
-      "path": "/api/webhooks"
+      "path": "/api/v2/webhooks"
     },
     {
       "methods": [
         "POST"
       ],
-      "path": "/api/webhooks/test"
+      "path": "/api/v2/webhooks/test"
     },
     {
       "methods": [
         "GET"
       ],
-      "path": "/api/wine/prefix-for-game"
+      "path": "/api/v2/wine/prefix-for-game"
     },
     {
       "methods": [
         "GET"
       ],
-      "path": "/api/wine/prefixes"
+      "path": "/api/v2/wine/prefixes"
     },
     {
       "methods": [
         "GET"
       ],
-      "path": "/api/wine/protons"
+      "path": "/api/v2/wine/protons"
     },
     {
       "methods": [
@@ -2246,5 +2246,674 @@
       "path": "/locales/pt.json"
     }
   ],
-  "retired": []
+  "retired": [
+    {
+      "path": "/api/backup",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/backup/create",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/backup/manifest",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/backup/restore",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/backups",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/bezels/download",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/bigbox/mode",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/bigbox/startup-video",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/cloud/sync",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/desktop/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/diagnostic",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/discovery",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/document",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/definitions",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/dependencies",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/install-all",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/open",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/recommend",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/scan",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/scan-configs",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/update",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emulators/update-all",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emumovies/download",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/emumovies/settings",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/events",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/explorer/facets",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/extra/launch",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/faugus/import",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/faugus/scan",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/faugus/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/favorite",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/filter-presets",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/filter-presets/delete",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/game",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/game/delete",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/game/store-action",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/games/bulk",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/games/bulk-wizard",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/games/delete-steam",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/gameyfin/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/gameyfin/install/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/gameyfin/providers",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/gameyfin/test",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/gameyfin/uninstall",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/health",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/health/dedupe",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/highscores",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/highscores/export",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/highscores/import",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/history",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/image-group",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/arcade",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/epic",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/exclusions",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/exclusions/delete",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/heroic",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/loose-arcade",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/lutris",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/rpcs3",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/scummvm",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/steam",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/vita3k",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/watch",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/wizard",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/import/xbox360",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/jobs",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/launch",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/launcher/menu",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/library",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/library/delta",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/log",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/audit",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/bulk",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/bulk/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/cache/cleanup",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/cleanup",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/duplicates",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/queue",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/queue/cancel",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/queue/pause",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/queue/resume",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/media/queue/retry",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/apply",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/gog",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/igdb/apply",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/igdb/search",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/match",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/search",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/steam",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/sync",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/metadata/trailer",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/battery",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/capabilities",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/dialog",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/open-external",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/reveal",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/native/window",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/notifications",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/obs/attach",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/obs/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/perf_profiles",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/platform/document",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/platform/documents",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/platform/video",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/platform/videos",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/playlists",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/playlists/delete",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins/catalog",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins/catalog/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins/remove",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/plugins/toggle",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/premium/media-packs",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/premium/media-packs/apply",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/premium/platform-categories",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/premium/strings",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/profiles",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/queue",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/ra/badge",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/ra/game",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/ra/inject",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/ra/settings",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/related",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/related/rich",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/running",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/save-tools/hoard",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/save-tools/ludusavi",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/save-tools/status",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/add",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/backup",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/discover",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/manifest",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/restore",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/restore/preview",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/scan",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/saves/scan/apply",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/screenshot",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/session/cleanup",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/session/control",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/settings",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/shutdown",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/state/recover",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/storefront/catalog",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/storefront/import",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/tags",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/theme-asset",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/theme-sounds",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/theme.css",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/themes",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/themes/import",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/themes/open-folder",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/themes/select",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/update",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/update/install",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/v1/jobs",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/webhooks",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/webhooks/test",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/wine/prefix-for-game",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/wine/prefixes",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    },
+    {
+      "path": "/api/wine/protons",
+      "reason": "Retired in 2.1.0: unversioned public API and legacy host paths removed; use the /api/v2 or /api/host twin (ADR 0103)."
+    }
+  ]
 }

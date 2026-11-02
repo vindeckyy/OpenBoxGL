@@ -6,6 +6,10 @@ const CODE_MESSAGE_KEYS = {
   STATE_MIGRATION_FAILED: 'errors.state_migration_failed',
   MOVE_PLAN_STALE: 'errors.move_plan_stale',
   BACKUP_FORMAT_UNSUPPORTED: 'errors.backup_format_unsupported',
+  BACKUP_FORMAT_RETIRED: 'errors.backup_format_retired',
+  API_VERSION_REQUIRED: 'errors.api_version_required',
+  V1_API_REMOVED: 'errors.v1_api_removed',
+  HOST_CHANNEL_RETIRED: 'errors.host_channel_retired',
   PLUGIN_API_UNSUPPORTED: 'errors.plugin_api_unsupported',
 };
 
@@ -19,7 +23,7 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
 try {
   const bootTheme = localStorage.getItem('openbox.theme');
   const bootLink = document.getElementById('themeStylesheet');
-  if (bootTheme && bootLink && !bootLink.getAttribute('href')) bootLink.href = `/api/theme.css?name=${encodeURIComponent(bootTheme)}&token=${encodeURIComponent(token)}`;
+  if (bootTheme && bootLink && !bootLink.getAttribute('href')) bootLink.href = apiPath(`/api/theme.css?name=${encodeURIComponent(bootTheme)}&token=${encodeURIComponent(token)}`);
 } catch {}
     /**
      * Central client application state container.
@@ -33,7 +37,7 @@ try {
     const selectedIds = new Set();
     const coverPlaceholder = () => ({ src: '/assets/placeholder-cover.svg', alt: '' });
     const coverSource = game => game?.has_cover ? media(game, 'cover') : coverPlaceholder().src;
-    const media = (game, kind, index = '') => kind === 'cover' && !game.has_cover ? '' : `/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${AppState.mediaEpoch}&token=${encodeURIComponent(token)}`;
+    const media = (game, kind, index = '') => kind === 'cover' && !game.has_cover ? '' : apiPath(`/api/media?id=${game.id}&kind=${kind}${index === '' ? '' : `&index=${index}`}&v=${AppState.mediaEpoch}&token=${encodeURIComponent(token)}`);
     const badgeVisibility = () => new Set(AppState.appSettings.badge_visibility || defaultBadges);
     const playlistFor = name => AppState.playlists.find(item => item.name === name);
     const playlistMembers = playlist => new Set((playlist?.members || []).map(String));
@@ -121,9 +125,9 @@ try {
       // Every call site speaks the public /api/v2 surface; the native host channel is /api/host.
       const target = apiPath(path);
       const method = String(options.method || 'GET').toUpperCase();
-      if (pageHidden && method !== 'GET' && method !== 'HEAD' && path !== '/api/shutdown') {
+      if (pageHidden && method !== 'GET' && method !== 'HEAD' && path !== '/api/v2/shutdown') {
         // A hidden tab holds stale AppState; never let it save over newer
-        // state written by the visible tab. /api/shutdown is exempt: it fires
+        // state written by the visible tab. /api/v2/shutdown is exempt: it fires
         // from beforeunload while the page is already hidden.
         throw new Error('State changes are paused while the tab is hidden.');
       }

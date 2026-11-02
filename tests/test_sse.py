@@ -70,7 +70,7 @@ class SseTests(unittest.TestCase):
 
         threading.Thread(target=emit, daemon=True).start()
         req = urllib.request.Request(
-            self.origin + "/api/events",
+            self.origin + "/api/v2/events",
             headers={"X-OpenBox-Token": "sse-test-token", "Accept": "text/event-stream"},
         )
         with urllib.request.urlopen(req, timeout=6) as resp:
@@ -79,7 +79,7 @@ class SseTests(unittest.TestCase):
             self.assertTrue(self.read_event(resp, "session.started"))
 
     def test_events_requires_auth(self):
-        req = urllib.request.Request(self.origin + "/api/events")
+        req = urllib.request.Request(self.origin + "/api/v2/events")
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req)
         self.assertEqual(ctx.exception.code, 403)
@@ -143,7 +143,7 @@ class SseTests(unittest.TestCase):
             try:
                 for _ in range(2):
                     req = urllib.request.Request(
-                        self.origin + "/api/events",
+                        self.origin + "/api/v2/events",
                         headers={"X-OpenBox-Token": "sse-test-token", "Accept": "text/event-stream"},
                     )
                     resp = urllib.request.urlopen(req, timeout=6)
@@ -151,7 +151,7 @@ class SseTests(unittest.TestCase):
                     self.assertTrue(resp.headers["Content-Type"].startswith("text/event-stream"))
                     streams.append(resp)
                 over = urllib.request.Request(
-                    self.origin + "/api/events",
+                    self.origin + "/api/v2/events",
                     headers={"X-OpenBox-Token": "sse-test-token", "Accept": "text/event-stream"},
                 )
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
@@ -205,7 +205,7 @@ class SseTests(unittest.TestCase):
 
         def fetch_delta(ids_param):
             req = urllib.request.Request(
-                f"{self.origin}/api/library/delta?ids={ids_param}&token=sse-test-token"
+                f"{self.origin}/api/v2/library/delta?ids={ids_param}&token=sse-test-token"
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 self.assertEqual(resp.status, 200)

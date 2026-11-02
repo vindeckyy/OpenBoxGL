@@ -63,22 +63,22 @@ class PerfBenchTests(unittest.TestCase):
         self.assertIn("archive_inspection", results)
         self.assertIn("throughput", results)
         paths = [p for _, p in requested_paths]
-        self.assertIn("/api/library", paths)
-        self.assertIn("/api/library?offset=0&limit=500", paths)
-        self.assertIn("/api/explorer/facets?field=genre", paths)
-        self.assertIn("/api/games/bulk", paths)
-        self.assertIn("/api/import", paths)
-        self.assertIn("/api/favorite", paths)
-        self.assertIn("/api/media?id=0&kind=cover", paths)
-        self.assertIn("/api/library/delta?ids=game-00000,game-00001", paths)
-        self.assertIn("/api/bigbox/mode", paths)
+        self.assertIn("/api/v2/library", paths)
+        self.assertIn("/api/v2/library?offset=0&limit=500", paths)
+        self.assertIn("/api/v2/explorer/facets?field=genre", paths)
+        self.assertIn("/api/v2/games/bulk", paths)
+        self.assertIn("/api/v2/import", paths)
+        self.assertIn("/api/v2/favorite", paths)
+        self.assertIn("/api/v2/media?id=0&kind=cover", paths)
+        self.assertIn("/api/v2/library/delta?ids=game-00000,game-00001", paths)
+        self.assertIn("/api/v2/bigbox/mode", paths)
         # Legacy / placeholder routes must not be queried
-        self.assertNotIn("/api/facets", paths)
-        self.assertNotIn("/api/library/facets", paths)
-        self.assertNotIn("/api/bulk", paths)
-        self.assertNotIn("/api/library/bulk", paths)
-        self.assertNotIn("/api/import/preview", paths)
-        self.assertNotIn("/api/import/apply", paths)
+        self.assertNotIn("/api/v2/facets", paths)
+        self.assertNotIn("/api/v2/library/facets", paths)
+        self.assertNotIn("/api/v2/bulk", paths)
+        self.assertNotIn("/api/v2/library/bulk", paths)
+        self.assertNotIn("/api/v2/import/preview", paths)
+        self.assertNotIn("/api/v2/import/apply", paths)
 
     def test_browser_timings_measure_a_library_this_run_generated(self):
         """--browser must point at the library the read benchmark built, not a write-path size."""
@@ -92,7 +92,7 @@ class PerfBenchTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as base, \
                 mock.patch.object(pb, "generate", lambda size, data_dir: None), \
-                mock.patch.object(pb, "benchmark", lambda data_dir, runs=1: {"runs": runs}), \
+                mock.patch.object(pb, "benchmark", lambda data_dir, runs=1, memory=False: {"runs": runs}), \
                 mock.patch.object(pb, "benchmark_write_path", lambda data_dir, runs=1: {"runs": 0, "error": "stub"}), \
                 mock.patch.object(pb, "benchmark_browser", fake_browser), \
                 mock.patch.object(sys, "argv", ["perf_bench.py", "--base-dir", base, "--sizes", "1000", "--runs", "1",
@@ -102,7 +102,7 @@ class PerfBenchTests(unittest.TestCase):
 
     def test_safe_request_failure_returns_error_object(self):
         with mock.patch.object(pb, "_request", side_effect=RuntimeError("connection refused")):
-            stats, last_bytes, payload = pb._safe_request("http://127.0.0.1:9999", "tok", "/api/test", runs=2)
+            stats, last_bytes, payload = pb._safe_request("http://127.0.0.1:9999", "tok", "/api/v2/test", runs=2)
         self.assertEqual(stats["runs"], 0)
         self.assertIn("connection refused", stats["error"])
         self.assertIsNone(last_bytes)

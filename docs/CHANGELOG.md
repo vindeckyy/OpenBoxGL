@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [2.1.0] - 2026-12-09
+
+### Added
+- **Media checksum toggle.** Settings > Library > Record media checksums controls whether downloads and captures are recorded in `media/manifest.json`. Turning it off skips manifest writes and media hashing; the integrity report says the manifest is disabled instead of reporting every file as untracked.
+- **A v2 jobs panel.** Background jobs and export polling read `/api/v2/jobs` list/cursor rows. The legacy job-name map is gone.
+- **Retired-surface errors.** API clients that still call `/api/v1`, an unversioned path, or a legacy native-host name receive a `410` problem document with the replacement path.
+
+### Changed
+- **The public API is `/api/v2` only.** Unversioned public `/api/*` paths are private implementation aliases and are no longer dispatched. `/api/host` is the only native-host channel. `OPENBOX_ENABLE_V1_API` is ignored with a startup warning.
+- **Backups write format 2 only.** Format 1 archives still restore. New format 1 writes return `BACKUP_FORMAT_RETIRED`; use a 2.0.x build for a 1.19-compatible export.
+- **Every frontend API URL is versioned.** Covers, theme CSS, theme sounds, RA badges, documents, platform videos, startup videos, and the reader now use `/api/v2`; the unversioned request path is no longer a second way in.
+- **Flatpak runtime 51.** The manifest moved from runtime 49 to 51; `libwebkit2gtk-4.1.so.0` is present, and a full `flatpak-builder` bundle build and install was verified. The macOS notarization claim remains conditional on real Developer ID evidence.
+- **Python 3.10 is deprecated.** It still works in 2.1 and remains in CI; 3.12 is recommended, and removal is planned for 3.0.
+
+### Removed
+- `/api/v1/*` and the `OPENBOX_ENABLE_V1_API` bridge (ADR 0103).
+- Unversioned public `/api/*` dispatch, including `/api/jobs` and the legacy host names `/api/launch`, `/api/shutdown`, and `/api/native/capabilities`.
+- Backup format 1 write support (the 1.19-compatible export). Format 1 reads remain.
+- `contracts.py` and the v1 contract generator, which no longer described a live surface.
+
+### Fixed
+- **Deep-link readiness probes a real route.** `openbox://` dispatch checks `GET /api/v2/version` instead of a `GET /api/health` route that only exists as `POST`, so an already-running server is detected and a second server is not started.
+- **Media manifest toggle has an effect.** The setting now controls record, verify, and repair.
+- **Decorator-only routes load when the server is started as a script.** `python web_app.py` now registers `/api/v2/version`, the native host routes, and other decorator-only routes instead of importing a second copy of `web_app`; `tests/test_script_entrypoint.py` pins it.
+- **Docs and version surfaces agree.** `release.sh` uses the polished release notes, and the version-sync gate checks the release-notes heading and the docs index shipped-release line.
+
+### Deprecated
+- `openbox --rollback-library` remains available in 2.1 and is planned for removal in 3.0.
+- Python 3.10 support (removal in 3.0).
+
+### Security
+- Retired paths authenticate before they return their `410`, so an unauthenticated caller still receives `403`.
+- The v1 bridge can no longer be re-enabled by an environment variable.
+
 ## [2.0.0] - 2026-10-31
 
 ### Added
@@ -2192,6 +2226,7 @@ If you jumped from an older build and skipped the last two releases:
 - AppImage, Flatpak manifest, and Makefile install targets
 
 [Unreleased]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...HEAD
+[2.1.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.1...v2.0.0
 [1.19.1]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.19.0...v1.19.1
 [1.19.0]: https://github.com/vindeckyy/OpenBoxGL/compare/v1.18.0...v1.19.0

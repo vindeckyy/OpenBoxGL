@@ -755,6 +755,15 @@ def main():
     bootstrap_env(DATA.parent)
     configure_logging(DATA.parent)
     LOGGER.info("OpenBox web UI starting")
+    if os.environ.get("OPENBOX_ENABLE_V1_API"):
+        LOGGER.warning(
+            "OPENBOX_ENABLE_V1_API is no longer supported: the /api/v1 surface was removed in 2.1. Use /api/v2."
+        )
+    if sys.version_info < (3, 11):
+        LOGGER.warning(
+            "Python %s is deprecated for OpenBox: 2.1 still supports 3.10, and 3.0 will require 3.11 or newer.",
+            ".".join(str(part) for part in sys.version_info[:2]),
+        )
     # An app started from Finder inherits a minimal PATH, so tools the user
     # installed with Homebrew would be invisible to the launcher and to the
     # emulators it probes.

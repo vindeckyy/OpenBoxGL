@@ -43,6 +43,7 @@ OPERATION_TYPE_BY_NAME = {
     "saves-scan": "saves.scan",
     "saves-backup": "saves.backup",
     "saves-restore": "saves.restore",
+    "dna-index-rebuild": "library.dna_rebuild",
 }
 
 
@@ -89,6 +90,8 @@ def operation_title_for_name(name: str) -> str:
         return "Bulk media download"
     if name == "memories-import":
         return "Memory roots import"
+    if name == "dna-index-rebuild":
+        return "Rebuild Game DNA index"
     if name == "metadata":
         return "Metadata database sync"
     if name == "metadata-match":

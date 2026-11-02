@@ -185,8 +185,8 @@ async function renderBuilding(payload) {
   stopBuildPoll();
   _pollTimer = setInterval(async () => {
     try {
-      const jobs = await api('/api/jobs');
-      const job = jobs && jobs.jobs && jobs.jobs['dna-index-rebuild'];
+      const page = await api('/api/v2/jobs?type=library.dna_rebuild&limit=5');
+      const job = (Array.isArray(page.jobs) ? page.jobs : [])[0];
       const pct = job && job.total ? Math.round(100 * (job.processed || 0) / job.total) : null;
       const label = $('dnaResults')?.querySelector('.dna-state p');
       if (label && pct !== null) label.textContent = t('dna.building', { pct });

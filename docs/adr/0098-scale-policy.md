@@ -1,6 +1,6 @@
 # ADR 0098: Scale policy: 20k formal, 50k exploratory
 
-Status: Accepted. The 50k measurement is pending.
+Status: Accepted. The 2.0 write measurement is recorded; the 2.1 release records 1194.8 MB server RSS at 50k (budget 1500 MB).
 
 ## Context
 
@@ -15,6 +15,10 @@ The formal scale promise has been 20,000 games. The JSON store and its write pat
 ## Consequences
 
 - No number is copied forward from an earlier run. A missing measurement is reported as missing.
+
+## 2.1 measurement
+
+`python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate --memory` on 2026-11-01: server RSS after warm-up 1057.4 MB, after the benchmark 1194.8 MB. Budget 1500 MB: met. The formal scale remains 20,000 games; 50k is still exploratory.
 
 ## Verification
 

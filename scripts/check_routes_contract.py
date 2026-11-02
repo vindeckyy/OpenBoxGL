@@ -55,11 +55,23 @@ def live_routes() -> dict[str, list[str]]:
     what the server actually dispatches, including multi-path decorators and
     the v1 alias expansion.
     """
+    from routes import GET_TABLE, POST_TABLE
     from routes.registry import all_routes
 
     surface: dict[str, set[str]] = {}
+    for table, method in ((GET_TABLE, "GET"), (POST_TABLE, "POST")):
+        for path in table:
+            if any(path.startswith(prefix) for prefix in IGNORED_PREFIXES):
+                continue
+            if path.startswith("/api/") and not path.startswith(("/api/v2/", "/api/host/")):
+                continue
+            surface.setdefault(path, set()).add(method)
     for route in all_routes():
         if any(route.path.startswith(prefix) for prefix in IGNORED_PREFIXES):
+            continue
+        # An unversioned /api base path is a private implementation alias, not
+        # a feature. The public contract is the synthesized /api/v2 route.
+        if route.path.startswith("/api/") and route.visibility not in ("public", "host"):
             continue
         surface.setdefault(route.path, set()).add(route.method)
     return {path: sorted(methods) for path, methods in sorted(surface.items())}
@@ -97,6 +109,12 @@ def write_baseline(live: dict[str, list[str]], retired: dict[str, str] | None = 
     BASELINE.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def _retire_missing(live: dict[str, list[str]], baseline: dict[str, list[str]], retired: dict[str, str], reason: str) -> None:
+    for path in sorted(baseline):
+        if path not in live and path not in retired:
+            retired[path] = reason
+
+
 def main() -> int:
     live = live_routes()
     data = load_baseline()
@@ -106,6 +124,17 @@ def main() -> int:
         return 1
 
     baseline, retired = _parse(data)
+    if "--retire-missing" in sys.argv:
+        index = sys.argv.index("--retire-missing")
+        reason = sys.argv[index + 1] if index + 1 < len(sys.argv) else ""
+        if not reason:
+            print("FAIL: --retire-missing needs a non-empty reason")
+            return 1
+        _retire_missing(live, baseline, retired, reason)
+        write_baseline(live, retired)
+        print(f"Wrote {BASELINE.relative_to(ROOT)} with {len(retired)} retired routes")
+        return 0
+
     failures: list[str] = []
 
     # Layer 1: live code must not lose anything the baseline promises.

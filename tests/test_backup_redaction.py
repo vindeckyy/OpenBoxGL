@@ -328,7 +328,7 @@ class BackupExportRouteTests(unittest.TestCase):
             return response.status, dict(response.headers), response.read()
 
     def test_get_api_backup_succeeds_and_redacts_secrets(self):
-        status, headers, body = self.request("/api/backup")
+        status, headers, body = self.request("/api/v2/backup")
         self.assertEqual(status, 200)
         self.assertIn("application/json", headers.get("Content-Type", ""))
         payload = json.loads(body)
@@ -357,7 +357,7 @@ class BackupExportRouteTests(unittest.TestCase):
             if JOB_MANAGER.snapshots().get("export-diagnostic-active", {}).get("state") == "running":
                 break
             time.sleep(0.01)
-        status, _, payload = self.request("/api/diagnostic")
+        status, _, payload = self.request("/api/v2/diagnostic")
         gate.set()
         self.assertEqual(status, 200)
         report = json.loads(json.loads(payload)["report"])

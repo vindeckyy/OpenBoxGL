@@ -46,7 +46,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/plugins/catalog"
+        handler.path = "/api/v2/plugins/catalog"
         handler.headers = {"Host": "127.0.0.1"}
         handler.do_GET()
         handler.send_json.assert_called_once()
@@ -156,7 +156,7 @@ class ParityApiTests(unittest.TestCase):
         from web_app import Handler, TOKEN
 
         handler = object.__new__(Handler)
-        handler.path = "/api/log"
+        handler.path = "/api/v2/log"
         handler.headers = {"X-OpenBox-Token": TOKEN}
         handler.send_json = mock.Mock()
         with mock.patch("handlers.health.read_diagnostic_log", return_value="2026-07-30 DEBUG test message"):
@@ -196,7 +196,7 @@ class ParityApiTests(unittest.TestCase):
         thread.start()
         try:
             request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/gameyfin/install",
+                f"http://127.0.0.1:{port}/api/v2/gameyfin/install",
                 data=json.dumps({"gameyfin_id": "7", "library_id": 0}).encode(),
                 headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
                 method="POST",
@@ -208,7 +208,7 @@ class ParityApiTests(unittest.TestCase):
                     self.assertEqual(payload["state"], "installing")
                 self.assertTrue(started.wait(timeout=2))
                 status_request = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/api/gameyfin/install/status?gameyfin_id=7",
+                    f"http://127.0.0.1:{port}/api/v2/gameyfin/install/status?gameyfin_id=7",
                     headers={"X-OpenBox-Token": "testtoken"},
                 )
                 with urllib.request.urlopen(status_request, timeout=5) as response:
@@ -287,7 +287,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/storefront/catalog?source=heroic"
+        handler.path = "/api/v2/storefront/catalog?source=heroic"
         handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.imports.storefront_catalog", side_effect=FileNotFoundError("xdg-open missing")):
             handler.do_GET()
@@ -303,7 +303,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/gameyfin/providers"
+        handler.path = "/api/v2/gameyfin/providers"
         handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.data.catalog_gameyfin", side_effect=GameyfinError("Gameyfin URL is not configured.")):
             handler.do_GET()
@@ -340,7 +340,7 @@ class ParityApiTests(unittest.TestCase):
         thread.start()
         try:
             request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/gameyfin/install",
+                f"http://127.0.0.1:{port}/api/v2/gameyfin/install",
                 data=json.dumps({"gameyfin_id": "9", "library_id": 0}).encode(),
                 headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
                 method="POST",
@@ -349,7 +349,7 @@ class ParityApiTests(unittest.TestCase):
                 with urllib.request.urlopen(request, timeout=5) as response:
                     self.assertEqual(response.status, 202)
                 status_request = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/api/gameyfin/install/status?gameyfin_id=9",
+                    f"http://127.0.0.1:{port}/api/v2/gameyfin/install/status?gameyfin_id=9",
                     headers={"X-OpenBox-Token": "testtoken"},
                 )
                 deadline = time.time() + 5
@@ -385,7 +385,7 @@ class ParityApiTests(unittest.TestCase):
         try:
             for body in (b"[]", b"null", b'"text"'):
                 request = urllib.request.Request(
-                    f"http://127.0.0.1:{server.server_address[1]}/api/settings",
+                    f"http://127.0.0.1:{server.server_address[1]}/api/v2/settings",
                     data=body,
                     headers={"Content-Type": "application/json", "X-OpenBox-Token": "testtoken"},
                     method="POST",
@@ -407,7 +407,7 @@ class ParityApiTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
         handler.headers = {"Host": "127.0.0.1"}
-        for path in ("/api/premium/strings", "/api/premium/media-packs", "/api/premium/platform-categories"):
+        for path in ("/api/v2/premium/strings", "/api/v2/premium/media-packs", "/api/v2/premium/platform-categories"):
             handler.send_json.reset_mock()
             handler.path = path
             handler.do_GET()
@@ -421,7 +421,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.send_json = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/update"
+        handler.path = "/api/v2/update"
         handler.headers = {"Host": "127.0.0.1"}
         with mock.patch("handlers.health.check_update", side_effect=AttributeError("release missing tag_name")):
             handler.do_GET()
@@ -671,7 +671,7 @@ class ParityApiTests(unittest.TestCase):
         list_handler.authorized = mock.Mock(return_value=True)
         list_handler.send_json = mock.Mock()
         list_handler.do_GET = Handler.do_GET.__get__(list_handler, Handler)
-        list_handler.path = "/api/backups"
+        list_handler.path = "/api/v2/backups"
         list_handler.headers = {"Host": "127.0.0.1"}
         list_handler.do_GET()
         status, payload = list_handler.send_json.call_args[0]
@@ -707,7 +707,7 @@ class ParityApiTests(unittest.TestCase):
         handler.authorized = mock.Mock(return_value=True)
         handler.send_file = mock.Mock()
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/media?id=0&kind=manual"
+        handler.path = "/api/v2/media?id=0&kind=manual"
         handler.headers = {"Host": "127.0.0.1"}
         handler.requestline = "GET / HTTP/1.1"
         handler.do_GET()

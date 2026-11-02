@@ -65,7 +65,15 @@
     "api_v2_title": "Eine stabile API",
     "api_v2_body": "Skripte nutzen die versionierten /api/v2-Routen. Das OpenAPI-Dokument listet jede öffentliche Route auf.",
     "backups_v2_title": "Sicherungen, die du prüfen kannst",
-    "backups_v2_body": "Jede Sicherung speichert eine Prüfsumme pro Datei. Eine 1.19-kompatible Option lässt sich auf älteren Installationen wiederherstellen."
+    "backups_v2_body": "Jede Sicherung speichert eine Prüfsumme pro Datei. Eine 1.19-kompatible Option lässt sich auf älteren Installationen wiederherstellen.",
+    "api_v2_only_title": "One API, no escape hatches",
+    "api_v2_only_body": "OpenBox 2.1 serves /api/v2 and /api/host only. The v1 bridge, unversioned /api paths, and legacy host names now return a clear 410 with the replacement.",
+    "backups_v2_only_title": "Backups you can verify",
+    "backups_v2_only_body": "2.1 writes backup format 2 with a SHA-256 for every file. Format 1 archives still restore; create a 1.19-compatible export on 2.0.x if you still need one.",
+    "media_manifest_title": "Integrity you can switch off",
+    "media_manifest_body": "Settings > Library > Record media checksums controls whether downloads and captures are tracked and hashed. Turning it off skips the manifest work.",
+    "platform_trust_title": "Clearer platform status",
+    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed."
   },
   "shortcuts": {
     "command_palette": "Befehlspalette",
@@ -657,11 +665,7 @@
     "preview_secrets_kept": "Gespeicherte Zugangsdaten sind nicht in Backups enthalten; deine aktuellen bleiben erhalten.",
     "preview_settings_changed": "{count} Einstellungen ändern sich.",
     "preview_settings_changed_one": "{count} Einstellung ändert sich.",
-    "preview_consequence": "Deine Bibliothek wird durch den Inhalt des Backups ersetzt. Vorher wird eine Sicherheitskopie der aktuellen Daten erstellt.",
-    "format_label": "Sicherungsformat",
-    "format_v2": "OpenBox-2.0-Format (Standard)",
-    "format_compat": "Kompatibel mit 1.19 (wiederherstellbar auf 1.19-Installationen)",
-    "format_help": "Wähle 1.19-kompatibel nur, wenn eine 1.19-Installation diese Sicherung wiederherstellen muss. Dieses Format hat kein Hash-Manifest pro Datei."
+    "preview_consequence": "Deine Bibliothek wird durch den Inhalt des Backups ersetzt. Vorher wird eine Sicherheitskopie der aktuellen Daten erstellt."
   },
   "sessions": {
     "title": "Laufende Spiele",
@@ -1224,7 +1228,11 @@
     "state_migration_failed": "Die Bibliothek konnte nicht aktualisiert werden. Die Originaldatei wurde nicht ersetzt.",
     "move_plan_stale": "Die Bibliothek hat sich nach der Vorschau geändert. Prüfe die Verschiebung erneut, bevor du sie anwendest.",
     "backup_format_unsupported": "Diese Sicherung verwendet ein Format, das diese OpenBox-Version nicht lesen kann. Installiere eine neuere Version, um sie wiederherzustellen; es wurde nichts geschrieben.",
-    "plugin_api_unsupported": "Dieses Plugin benötigt eine Plugin-API, die diese OpenBox-Version nicht bereitstellt. Es wurde nicht geladen."
+    "plugin_api_unsupported": "Dieses Plugin benötigt eine Plugin-API, die diese OpenBox-Version nicht bereitstellt. Es wurde nicht geladen.",
+    "api_version_required": "This API path is no longer served unversioned. Use /api/v2 instead.",
+    "v1_api_removed": "The /api/v1 API was removed in OpenBox 2.1. Use /api/v2 instead.",
+    "host_channel_retired": "This native window is too old for OpenBox 2.1. Reinstall the native host.",
+    "backup_format_retired": "OpenBox 2.1 writes backup format 2 only. Use a 2.0.x build for a 1.19-compatible export."
   },
   "insights": {
     "heatmap_label": "Spiel-Heatmap, letzte {days} Tage",
@@ -1979,7 +1987,10 @@
     "move_failed": "Die Verschiebung wurde nicht ausgeführt: {message}",
     "cat_media_missing": "Mediendateien nicht gefunden",
     "cat_media_changed": "Mediendateien seit dem Speichern geändert",
-    "cat_media_untracked": "Mediendateien, die nicht im Manifest stehen"
+    "cat_media_untracked": "Mediendateien, die nicht im Manifest stehen",
+    "manifest_enabled": "Record media checksums",
+    "manifest_help": "Tracks the size, timestamp, and SHA-256 of downloaded and captured media so the integrity check can tell a changed file from an untouched one. Turning this off skips manifest writes and media hashing.",
+    "manifest_disabled": "Media checksum tracking is off, so the integrity check skipped media files."
   },
   "compat": {
     "checking": "Es wird geprüft, was diese Version mit deinen Daten macht ...",
@@ -2002,11 +2013,10 @@
     "settings_unknown": "Diese Einstellungsschlüssel werden beim nächsten Speichern entfernt: {keys}.",
     "settings_none": "Keine unbekannten Einstellungsschlüssel.",
     "api_public": "Öffentliche API: {prefix}. Host-Kanal: {host}.",
-    "api_v1_on": "Abgelöste /api/v1-Routen sind an (OPENBOX_ENABLE_V1_API=1).",
-    "api_v1_off": "Abgelöste /api/v1-Routen sind aus.",
     "sync_none": "Kein Synchronisierungsordner festgelegt.",
     "sync_found": "Synchronisierungsordner gefunden.",
-    "sync_missing": "Der Synchronisierungsordner ist festgelegt, wurde aber nicht gefunden."
+    "sync_missing": "Der Synchronisierungsordner ist festgelegt, wurde aber nicht gefunden.",
+    "api_retired": "/api/v1, unversioned /api/*, and the legacy host paths were removed in 2.1. Use /api/v2 and /api/host."
   },
   "migration": {
     "title": "Deine Bibliothek wurde aktualisiert",
