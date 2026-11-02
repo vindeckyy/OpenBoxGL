@@ -85,7 +85,7 @@ def check_server(bundle: Path) -> None:
             port = port_file.read_text(encoding="utf-8").strip()
             token = token_file.read_text(encoding="utf-8").strip()
             request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/native/capabilities",
+                f"http://127.0.0.1:{port}/api/v2/native/capabilities",
                 headers={"X-OpenBox-Token": token},
             )
             with urllib.request.urlopen(request, timeout=15) as response:

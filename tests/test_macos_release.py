@@ -42,6 +42,13 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(gate.pipeline_problems(gate.BUILD_SCRIPT.read_text(encoding="utf-8")), [])
 
 
+class BundleSmokeTests(unittest.TestCase):
+    def test_the_bundle_smoke_probes_the_v2_capabilities_route(self):
+        smoke = (ROOT / "scripts" / "macos_bundle_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("/api/v2/native/capabilities", smoke)
+        self.assertNotIn("/api/native/capabilities", smoke)
+
+
 class SigningOutputTests(unittest.TestCase):
     def test_the_hardened_runtime_flag_is_read_from_codesign_details(self):
         self.assertTrue(gate.runtime_flag_set("CodeDirectory v=20500 size=472 flags=0x10002(adhoc,runtime) hashes=8+3"))
