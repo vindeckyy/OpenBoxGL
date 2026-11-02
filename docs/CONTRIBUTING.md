@@ -146,7 +146,7 @@ See [ADR 0013 (Artifact Gates & Release Criteria)](adr/0013-artifact-gates.md) f
 
 ### No telemetry
 
-OpenBox does not add telemetry. Diagnostics (`/api/diagnostic`), artifacts, and Flatpak `finish-args` must not upload usage data. Do not introduce phone-home, analytics SDKs, or crash reporters that exfiltrate library contents.
+OpenBox does not add telemetry. Diagnostics (`/api/v2/diagnostic`), artifacts, and Flatpak `finish-args` must not upload usage data. Do not introduce phone-home, analytics SDKs, or crash reporters that exfiltrate library contents.
 
 ## Pull request process
 

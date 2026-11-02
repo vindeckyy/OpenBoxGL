@@ -647,11 +647,11 @@ def test_restore_cannot_be_armed_without_a_preview():
     # One POST, and it is behind a guard, so there is no second way in.
     posters = [
         path.name for path in sorted((ROOT / "static").glob("*.js"))
-        if "/api/backup/restore" in path.read_text(encoding="utf-8")
+        if "/api/v2/backup/restore" in path.read_text(encoding="utf-8")
     ]
     assert posters == ["settings.js"], f"restore is posted from {posters}"
     commit = _function_body(settings, "commitRestore")
-    assert "/api/backup/restore" in commit
+    assert "/api/v2/backup/restore" in commit
     assert re.search(r"if \(!backupPreviewPath\)\s*return", _strip_comments(commit)), (
         "commitRestore() does not require an armed preview path, so a stale or "
         "cleared panel can still post a restore"
@@ -1822,7 +1822,7 @@ def test_state_pagehide_suppresses_hidden_tab_saves():
     assert body, "missing function api"
     assert "pageHidden" in body, "api() must consult the hidden flag"
     assert "paused while the tab is hidden" in body, "api() must refuse hidden-tab mutations"
-    assert "/api/shutdown" in body, "the shutdown POST must stay exempt from suppression"
+    assert "/api/v2/shutdown" in body, "the shutdown POST must stay exempt from suppression"
     assert "isPageHidden" in text and "registerLifecycleStream" in text, (
         "state.js must export the lifecycle helpers"
     )

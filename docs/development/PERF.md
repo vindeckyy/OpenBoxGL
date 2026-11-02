@@ -2,6 +2,43 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 2.1 verification: 10k / 20k / 50k memory (2026-11-01)
+
+Machine: Linux 7.3.0-9-generic, AMD Ryzen 5 4600H (6 cores / 12 threads, about 85% scaling), Python 3.14.8, 15 GiB RAM. Commands:
+`python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --out build/perf-2.1.json` and
+`python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate --memory --out build/perf-2.1-50k.json`.
+Times are p95 milliseconds.
+
+| Gate key | 10k | 20k | Gate / note |
+|---|---:|---:|---|
+| library | 36.6 | 71.3 | read path |
+| library_gzip | 2.2 | 3.2 | read path |
+| favorite_mutation | 431.5 | 889.4 | write budget at 20k is 2000 ms: met |
+| filtered_query | 14.0 | 13.5 | read path |
+| facet | 253.9 | 530.7 | UI-thread facet gate at 20k is 2000 ms: met |
+| picker_score | 33.7 | 66.3 | 200 ms gate: met |
+| constellation_build | 283.2 | 218.7 | 1500 ms gate: met |
+| write (`10k_write` / `20k_write`) | 580.8 | 918.8 | **10k write missed its 500 ms gate on this host; 20k is inside the 2000 ms gate** |
+
+The 10k write result is a host measurement, not a comparison: these numbers are from a Linux
+Ryzen 5 4600H, while the 2.0 baseline table above was measured on an Apple M4. The same code
+path is unchanged in 2.1. The fixed gate still fails on this host, so the release comparison
+must be run on the reference machine before the 2.1 tag; the server-level 20k write remains
+inside its 2000 ms budget.
+
+### 50k memory
+
+| Metric | Value |
+|---|---:|
+| Server RSS after warm-up | 1057.4 MB |
+| Server RSS after the benchmark | **1194.8 MB** |
+| ADR 0098 budget | 1500 MB: met |
+| Formal scale | still 20,000 games; 50k remains exploratory |
+
+Memory at 50k is now measured on this host. The end-of-run RSS is 1.17 GiB, below the
+1.5 GB budget. This closes the memory half of the ADR 0098 evidence; the formal scale does
+not change in 2.1 and the storage decision remains a 3.0 decision.
+
 ## 2.0 program baseline: 1.19.1 and the 2.0 snapshot (2026-10-29)
 
 Machine: Apple M4, macOS 27.2 (arm64), Python 3.12.15 from `.venv-dev`, loopback. The 1.19.1 side is the `release/1.19` worktree at `b3c4cec`; the 2.0 side is a copy of the working tree taken for this run. Command: `python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --no-gate` (p95 milliseconds). Raw JSON is under `/tmp/openbox-2.0` and is not committed.

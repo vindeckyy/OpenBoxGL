@@ -80,6 +80,29 @@ class MediaManifestTests(unittest.TestCase):
         self.assertEqual(media_manifest.rebuild(self.media)["dropped"], 1)
         self.assertEqual(media_manifest.load(self.media), {})
 
+    def test_the_integrity_report_skips_media_when_the_toggle_is_off(self):
+        data = Path(self.tmp.name) / "data-off"
+        (data / "media").mkdir(parents=True)
+        state = default_state()
+        state.setdefault("settings", {})["media_manifest_enabled"] = False
+        (data / "library.json").write_text(json.dumps(state), encoding="utf-8")
+        (data / "media" / "stray.png").write_bytes(b"stray")
+        report = library_v7.check_library(data)
+        self.assertFalse(report["media_manifest"]["enabled"])
+        self.assertNotIn("media_untracked", report["categories"])
+        self.assertFalse((data / "media" / "manifest.json").exists())
+
+    def test_repair_leaves_the_manifest_alone_when_the_toggle_is_off(self):
+        data = Path(self.tmp.name) / "data-repair-off"
+        (data / "media").mkdir(parents=True)
+        state = default_state()
+        state.setdefault("settings", {})["media_manifest_enabled"] = False
+        (data / "library.json").write_text(json.dumps(state), encoding="utf-8")
+        (data / "media" / "stray.png").write_bytes(b"stray")
+        report = library_v7.repair_library(data)
+        self.assertFalse(report["media_manifest"]["enabled"])
+        self.assertFalse((data / "media" / "manifest.json").exists())
+
     def test_the_integrity_report_lists_media_problems_by_category(self):
         data = Path(self.tmp.name) / "data"
         (data / "media").mkdir(parents=True)

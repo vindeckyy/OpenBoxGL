@@ -1,4 +1,4 @@
-import { $, defaultControllerMap, prefersReducedMotion, motionMs } from './util.js';
+import { $, defaultControllerMap, prefersReducedMotion, motionMs, apiPath } from './util.js';
 import { AppState, token, api, notify, nativeOpenExternal } from './state.js';
 import { matchesKey, keyAction } from './pure.js';
 import { registerGamepadSurface, ensureGamepadLoop, syncGamepadLoop } from './gamepad.js';
@@ -43,7 +43,7 @@ function openReader(game, index, customUrl) {
   if (!doc) return;
   AppState.readerPage = 1;
   AppState.readerPath = doc.path || '';
-  AppState.readerUrl = customUrl || `/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`;
+  AppState.readerUrl = customUrl || apiPath(`/api/document?id=${game.id}&index=${index}&token=${encodeURIComponent(token)}`);
   $('readerTitle').textContent = doc.name;
   $('readerOpenExternal').hidden = !AppState.readerPath;
   applyReaderAppearance();
@@ -60,7 +60,7 @@ function setReaderPage(page, { animate = true } = {}) {
     return;
   }
   AppState.readerPage = next;
-  const suffix = AppState.readerUrl.toLowerCase().includes('.pdf') || AppState.readerUrl.includes('/api/document') ? `#page=${AppState.readerPage}` : '';
+  const suffix = AppState.readerUrl.toLowerCase().includes('.pdf') || AppState.readerUrl.includes('/api/v2/document') ? `#page=${AppState.readerPage}` : '';
   const url = `${AppState.readerUrl}${suffix}`;
   const frame = $('readerFrame');
   // Assigning iframe.src pushes a session-history entry per page turn;

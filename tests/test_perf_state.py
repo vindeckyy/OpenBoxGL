@@ -197,7 +197,7 @@ class PerfStateTests(unittest.TestCase):
             handler.send_json = mock.Mock()
             handler.authorized = mock.Mock(return_value=True)
             handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-            handler.path = "/api/related?id=0&token=test"
+            handler.path = "/api/v2/related?id=0&token=test"
             handler.headers = {"Host": "127.0.0.1"}
             handler.do_GET()
             view.assert_called_once()

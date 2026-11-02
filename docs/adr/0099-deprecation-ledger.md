@@ -1,6 +1,6 @@
 # ADR 0099: Deprecation and removal ledger
 
-Status: Accepted and implemented (2026-10-29)
+Status: Accepted and implemented (2026-10-29); 2.1 rows are recorded in the same ledger.
 
 ## Context
 

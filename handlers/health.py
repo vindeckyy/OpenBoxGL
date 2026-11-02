@@ -5,13 +5,13 @@ import copy
 import urllib.parse
 import zipfile
 
-from api_errors import BadRequest, Conflict
+from api_errors import BackupFormatRetired, BadRequest, Conflict
 from crash_report import build_preview
 from cloud_sync import LibrarySyncUnavailable
 from openbox import DATA, load_state
 from routes.registry import route
 from openbox_logging import read_diagnostic_log
-from pkg.parity.parity_backup import BACKUP_ITEMS, create_backup, restore_backup, diff_manifests
+from pkg.parity.parity_backup import BACKUP_ITEMS, WRITABLE_BACKUP_FORMATS, create_backup, restore_backup, diff_manifests
 from pkg.parity.parity_redact import detach_state_view, redact_state_for_export
 from updates import check_update, install_desktop_entry, install_update
 from webapp_state import JOB_MANAGER, RUNNING, approved_backup_file, bump_media_epoch, load_state_view, sync_cloud, transact_state
@@ -142,7 +142,15 @@ class HealthHandlers:
     def create_library_backup(self, payload):
         items = payload.get("items", ["library", "settings"])
         keep = int(payload.get("keep", 0))
-        format_version = int(payload.get("format", 2))
+        try:
+            format_version = int(payload.get("format", 2))
+        except (TypeError, ValueError) as error:
+            raise BadRequest("Backup format must be an integer.") from error
+        if format_version not in WRITABLE_BACKUP_FORMATS:
+            raise BackupFormatRetired(
+                "OpenBox 2.1 writes backup format 2 only. Use a 2.0.x build for a 1.19-compatible export.",
+                detail={"retired": format_version, "writable": list(WRITABLE_BACKUP_FORMATS), "since": "2.1.0"},
+            )
 
         def worker(_cancel_event):
             state = load_state()

@@ -42,6 +42,8 @@ A crash before step 5 leaves the v6 file in place and the next start retries. A 
 
 `openbox --rollback-library --yes` restores the v6 bytes. It keeps the replaced v7 file as `library.v7.kept-<stamp>.json`, writes `rollback-report.json` that lists game edits made after the migration, and removes the migration report. It refuses while OpenBox is answering on its port or while `sessions.json` holds sessions.
 
+The rollback command is deprecated in 2.1 and is planned for removal in 3.0. Keep `library.v6.backup.json` if you may return to 1.19.
+
 ## Integrity and repair
 
 - `openbox --check-library` reads the library without changing it. Exit codes: 0 healthy, 1 warnings, 2 errors. The same report is served at `GET /api/v2/library/integrity`.

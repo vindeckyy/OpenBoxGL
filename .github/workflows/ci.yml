@@ -103,6 +103,15 @@ jobs:
       - name: HTTP route surface ratchet
         run: python -B scripts/check_routes_contract.py
 
+      - name: Public API contract
+        run: python -B scripts/check_api_contract.py
+
+      - name: Deprecation ledger
+        run: python -B scripts/check_deprecations.py
+
+      - name: Frontend API paths
+        run: python -B scripts/check_api_paths.py
+
       - name: Settings schema ratchet
         run: python -B scripts/check_settings_contract.py
 
@@ -178,6 +187,15 @@ jobs:
 
       - name: HTTP route surface ratchet
         run: python -B scripts/check_routes_contract.py
+
+      - name: Public API contract
+        run: python -B scripts/check_api_contract.py
+
+      - name: Deprecation ledger
+        run: python -B scripts/check_deprecations.py
+
+      - name: Frontend API paths
+        run: python -B scripts/check_api_paths.py
 
       - name: Settings schema ratchet
         run: python -B scripts/check_settings_contract.py
@@ -299,7 +317,8 @@ jobs:
         run: |
           for gate in check_routes_contract check_settings_contract \
                       check_emulator_defs check_frontend_modules \
-                      check_reliability_catalog check_clock_coupling; do
+                      check_reliability_catalog check_clock_coupling \
+                      check_api_contract check_deprecations check_api_paths; do
             echo "::group::$gate"
             python3 -B "scripts/$gate.py" || exit 1
             echo "::endgroup::"

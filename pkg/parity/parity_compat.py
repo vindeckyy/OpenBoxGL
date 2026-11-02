@@ -12,7 +12,6 @@ value and the UI still renders; a token the contract does not know is reported a
 from __future__ import annotations
 
 import json
-import os
 import re
 import zipfile
 from pathlib import Path
@@ -110,7 +109,7 @@ def api_section() -> dict[str, Any]:
     return {
         "public_prefix": "/api/v2",
         "host_channel": "/api/host",
-        "v1_bridge": os.environ.get("OPENBOX_ENABLE_V1_API") == "1",
+        "retired": ["/api/v1", "unversioned /api/*", "legacy host paths"],
     }
 
 

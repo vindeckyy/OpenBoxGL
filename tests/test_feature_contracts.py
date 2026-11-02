@@ -417,6 +417,71 @@ class RatchetRuleTest(unittest.TestCase):
         self.assertIn("OPENBOX_CONTRACT_REF", label)
 
 
+
+
+class ApiContractTest(unittest.TestCase):
+    """The public v2 surface may grow or retire only through the ledger."""
+
+    def setUp(self):
+        self.gate = _load("check_api_contract")
+        self.baseline = json.loads(self.gate.CONTRACT.read_text(encoding="utf-8"))
+
+    def test_repository_passes(self):
+        self.assertEqual(0, self.gate.main([]))
+
+    def test_public_and_host_surfaces_are_exactly_the_baseline(self):
+        live = self.gate.live_contract(self.baseline.get("retired", []))
+        self.assertEqual(live["public"], self.baseline["public"])
+        self.assertEqual(live["host"], self.baseline["host"])
+
+    def test_retired_ledger_records_the_v1_bridge(self):
+        retired = {(entry["method"], entry["path"]) for entry in self.baseline["retired"]}
+        self.assertIn(("GET", "/api/v1/library"), retired)
+        self.assertTrue(all(entry.get("reason") for entry in self.baseline["retired"]))
+
+    def test_update_refuses_to_drop_a_public_operation_without_a_reason(self):
+        edited = json.loads(json.dumps(self.baseline))
+        edited["public"].append({"method": "GET", "path": "/api/v2/retired-probe"})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "api_contracts.json"
+            path.write_text(json.dumps(edited), encoding="utf-8")
+            with mock.patch.object(self.gate, "CONTRACT", path):
+                code, output = _run(lambda: self.gate.main(["--update"]))
+        self.assertNotEqual(0, code)
+        self.assertIn("retire-missing", output)
+
+
+class DeprecationLedgerTest(unittest.TestCase):
+    def test_repository_passes(self):
+        gate = _load("check_deprecations")
+        self.assertEqual(0, gate.main())
+
+    def test_every_row_has_a_removal_and_a_recognised_status(self):
+        rows = _load("check_deprecations")._rows((ROOT / "docs" / "api-deprecations.md").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(rows), 9)
+        for cells in rows:
+            status = cells[6]
+            self.assertTrue(status.startswith(("Deprecated", "Removed")), status)
+
+
+class FrontendApiPathGateTest(unittest.TestCase):
+    def test_repository_passes(self):
+        gate = _load("check_api_paths")
+        self.assertEqual(0, gate.main())
+
+    def test_bare_asset_url_is_flagged(self):
+        gate = _load("check_api_paths")
+        problems = gate.scan_text("const cover = `/api/media?id=1&token=x`;")
+        self.assertTrue(problems)
+        self.assertIn("/api/media", problems[0])
+
+    def test_api_helper_and_versioned_urls_are_allowed(self):
+        gate = _load("check_api_paths")
+        self.assertEqual(gate.scan_text("await api('/api/library');"), [])
+        self.assertEqual(gate.scan_text("const cover = `/api/v2/media?id=1`;"), [])
+        self.assertEqual(gate.scan_text("const cover = `/api/host/capabilities`;"), [])
+
+
 class ContractFilesTest(unittest.TestCase):
     """The frozen contracts must exist, stay well-formed, and stay wired in."""
 
@@ -427,6 +492,9 @@ class ContractFilesTest(unittest.TestCase):
         "check_frontend_modules.py",
         "check_reliability_catalog.py",
         "check_clock_coupling.py",
+        "check_api_contract.py",
+        "check_deprecations.py",
+        "check_api_paths.py",
     )
     CONTRACTS = (
         "routes.json",

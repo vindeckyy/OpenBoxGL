@@ -64,7 +64,6 @@ pkg/parity/parity_picker.py
 routes.py
 routes/registry.py
 api_errors.py
-contracts.py
 handlers/__init__.py
 handlers/native.py
 handlers/library.py

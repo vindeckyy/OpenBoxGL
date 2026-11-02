@@ -10,7 +10,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from api_errors import BackupFormatUnsupported
+from api_errors import BackupFormatRetired, BackupFormatUnsupported
 from backend_io import atomic_copy_stream, atomic_write_text, fsync_directory
 from state_store import STATE_SCHEMA_VERSION, app_version, default_state
 from pkg.parity.parity_redact import redact_settings, redact_state_for_export, merge_preserved_credentials
@@ -28,9 +28,13 @@ BACKUP_ITEMS = {
 MAX_BACKUP_MEMBERS = 50_000
 MAX_BACKUP_MEMBER_BYTES = 4 * 1024 * 1024 * 1024
 MAX_BACKUP_TOTAL_BYTES = 32 * 1024 * 1024 * 1024
-# Format 2 writes a manifest that lists every member with its SHA-256 (ADR 0093). Format 1 is the 1.19 layout.
+# Format 2 writes a manifest that lists every member with its SHA-256 (ADR 0093).
+# 2.1 still reads format 1 for older archives, but writes format 2 only (ADR 0104).
 BACKUP_FORMAT_VERSION = 2
-SUPPORTED_BACKUP_FORMATS = (1, 2)
+READABLE_BACKUP_FORMATS = (1, 2)
+WRITABLE_BACKUP_FORMATS = (2,)
+# Kept for callers that still speak in terms of what this build can read.
+SUPPORTED_BACKUP_FORMATS = READABLE_BACKUP_FORMATS
 AUTO_BACKUP_DAYS = 7
 AUTO_BACKUP_KEEP = 4
 AUTO_BACKUP_ITEMS = ["library", "settings", "media", "plugins", "themes"]
@@ -229,22 +233,20 @@ def merge_preserved_plugin_settings(restored, existing, plugins_root):
     return restored
 
 
-def _library_snapshot_for_v1(state):
-    """The 1.19 library layout: v7 envelope removed, schema 6, unknown fields kept, sessions kept."""
-    envelope = ("format", "library_id", "created_with", "path_mode", "library_root")
-    snapshot = {key: value for key, value in state.items() if key not in envelope}
-    snapshot["schema_version"] = 6
-    snapshot.setdefault("active_sessions", [])
-    return snapshot
-
-
 def create_backup(data_dir, state, items, keep=0, running_map=None, format_version=BACKUP_FORMAT_VERSION):
     """Write a backup archive. Format 2 (default) manifests every member's size, mode, and SHA-256.
 
     The manifest is written last so it can describe the bytes actually archived.
-    Format 1 writes the 1.19 layout for a 1.19-compatible export.
+    2.1 writes format 2 only. Format 1 remains readable so archives written by
+    1.19.x or the 2.0.x compatibility export still restore.
     """
-    if format_version not in SUPPORTED_BACKUP_FORMATS:
+    if format_version not in WRITABLE_BACKUP_FORMATS:
+        if format_version in READABLE_BACKUP_FORMATS:
+            raise BackupFormatRetired(
+                f"Backup format {format_version} is no longer written by OpenBox 2.1. "
+                "Use a 2.0.x build to create a 1.19-compatible export.",
+                detail={"retired": format_version, "writable": list(WRITABLE_BACKUP_FORMATS), "since": "2.1.0"},
+            )
         raise BackupFormatUnsupported(f"Backup format {format_version} cannot be written.")
     if running_map is not None and games_running(running_map):
         raise ValueError("Close running games before creating a backup.")
@@ -283,7 +285,7 @@ def create_backup(data_dir, state, items, keep=0, running_map=None, format_versi
             add_json(package, "settings.json", redact_settings(settings_snapshot(state)))
         if "library" in selected:
             library = redact_state_for_export(state)
-            add_json(package, "library.json", _library_snapshot_for_v1(library) if format_version == 1 else library)
+            add_json(package, "library.json", library)
         for key in ("media", "plugins", "themes", "extension_data"):
             if key not in selected:
                 continue

@@ -28,7 +28,7 @@ Rollback restores the exact old file. Changes made after the upgrade (games adde
 
 ## Scripts that call the local API
 
-The public API is `/api/v2`. `/api/v1` is off by default. Set `OPENBOX_ENABLE_V1_API=1` to re-enable it through 2.0.x. It is removed in 2.1. `GET /api/v2/version` reports the contract versions. The native windows call `/api/host/*`.
+The public API is `/api/v2`. `/api/v1` is off by default in 2.0 and was removed in 2.1; `OPENBOX_ENABLE_V1_API=1` only works on 2.0.x. `GET /api/v2/version` reports the contract versions. The native windows call `/api/host/*`. If you are upgrading to 2.1, see [`upgrade-2.1.md`](upgrade-2.1.md).
 
 ## Backups
 

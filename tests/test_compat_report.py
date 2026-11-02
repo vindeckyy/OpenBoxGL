@@ -65,11 +65,13 @@ class CompatReportTests(unittest.TestCase):
         write_archive(self.data / "backups" / "v2.zip", 2)
         self.assertEqual(compat.build_report(self.data, root=self.app), compat.build_report(self.data, root=self.app))
 
-    def test_the_v1_bridge_flag_follows_the_environment(self):
-        with mock.patch.dict(os.environ, {"OPENBOX_ENABLE_V1_API": "1"}):
-            self.assertTrue(compat.build_report(self.data, root=self.app)["api"]["v1_bridge"])
-        with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertFalse(compat.build_report(self.data, root=self.app)["api"]["v1_bridge"])
+    def test_the_retired_api_surfaces_are_reported_the_same_way(self):
+        for environment in ({"OPENBOX_ENABLE_V1_API": "1"}, {}):
+            with mock.patch.dict(os.environ, environment, clear=True):
+                report = compat.build_report(self.data, root=self.app)
+                self.assertEqual(report["api"]["public_prefix"], "/api/v2")
+                self.assertEqual(report["api"]["host_channel"], "/api/host")
+                self.assertIn("/api/v1", report["api"]["retired"])
 
     def test_a_configured_sync_folder_is_reported_as_found_when_it_exists(self):
         state = json.loads((self.data / "library.json").read_text(encoding="utf-8"))

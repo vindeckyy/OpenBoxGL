@@ -55,7 +55,7 @@ const failures = [];
   const themeResults = [];
   for (const name of themeNames) {
     await page.evaluate(async (n, t) => {
-      await fetch('/api/themes/select', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({name: n})});
+      await fetch('/api/v2/themes/select', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({name: n})});
     }, name, process.env.TOKEN);
     await page.goto(`http://127.0.0.1:${process.env.PORT}/?token=${process.env.TOKEN}`, {waitUntil: 'domcontentloaded', timeout: 20000});
     await new Promise(r => setTimeout(r, 1200));
@@ -82,7 +82,7 @@ const failures = [];
     games: AppState.bigBoxGames.map(g => g.platform),
   }));
   const hybridSwitched = await page.evaluate(async (t) => {
-    await fetch('/api/settings', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({...AppState.appSettings, bigbox_mode: 'hybrid'})});
+    await fetch('/api/v2/settings', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({...AppState.appSettings, bigbox_mode: 'hybrid'})});
     return true;
   }, process.env.TOKEN);
   await page.goto(`http://127.0.0.1:${process.env.PORT}/?token=${process.env.TOKEN}`, {waitUntil: 'domcontentloaded', timeout: 20000});
@@ -99,7 +99,7 @@ const failures = [];
   });
   console.log('bigbox hybrid platform:', JSON.stringify({platformBefore, hybridSwitched, platformAfter}));
   await page.evaluate(async (t) => {
-    await fetch('/api/settings', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({...AppState.appSettings, bigbox_mode: 'stage'})});
+    await fetch('/api/v2/settings', {method: 'POST', headers: {'X-OpenBox-Token': t, 'Content-Type': 'application/json'}, body: JSON.stringify({...AppState.appSettings, bigbox_mode: 'stage'})});
   }, process.env.TOKEN);
 
   // 4. IGDB search platform parameter forwarding & API route mapping
@@ -197,7 +197,7 @@ const failures = [];
         calls.apply = JSON.parse(opts.body || '{}');
         return jsonResponse({job_id: 'apply-1', preview_id: fixture.preview_id, revision: fixture.revision}, 202);
       }
-      if (href.includes('/api/metadata/status')) {
+      if (href.includes('/api/v2/metadata/status')) {
         return jsonResponse({ready: true, coverage: {games: 1}});
       }
       return origFetch(url, opts);
@@ -646,7 +646,7 @@ const failures = [];
         return jsonResponse({jobs: [{job_id: 'job-commit-empty', state: 'done', type: 'setup.commit', result: {added: 0, merged: 0, skipped: 4}, can_cancel: false, can_retry: false, can_resume: false}], next_cursor: null});
       if (href.includes('/api/v2/library'))
         return jsonResponse({games: [], playlists: [], settings: {locale: 'en'}, filter_presets: [], media_epoch: 0});
-      if (href.includes('/api/settings') && method === 'POST') {
+      if (href.includes('/api/v2/settings') && method === 'POST') {
         const body = opts.body ? JSON.parse(opts.body) : {};
         return jsonResponse(body);
       }
@@ -970,14 +970,14 @@ const failures = [];
     for (const [name, rom] of [['Party Kart', 'kart.bin'], ['Couch Brawler', 'brawl.bin']]) {
       const romPath = `${partySeedDir}/${rom}`;
       fs.writeFileSync(romPath, 'party-smoke-fixture');
-      const res = await fetch(`http://127.0.0.1:${process.env.PORT}/api/game`, {
+      const res = await fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/game`, {
         method: 'POST',
         headers: {'X-OpenBox-Token': process.env.TOKEN, 'Content-Type': 'application/json'},
         body: JSON.stringify({game: {name, platform: 'SNES', path: romPath, max_players: 4}}),
       });
       if (!res.ok) throw new Error(`party seed failed for ${name}: ${res.status}`);
     }
-    const libRes = await fetch(`http://127.0.0.1:${process.env.PORT}/api/library`, {
+    const libRes = await fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/library`, {
       headers: {'X-OpenBox-Token': process.env.TOKEN},
     });
     const lib = await libRes.json();
@@ -1059,7 +1059,7 @@ const failures = [];
     body: JSON.stringify({name: 'Smoke Deck'}),
   }).catch(() => {});
   for (const id of partySeedIds) {
-    await fetch(`http://127.0.0.1:${process.env.PORT}/api/game/delete`, {
+    await fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/game/delete`, {
       method: 'POST',
       headers: {'X-OpenBox-Token': process.env.TOKEN, 'Content-Type': 'application/json'},
       body: JSON.stringify({id}),
@@ -1599,7 +1599,7 @@ const failures = [];
     const origOpen = window.open;
     window.open = (...args) => { nativeExternalCalls++; return origOpen ? origOpen(...args) : null; };
     window.fetch = async (url, opts) => {
-      if (String(url).includes('/api/native/open-external')) { nativeExternalCalls++; return {ok: true, json: async () => ({ok: true})}; }
+      if (String(url).includes('/api/v2/native/open-external')) { nativeExternalCalls++; return {ok: true, json: async () => ({ok: true})}; }
       return origFetch(url, opts);
     };
     manualTile?.click();
@@ -1611,7 +1611,7 @@ const failures = [];
     document.getElementById('closeReader')?.click();
     let libraryPostDuringResize = false;
     window.fetch = async (url, opts) => {
-      if (String(url).includes('/api/library') && opts?.method === 'POST') libraryPostDuringResize = true;
+      if (String(url).includes('/api/v2/library') && opts?.method === 'POST') libraryPostDuringResize = true;
       return origFetch(url, opts);
     };
     const handle = document.getElementById('detailsResizeHandle');
@@ -1630,7 +1630,7 @@ const failures = [];
     let importBody = null;
     const origFetch = window.fetch;
     window.fetch = async (url, opts) => {
-      if (String(url).includes('/api/import') && opts?.method === 'POST') {
+      if (String(url).includes('/api/v2/import') && opts?.method === 'POST') {
         try { importBody = JSON.parse(opts.body || '{}'); } catch { importBody = {}; }
         return {ok: true, json: async () => ({added: 0})};
       }
@@ -1658,7 +1658,7 @@ const failures = [];
     let importCalled = false;
     const origFetch = window.fetch;
     window.fetch = async (url, opts) => {
-      if (String(url).includes('/api/import') && opts?.method === 'POST') {
+      if (String(url).includes('/api/v2/import') && opts?.method === 'POST') {
         importCalled = true;
         return {ok: true, json: async () => ({added: 0})};
       }
@@ -1688,7 +1688,7 @@ const failures = [];
   // rapid filter switching stays consistent.
   const hardening = {};
   hardening.longName = await page.evaluate(async (token) => {
-    const state = await (await fetch('/api/library', {headers: {'X-OpenBox-Token': token}})).json();
+    const state = await (await fetch('/api/v2/library', {headers: {'X-OpenBox-Token': token}})).json();
     AppState.games = state.games;
     if (!AppState.games.length) return {rendered: false};
     const name = 'A'.repeat(400);
@@ -1913,7 +1913,7 @@ const failures = [];
     // state.api() attaches the session token; a bare fetch() gets a 403 and the
     // selection never changes, which is how this first attempt passed vacuously.
     if (next && next !== current) {
-      await state.api('/api/themes/select', {method: 'POST', body: JSON.stringify({name: next})});
+      await state.api('/api/v2/themes/select', {method: 'POST', body: JSON.stringify({name: next})});
       await settings.loadTheme(true);
     }
     await new Promise(r => setTimeout(r, 800));
@@ -2362,8 +2362,8 @@ const failures = [];
     const os = require('os');
     const path = require('path');
     const headers = {'X-OpenBox-Token': process.env.TOKEN};
-    const libraryOf = async () => (await (await fetch(`http://127.0.0.1:${process.env.PORT}/api/library`, {headers})).json()).games || [];
-    const save = body => fetch(`http://127.0.0.1:${process.env.PORT}/api/game`, {
+    const libraryOf = async () => (await (await fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/library`, {headers})).json()).games || [];
+    const save = body => fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/game`, {
       method: 'POST',
       headers: {...headers, 'Content-Type': 'application/json'},
       body: JSON.stringify(body),

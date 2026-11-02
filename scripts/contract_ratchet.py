@@ -81,7 +81,12 @@ def reference_rev() -> tuple[str | None, str]:
 
 
 def reference_data(filename: str) -> tuple[dict | None, str]:
-    """Return (baseline parsed at the reference rev, label describing it).
+    """Return a contract parsed at the reference rev, relative to scripts/contracts."""
+    return reference_data_path(f"{CONTRACT_DIR}/{filename}")
+
+
+def reference_data_path(relative_path: str) -> tuple[dict | None, str]:
+    """Return (document parsed at the reference rev, label describing it).
 
     ``None`` means layer 2 cannot run, and the label says why. Callers report
     that instead of failing, because layer 1 is still enforcing the rule.
@@ -90,7 +95,7 @@ def reference_data(filename: str) -> tuple[dict | None, str]:
     if rev is None:
         return None, label
     label = f"{label} {rev[:12]}"
-    raw = _git("show", f"{rev}:{CONTRACT_DIR}/{filename}")
+    raw = _git("show", f"{rev}:{relative_path}")
     if raw is None:
         return None, f"{label} (baseline absent there)"
     try:

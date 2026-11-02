@@ -163,6 +163,12 @@
     "159:the-library-filter-chips-count-a-large-library",
     "160:2-0-starts-on-a-library-that-still-needs-the-upgrade",
     "161:something-in-the-install-needs-the-user-s-attention-before-t",
-    "162:the-user-wants-a-backup-before-opening-the-upgraded-library"
+    "162:the-user-wants-a-backup-before-opening-the-upgraded-library",
+    "163:an-authenticated-client-requests-an-unversioned-public-api-p",
+    "164:an-authenticated-client-requests-a-legacy-native-host-path",
+    "165:a-client-asks-2-1-to-write-backup-format-1",
+    "166:media-checksum-tracking-is-turned-off",
+    "167:a-deep-link-is-issued-while-a-server-is-already-running",
+    "168:a-2-0-build-opens-a-2-1-library"
   ]
 }

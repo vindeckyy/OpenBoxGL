@@ -129,7 +129,7 @@ class DeeplinkTests(unittest.TestCase):
                 "127.0.0.1",
                 12345,
                 "tok",
-                "/api/launch",
+                "/api/v2/launch",
                 "POST",
                 {"game_id": "game-0123456789abcdef01234567-1"},
             )
@@ -148,7 +148,7 @@ class DeeplinkTests(unittest.TestCase):
                 "127.0.0.1",
                 12345,
                 "tok",
-                "/api/launch",
+                "/api/v2/launch",
                 "POST",
                 {"id": 3},
             )
@@ -225,7 +225,7 @@ class DeeplinkTests(unittest.TestCase):
         response.__exit__ = mock.Mock(return_value=False)
         with mock.patch("pkg.parity.parity_deeplinks.urllib.request.urlopen", return_value=response), \
              mock.patch("pkg.parity.parity_deeplinks.read_limited", return_value=b'{"ok": true}'):
-            payload = api_request("127.0.0.1", 8787, "tok", "/api/launch", "POST", {"game_id": "g1"})
+            payload = api_request("127.0.0.1", 8787, "tok", "/api/v2/launch", "POST", {"game_id": "g1"})
         self.assertTrue(payload["ok"])
 
     def test_read_port_file(self):

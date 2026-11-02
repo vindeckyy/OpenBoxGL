@@ -148,7 +148,7 @@ class MediaPathTests(unittest.TestCase):
         with mock.patch("handlers.media.load_state_view", return_value={"games": []}), \
              mock.patch("handlers.media.game_from_query", return_value={"cover": "/etc/hosts"}):
             with self.assertRaises(MediaNotFound):
-                handler._api_get_api_media(urlparse("/api/media?kind=cover"))
+                handler._api_get_api_media(urlparse("/api/v2/media?kind=cover"))
         handler.send_file.assert_not_called()
 
     def test_file_probe_rejects_non_regular_files(self):

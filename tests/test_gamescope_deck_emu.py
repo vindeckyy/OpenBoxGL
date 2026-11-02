@@ -352,11 +352,11 @@ def main():
                 if not url:
                     return 1
 
-                settings = api_get(url, "/api/settings")
+                settings = api_get(url, "/api/v2/settings")
                 check("settings.gamescope_guest true", settings.get("gamescope_guest") is True, str(settings.get("gamescope_guest")))
 
                 # Non-Steam launch under guest session
-                launch = api_post(url, "/api/launch", {"id": 0})
+                launch = api_post(url, "/api/v2/launch", {"id": 0})
                 check("non-Steam launch returns pid", bool(launch.get("pid")), str(launch))
                 time.sleep(1.2)
                 marked = False
@@ -441,7 +441,7 @@ def main():
                 # Steam launch path must stay on steam (Input/overlay stay with Steam)
                 args = ["steam", "-applaunch", "570"]
                 check("Steam launch detected as steam path", is_steam_launch(args))
-                steam_launch = api_post(url, "/api/launch", {"id": 1})
+                steam_launch = api_post(url, "/api/v2/launch", {"id": 1})
                 check("Steam title launch returns pid", bool(steam_launch.get("pid")), str(steam_launch))
                 time.sleep(0.6)
                 steam_log_text = steam_log.read_text(encoding="utf-8") if steam_log.exists() else ""

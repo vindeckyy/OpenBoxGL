@@ -32,7 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 2.0.x | Yes (current) |
+| 2.1.x | Yes (current) |
+| 2.0.x | No — upgrade required |
 | 1.19.x | No — upgrade required |
 | 1.18.x | No — upgrade required |
 | 1.16.x | No — upgrade required (see above) |
@@ -60,7 +61,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. Until v2.0.0 is tagged, the 1.19.x line remains the latest released line; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 2.1.x line is the current supported line; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
@@ -141,8 +142,8 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 | Backup format above this build | Silent misread of a newer archive | Refused with `BACKUP_FORMAT_UNSUPPORTED`; nothing is written | `tests/test_backup_format_v2.py` |
 | Media manifest | A changed or substituted media file goes unnoticed | Size and mtime are checked on demand; a change triggers a hash comparison; untracked files are reported | `tests/test_media_manifest.py` |
 | Host channel | A host built for another major API drives the server | `X-OpenBox-API-Version` is checked; a mismatch is refused with `HOST_API_UNSUPPORTED` before routing | `tests/test_api_v2_contract.py` |
-| v1 API bridge | Retired unversioned routes return to the public surface | Off by default; `OPENBOX_ENABLE_V1_API=1` re-enables it | `tests/test_api_v2_contract.py` |
-| Frontend requests | A request reaches an unversioned or unknown endpoint | Every `api()` call site must resolve to a live route; `/api/v1` may not appear in the frontend | `tests/test_frontend_endpoint_contract.py` |
+| Retired API surfaces | The v1, unversioned, or legacy host paths return to the public surface | Removed in 2.1; requests get `410` with a replacement, and the environment variable cannot re-enable them | `tests/test_retired_surfaces.py`, `tests/test_api_v2_contract.py` |
+| Frontend requests | A request reaches an unversioned or unknown endpoint | Every `api()` call site resolves to an `/api/v2` route; direct asset URLs must be versioned | `tests/test_frontend_endpoint_contract.py`, `scripts/check_api_paths.py` |
 | Failure messages | A code is shown raw or not at all | Five codes map to explanations; a test requires an English explanation for each | `tests/test_api_problem_details.py` |
 | macOS bundle | An ad-hoc build is described as notarized | Notarization is claimed only with `spctl` evidence; the entitlements file is empty by default; the gate checks the pipeline | `tests/test_macos_release.py`, `docs/archive/HANDOFF-MACOS-NOTARY.md` |
 

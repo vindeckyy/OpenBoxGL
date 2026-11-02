@@ -25,7 +25,7 @@ import pkg.parity.parity_faugus as parity_faugus  # noqa: E402
 import pkg.parity.parity_flatpak_grant as flatpak_grant  # noqa: E402
 
 
-LINUX_ONLY_PREFIXES = ("/api/wine/", "/api/faugus/", "/api/v2/launch/grant")
+LINUX_ONLY_PREFIXES = ("/api/v2/wine/", "/api/v2/faugus/", "/api/v2/launch/grant")
 
 
 class Handler:
@@ -48,7 +48,7 @@ class FaugusHandler(faugus_handler.FaugusHandlers, Handler):
 
 class RouteFamilyTests(unittest.TestCase):
     def test_every_linux_only_route_is_in_a_probed_family(self):
-        paths = {route.path for route in all_routes()}
+        paths = {route.path for route in all_routes() if route.visibility in ("public", "host")}
         for prefix in LINUX_ONLY_PREFIXES:
             self.assertTrue({path for path in paths if path.startswith(prefix)}, prefix)
         for path in paths:

@@ -1,6 +1,6 @@
 # API reference
 
-Generated from `routes.py`, `contracts.py`, and `routes/registry.py`; do not edit by hand. Regenerate with `python3 scripts/gen_api_docs.py --v2`.
+Generated from `routes.py` and `routes/registry.py`; do not edit by hand. Regenerate with `python3 scripts/gen_api_docs.py`.
 
 Authentication: requests use the `X-OpenBox-Token` header with the per-process token from `server.token`; the local UI may also use a query token during startup. Public assets and byte/stream endpoints follow their route-specific behavior.
 
@@ -415,73 +415,6 @@ The native windows (WebKitGTK, WebView2, WKWebView) call `/api/host/*` and send 
 
 _4 routes._
 
-## API v1 (retired bridge)
+## Retired surfaces
 
-The v1 surface is retired in 2.0: it is off by default, `OPENBOX_ENABLE_V1_API=1` bridges it through 2.0.x with `Deprecation` and `Sunset` headers, and it is removed in 2.1. The frozen route list is archived at `docs/archive/v1_contracts.json`.
-
-| Method | Path | Handler | Response |
-|---|---|---|---|
-| - | `/api/v1/backup` | `-` | `-` |
-| - | `/api/v1/backup/create` | `-` | `-` |
-| - | `/api/v1/backup/restore` | `-` | `-` |
-| - | `/api/v1/backups` | `-` | `-` |
-| - | `/api/v1/bigbox/mode` | `-` | `-` |
-| - | `/api/v1/diagnostic` | `-` | `-` |
-| - | `/api/v1/emulators` | `-` | `-` |
-| - | `/api/v1/emulators/install` | `-` | `-` |
-| - | `/api/v1/extra/launch` | `-` | `-` |
-| - | `/api/v1/favorite` | `-` | `-` |
-| - | `/api/v1/filter-presets` | `-` | `-` |
-| - | `/api/v1/game` | `-` | `saved game record` |
-| - | `/api/v1/game/delete` | `-` | `removed game name` |
-| - | `/api/v1/games/bulk` | `-` | `-` |
-| - | `/api/v1/games/bulk-wizard` | `-` | `-` |
-| - | `/api/v1/gameyfin/test` | `-` | `-` |
-| - | `/api/v1/health` | `-` | `health facts and job history` |
-| - | `/api/v1/health/dedupe` | `-` | `-` |
-| - | `/api/v1/history` | `-` | `enabled, history` |
-| - | `/api/v1/import` | `-` | `added, found, recommendations` |
-| - | `/api/v1/import/arcade` | `-` | `-` |
-| - | `/api/v1/import/epic` | `-` | `-` |
-| - | `/api/v1/import/heroic` | `-` | `-` |
-| - | `/api/v1/import/lutris` | `-` | `-` |
-| - | `/api/v1/import/rpcs3` | `-` | `-` |
-| - | `/api/v1/import/scummvm` | `-` | `-` |
-| - | `/api/v1/import/steam` | `-` | `-` |
-| - | `/api/v1/import/vita3k` | `-` | `-` |
-| - | `/api/v1/jobs` | `-` | `jobs, history` |
-| - | `/api/v1/launch` | `-` | `ok, launch_id, game` |
-| - | `/api/v1/library` | `-` | `games, playlists, settings, platforms, categories, tags, queue` |
-| - | `/api/v1/log` | `-` | `-` |
-| - | `/api/v1/media` | `-` | `media bytes or a JSON error` |
-| - | `/api/v1/media/audit` | `-` | `-` |
-| - | `/api/v1/media/bulk` | `-` | `media job state` |
-| - | `/api/v1/media/cleanup` | `-` | `-` |
-| - | `/api/v1/metadata/apply` | `-` | `applied field names and notes` |
-| - | `/api/v1/metadata/match` | `-` | `-` |
-| - | `/api/v1/metadata/search` | `-` | `-` |
-| - | `/api/v1/metadata/status` | `-` | `ready, coverage, matched counts` |
-| - | `/api/v1/notifications` | `-` | `notifications and unread count` |
-| - | `/api/v1/playlists` | `-` | `saved playlist name` |
-| - | `/api/v1/plugins` | `-` | `-` |
-| - | `/api/v1/premium/media-packs` | `-` | `-` |
-| - | `/api/v1/premium/media-packs/apply` | `-` | `-` |
-| - | `/api/v1/profiles` | `-` | `emulator profile map` |
-| - | `/api/v1/queue` | `-` | `queue and the advanced game` |
-| - | `/api/v1/ra/inject` | `-` | `-` |
-| - | `/api/v1/running` | `-` | `running, events, last_event` |
-| - | `/api/v1/saves` | `-` | `discovered save backups` |
-| - | `/api/v1/saves/scan/apply` | `-` | `-` |
-| - | `/api/v1/settings` | `-` | `the full public settings object` |
-| - | `/api/v1/shutdown` | `-` | `-` |
-| - | `/api/v1/state/recover` | `-` | `-` |
-| - | `/api/v1/storefront/import` | `-` | `-` |
-| - | `/api/v1/tags` | `-` | `updated count and tag counts` |
-| - | `/api/v1/themes` | `-` | `installed themes and the active theme` |
-| - | `/api/v1/themes/open-folder` | `-` | `-` |
-| - | `/api/v1/update` | `-` | `available, latest, current` |
-| - | `/api/v1/update/install` | `-` | `-` |
-| - | `/api/v1/webhooks` | `-` | `saved webhooks and event types` |
-
-_61 routes._
-
+`/api/v1`, the unversioned public `/api/*` paths, and the legacy native-host names were removed in 2.1 (ADR 0103). The frozen v1 route list remains at `docs/archive/v1_contracts.json`; the retirement ledger is `docs/api-deprecations.md`.

@@ -24,7 +24,7 @@ ALLOWED_ID_ONLY_GAME_CALLS = 0
 ALLOWED_BARE_FROMISOFORMAT = 29
 
 GAME_ROUTE_RE = re.compile(
-    r"/api/(favorite|game\b|v2/library/trash|screenshot|extra/launch|ra/game|saves/|metadata/|storefront/|library/)"
+    r"/api/v2/(favorite|game\b|v2/library/trash|screenshot|extra/launch|ra/game|saves/|metadata/|storefront/|library/)"
 )
 API_CALL_RE = re.compile(r"""api\(\s*(['"`])(/api/[^'"`]+)\1[^;]*?JSON\.stringify\(\{\s*id\s*[,:}]([^;]*)""", re.S)
 

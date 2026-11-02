@@ -203,7 +203,7 @@ class ResumeHttpTests(unittest.TestCase):
         self.assertEqual(payload["slot"], "hardcore_2")
         stored = self.openbox.load_state()["games"][0]
         self.assertEqual(stored["resume_slot"], "hardcore_2")
-        status, state = self.request("GET", "/api/library")
+        status, state = self.request("GET", "/api/v2/library")
         self.assertEqual(status, 200)
         projected = next(game for game in state["games"] if game["game_id"] == self.game_id)
         self.assertEqual(projected["resume_slot"], "hardcore_2")

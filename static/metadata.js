@@ -1,4 +1,4 @@
-import { $, escapeHtml, fact, HTTP_URL_RE } from './util.js';
+import { $, escapeHtml, fact, HTTP_URL_RE, apiPath } from './util.js';
 import { api, notify, AppState, token, gameIdOf } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
@@ -773,7 +773,7 @@ function _achievementItems(source) {
   if (!source || !Array.isArray(source.items)) return '';
   return source.items.slice(0, 500).map(item => {
     const title = item.title || item.id || 'Achievement';
-    const icon = item.icon_url || (item.badge ? `/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}` : '');
+    const icon = item.icon_url || (item.badge ? apiPath(`/api/ra/badge?name=${encodeURIComponent(item.badge)}&locked=${item.earned ? 0 : 1}&token=${encodeURIComponent(token)}`) : '');
     return `<div class="achievement">${icon ? `<img src="${escapeHtml(icon)}" alt="" loading="lazy" decoding="async">` : ''}<div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(item.description || '')}</small></div><span>${item.points ? `${Number(item.points)} pts` : ''}${item.earned ? ' · earned' : ''}</span></div>`;
   }).join('');
 }

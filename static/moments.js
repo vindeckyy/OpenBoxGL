@@ -5,7 +5,7 @@
    existing navigation modules remain the first writers for their hotkeys.
 */
 import { progressScore } from './pure.js';
-import { $, escapeHtml } from './util.js';
+import { $, escapeHtml, apiPath } from './util.js';
 import { AppState, api, media, notify, token } from './state.js';
 import { t } from './i18n.js';
 
@@ -66,7 +66,7 @@ function screenshotUrl(game, item) {
 
 function clipUrl(game, item, index) {
   if (!item?.path) return '';
-  return `/api/media?game_id=${encodeURIComponent(stableGameId(game))}&kind=clip&index=${encodeURIComponent(index)}&v=${encodeURIComponent(String(AppState.mediaEpoch))}&token=${encodeURIComponent(token)}`;
+  return apiPath(`/api/media?game_id=${encodeURIComponent(stableGameId(game))}&kind=clip&index=${encodeURIComponent(index)}&v=${encodeURIComponent(String(AppState.mediaEpoch))}&token=${encodeURIComponent(token)}`);
 }
 
 function memoryMediaUrl(game, index) {

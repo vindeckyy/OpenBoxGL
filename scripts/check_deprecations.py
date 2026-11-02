@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Deprecation ledger gate (ADR 0099): every deprecated surface has an owner, a version, and a removal.
+"""Deprecation ledger gate (ADR 0099, ADR 0102, ADR 0103).
 
 Reads the table in docs/api-deprecations.md. A row must name an owner, an announcement
-version, and a removal version. Removal must come after the announcement. The /api/v1
-sunset date in the ledger must equal ``routes.V1_SUNSET``.
+version, and a removal version. A row marked Removed must not still be live; a row
+marked Deprecated must not be past its removal version.
 """
 
 from __future__ import annotations
@@ -13,8 +13,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 LEDGER = ROOT / "docs" / "api-deprecations.md"
 VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+STATUS_REMOVED = "Removed"
+STATUS_DEPRECATED = "Deprecated"
 
 
 def _rows(text: str) -> list[list[str]]:
@@ -24,7 +27,23 @@ def _rows(text: str) -> list[list[str]]:
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         rows.append(cells)
-    return rows[1:]  # drop the header row
+    return rows[1:]
+
+
+def _version(value: str) -> tuple[int, int, int]:
+    return tuple(int(part) for part in value.split("."))
+
+
+def _current_version() -> str:
+    source = (ROOT / "updates.py").read_text(encoding="utf-8")
+    match = re.search(r'^VERSION\s*=\s*"([^"]+)"', source, re.MULTILINE)
+    return match.group(1) if match else "0.0.0"
+
+
+def _live_api_paths() -> set[str]:
+    from routes import GET_TABLE, POST_TABLE
+
+    return set(GET_TABLE) | set(POST_TABLE)
 
 
 def main() -> int:
@@ -35,21 +54,32 @@ def main() -> int:
     rows = _rows(LEDGER.read_text(encoding="utf-8"))
     if not rows:
         problems.append("ledger has no rows")
+    current = _current_version()
+    live = _live_api_paths()
     for cells in rows:
-        surface, owner, announced, _default, removed, sunset, status = (cells + [""] * 7)[:7]
+        surface, owner, announced, _default, removed, _sunset, status = (cells + [""] * 7)[:7]
         if not owner or not VERSION.match(announced) or not VERSION.match(removed):
             problems.append(f"{surface}: needs an owner, an announced version, and a removal version")
             continue
-        if tuple(map(int, removed.split("."))) <= tuple(map(int, announced.split("."))):
+        if _version(removed) <= _version(announced):
             problems.append(f"{surface}: removal {removed} must come after announcement {announced}")
-        if surface.startswith("`/api/v1") and not status:
-            problems.append(f"{surface}: status is required")
-        if surface.startswith("`/api/v1"):
-            sys.path.insert(0, str(ROOT))
-            from routes import V1_SUNSET
-
-            if V1_SUNSET not in sunset:
-                problems.append(f"{surface}: sunset header {sunset!r} does not match routes.V1_SUNSET")
+        if status.startswith(STATUS_REMOVED):
+            if _version(removed) > _version(current):
+                problems.append(f"{surface}: marked Removed but removal {removed} is after {current}")
+            if surface.startswith("`/api/v1"):
+                if any(path.startswith("/api/v1/") for path in live):
+                    problems.append(f"{surface}: marked Removed but a /api/v1 route is still registered")
+            # Unversioned /api base paths remain as private aliases used to build
+            # the public /api/v2 twins; dispatch refuses them (tested separately).
+            if surface.startswith("1.19-compatible backup write"):
+                from pkg.parity import parity_backup
+                if 1 in parity_backup.WRITABLE_BACKUP_FORMATS:
+                    problems.append(f"{surface}: marked Removed but format 1 is still writable")
+        elif status.startswith(STATUS_DEPRECATED):
+            if _version(removed) <= _version(current):
+                problems.append(f"{surface}: marked Deprecated but removal {removed} is not after {current}")
+        else:
+            problems.append(f"{surface}: status must start with Deprecated or Removed")
     if problems:
         print("FAIL: deprecation ledger incomplete")
         for problem in problems:

@@ -1,6 +1,6 @@
 # ADR 0094: macOS notarization
 
-Status: Not adopted for 2.0 (2026-10-29). The maintainer decided the 2.0 macOS bundle ships ad-hoc signed, so no notarized artifact is produced and no Developer ID secrets are needed. The machinery below stays in the tree for a later release; the hardened-runtime dry run passed locally with an ad-hoc identity (`docs/archive/HANDOFF-MACOS-NOTARY.md`).
+Status: Not adopted for 2.0 (2026-10-29); still conditional in 2.1 (ADR 0102). The maintainer decided the 2.0 macOS bundle ships ad-hoc signed, so no notarized artifact is produced and no Developer ID secrets are needed. The machinery below stays in the tree for a later release; the hardened-runtime dry run passed locally with an ad-hoc identity (`docs/archive/HANDOFF-MACOS-NOTARY.md`).
 
 ## Context
 

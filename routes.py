@@ -1,9 +1,14 @@
 """Route tables mapping HTTP paths to Handler method names."""
 
-import os
 from pathlib import Path
 
-from api_errors import HostApiUnsupported, RouteNotFound, V1ApiDisabled
+from api_errors import (
+    ApiVersionRequired,
+    HostApiUnsupported,
+    HostChannelRetired,
+    RouteNotFound,
+    V1ApiRemoved,
+)
 
 __path__ = [str(Path(__file__).resolve().parent / "routes")]
 
@@ -254,6 +259,7 @@ GET_TABLE = {
     "/api/faugus/scan": "_api_get_api_faugus_scan",
     "/api/native/capabilities": "handlers.native.capabilities",
     "/api/native/battery": "handlers.native.battery",
+    "/api/host/capabilities": "handlers.native.capabilities",
     "/favicon.ico": "_api_get_favicon",
     "/favicon.svg": "_api_get_favicon",
     "/index.html": "_api_get_index",
@@ -310,6 +316,7 @@ POST_TABLE = {
     "/api/import/wizard": "_api_post_api_import_wizard",
     "/api/import/xbox360": "_api_post_api_import_xbox360",
     "/api/launch": "_api_post_api_launch",
+    "/api/host/launch": "_api_post_api_launch",
     "/api/v2/launch/preflight": "_api_post_api_v2_launch_preflight",
     "/api/v2/launch/preflight/batch": "_api_post_api_v2_launch_preflight_batch",
     "/api/v2/launch/audit/refresh": "_api_post_api_v2_launch_audit_refresh",
@@ -465,6 +472,7 @@ POST_TABLE = {
     "/api/settings": "_api_post_api_settings",
     "/api/faugus/import": "_api_post_api_faugus_import",
     "/api/shutdown": "_api_post_api_shutdown",
+    "/api/host/shutdown": "_api_post_api_shutdown",
     "/api/state/recover": "_api_post_api_state_recover",
     "/api/storefront/import": "_api_post_api_storefront_import",
     "/api/tags": "_api_post_api_tags",
@@ -503,93 +511,13 @@ POST_TABLE = {
 }
 
 
-# The frozen 1.19 surface. Served under /api/v1 only when OPENBOX_ENABLE_V1_API=1 (ADR 0091).
-V1_ALIASED_PREFIXES = (
-    "/api/library",
-    "/api/settings",
-    "/api/health",
-    "/api/health/dedupe",
-    "/api/launch",
-    "/api/game",
-    "/api/game/delete",
-    "/api/games/bulk",
-    "/api/queue",
-    "/api/tags",
-    "/api/notifications",
-    "/api/webhooks",
-    "/api/playlists",
-    "/api/running",
-    "/api/history",
-    "/api/saves",
-    "/api/media",
-    "/api/media/bulk",
-    "/api/media/audit",
-    "/api/metadata/status",
-    "/api/metadata/apply",
-    "/api/metadata/match",
-    "/api/metadata/search",
-    "/api/import",
-    "/api/import/steam",
-    "/api/import/heroic",
-    "/api/import/lutris",
-    "/api/import/arcade",
-    "/api/import/epic",
-    "/api/emulators",
-    "/api/emulators/install",
-    "/api/profiles",
-    "/api/themes",
-    "/api/update",
-    "/api/update/install",
-    "/api/backup",
-    "/api/backup/create",
-    "/api/backup/restore",
-    "/api/backups",
-    "/api/jobs",
-    "/api/log",
-    "/api/diagnostic",
-    "/api/shutdown",
-    "/api/favorite",
-    "/api/plugins",
-    "/api/state/recover",
-    "/api/filter-presets",
-    "/api/premium/media-packs",
-    "/api/premium/media-packs/apply",
-    "/api/storefront/import",
-    "/api/gameyfin/test",
-    "/api/import/scummvm",
-    "/api/import/rpcs3",
-    "/api/import/vita3k",
-    "/api/themes/open-folder",
-    "/api/ra/inject",
-    "/api/media/cleanup",
-    "/api/saves/scan/apply",
-    "/api/bigbox/mode",
-    "/api/games/bulk-wizard",
-    "/api/extra/launch",
-)
-
-
-# Legacy host-channel names and their /api/host replacements. Old hosts keep the legacy names until 2.1.
-HOST_CHANNEL_ALIASES = {
+# Legacy native-host names kept only to explain the migration. Requests to them
+# are refused in 2.1; the host channel is /api/host/*.
+RETIRED_HOST_PATHS = {
     "/api/launch": "/api/host/launch",
     "/api/shutdown": "/api/host/shutdown",
     "/api/native/capabilities": "/api/host/capabilities",
 }
-HOST_ONLY_BASES = frozenset(HOST_CHANNEL_ALIASES)
-V1_BRIDGE_ENV = "OPENBOX_ENABLE_V1_API"
-# Sunset date advertised on every /api/v1 response; removal is planned for 2.1.0 (docs/api-deprecations.md).
-V1_SUNSET = "Mon, 19 Sep 2027 00:00:00 GMT"
-
-
-def v1_bridge_enabled() -> bool:
-    return os.environ.get(V1_BRIDGE_ENV, "").strip() == "1"
-
-
-def _apply_host_aliases(table):
-    for legacy, host_path in HOST_CHANNEL_ALIASES.items():
-        if legacy in table:
-            table.setdefault(host_path, table[legacy])
-    return table
 
 
 def _apply_v2_aliases(table):
@@ -601,20 +529,12 @@ def _apply_v2_aliases(table):
     return table
 
 
-def _apply_v1_bridge(table):
-    if not v1_bridge_enabled():
-        return table
-    for path in V1_ALIASED_PREFIXES:
-        if path in table:
-            table[f"/api/v1{path[len('/api'):]}"] = table[path]
-    return table
-
-
 def _build_tables():
-    # Base tables plus host, v2, and opt-in v1 aliases. Decorator-registered routes
-    # are consulted at dispatch time, so they need no build-time merge.
-    get_tbl = _apply_v1_bridge(_apply_v2_aliases(_apply_host_aliases(dict(GET_TABLE))))
-    post_tbl = _apply_v1_bridge(_apply_v2_aliases(_apply_host_aliases(dict(POST_TABLE))))
+    # Base tables plus the public /api/v2 aliases. Unversioned /api paths are
+    # private implementation names and are refused at dispatch. Decorator-registered
+    # routes are consulted at dispatch time, so they need no build-time merge.
+    get_tbl = _apply_v2_aliases(dict(GET_TABLE))
+    post_tbl = _apply_v2_aliases(dict(POST_TABLE))
     return get_tbl, post_tbl
 
 
@@ -650,8 +570,9 @@ def _is_public_path(path):
 def _lookup_registry(method, path):
     """Check the decorator registry for a path not in the static tables."""
     try:
-        from routes.registry import _REGISTRY
+        from routes.registry import _REGISTRY, _ensure_handlers_loaded
 
+        _ensure_handlers_loaded()
         entry = _REGISTRY.get((method, path))
         if entry is not None:
             return entry.spec
@@ -660,25 +581,42 @@ def _lookup_registry(method, path):
             entry = _REGISTRY.get((method, base))
             if entry is not None and entry.visibility != "host":
                 return entry.spec
-        if path.startswith("/api/v1/") and v1_bridge_enabled():
-            base = "/api" + path[len("/api/v1"):]
-            entry = _REGISTRY.get((method, base))
-            if entry is not None and base in V1_ALIASED_PREFIXES:
-                return entry.spec
     except Exception:
         pass
     return None
 
 
-def _route_headers(path):
+def _public_twin(path: str) -> str:
+    return "/api/v2" + path[len("/api"):]
+
+
+def _twin_exists(method: str, path: str) -> bool:
+    twin = _public_twin(path)
+    table = GET_TABLE if method == "GET" else POST_TABLE
+    if twin in table:
+        return True
+    return _lookup_registry(method, twin) is not None
+
+
+def _guard_retired(handler, method: str, path: str) -> None:
+    """Refuse the surfaces retired in 2.1 with a stable code and a replacement."""
     if path.startswith("/api/v1/"):
-        return {"Deprecation": "true", "Sunset": V1_SUNSET}
-    return {}
-
-
-def _guard_v1(path):
-    if path.startswith("/api/v1/") and not v1_bridge_enabled():
-        raise V1ApiDisabled("The /api/v1 surface is off. Use /api/v2, or set OPENBOX_ENABLE_V1_API=1 through 2.0.x.")
+        raise V1ApiRemoved(
+            "The /api/v1 API was removed in OpenBox 2.1. Use /api/v2 instead.",
+            detail={"retired": path, "use": "/api/v2" + path[len("/api/v1"):], "since": "2.1.0"},
+        )
+    if path in RETIRED_HOST_PATHS:
+        raise HostChannelRetired(
+            "This native host path was removed in OpenBox 2.1. Update the native window to use /api/host.",
+            detail={"retired": path, "use": RETIRED_HOST_PATHS[path], "since": "2.1.0"},
+        )
+    if path.startswith("/api/") and not path.startswith(("/api/v2/", "/api/host/")):
+        if _twin_exists(method, path):
+            raise ApiVersionRequired(
+                "This API path is no longer served unversioned. Use /api/v2 instead.",
+                detail={"retired": path, "use": _public_twin(path), "since": "2.1.0"},
+            )
+        raise RouteNotFound("Not found")
 
 
 def _guard_host(handler, path):
@@ -694,20 +632,22 @@ def _guard_host(handler, path):
 
 
 def dispatch_get(handler, parsed):
-    _guard_host(handler, parsed.path)
-    _guard_v1(parsed.path)
-    handler.route_headers = _route_headers(parsed.path)
-    spec = GET_TABLE.get(parsed.path)
+    path = parsed.path
+    if path.startswith("/static/") and not _is_static_asset(path):
+        raise RouteNotFound("Not found")
+    if not _is_public_path(path) and not handler.authorized():
+        handler.handle_unauthorized()
+        return
+    _guard_host(handler, path)
+    _guard_retired(handler, "GET", path)
+    spec = GET_TABLE.get(path)
     if spec is None:
-        spec = _lookup_registry("GET", parsed.path)
+        spec = _lookup_registry("GET", path)
     if spec is None:
-        if _is_static_asset(parsed.path):
+        if _is_static_asset(path):
             spec = "_api_get_static"
         else:
             raise RouteNotFound("Not found")
-    if not _is_public_path(parsed.path) and not handler.authorized():
-        handler.handle_unauthorized()
-        return
     callable_ = _resolve(spec)
     if callable_ is None:
         getattr(handler, spec)(parsed)
@@ -716,17 +656,16 @@ def dispatch_get(handler, parsed):
 
 
 def dispatch_post(handler, route, payload):
+    if not handler.authorized():
+        handler.handle_unauthorized()
+        return
     _guard_host(handler, route)
-    _guard_v1(route)
-    handler.route_headers = _route_headers(route)
+    _guard_retired(handler, "POST", route)
     spec = POST_TABLE.get(route)
     if spec is None:
         spec = _lookup_registry("POST", route)
     if spec is None:
         raise RouteNotFound("Not found")
-    if not handler.authorized():
-        handler.handle_unauthorized()
-        return
     callable_ = _resolve(spec)
     if callable_ is None:
         getattr(handler, spec)(payload)

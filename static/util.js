@@ -142,8 +142,7 @@
      * @returns {string}
      */
     function apiPath(path) {
-      // /api/jobs keeps the 1.19 job-map shape the jobs panel reads; /api/v2/jobs is a list. See api-deprecations.md.
-      if (!path.startsWith('/api/') || path.startsWith('/api/v2/') || path.startsWith('/api/host/') || path === '/api/jobs') return path;
+      if (!path.startsWith('/api/') || path.startsWith('/api/v2/') || path.startsWith('/api/host/')) return path;
       return '/api/v2' + path.slice('/api'.length);
     }
     /**

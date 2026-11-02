@@ -1,4 +1,4 @@
-import { $, escapeHtml, defaultControllerMap, recentActivityValue, prefersReducedMotion } from './util.js';
+import { $, escapeHtml, defaultControllerMap, recentActivityValue, prefersReducedMotion, apiPath } from './util.js';
 import { firstEdge, wheelStepAllowed, screenSaverStats } from './pure.js';
 import { AppState, media, coverSource, filteredGames, api, token, notify, gameForSession, nativeFullscreen, nativeFullscreenOn, nativePickFile, platformCategoryFor } from './state.js';
 import { createPointerNavigator } from './pointer_nav.js';
@@ -185,7 +185,7 @@ function releaseBigBoxBack() {
       $('bigBox').focus();
       const startup = $('bigBoxStartupVideo');
       if (startup && AppState.appSettings.bigbox_startup_video) {
-        startup.src = `/api/bigbox/startup-video?token=${encodeURIComponent(token)}`;
+        startup.src = apiPath(`/api/bigbox/startup-video?token=${encodeURIComponent(token)}`);
         startup.classList.remove('startup-video-done');
         startup.loop = AppState.appSettings.bigbox_startup_video_loop === true;
         startup.hidden = false;
@@ -539,7 +539,7 @@ function releaseBigBoxBack() {
       if (!backdrop) return;
       const platformPath = AppState.appSettings.platform_videos?.[game?.platform || ''];
       const enabled = AppState.appSettings.bigbox_video_backdrop === true;
-      const source = enabled ? (platformPath ? `/api/platform/video?platform=${encodeURIComponent(game.platform)}&token=${encodeURIComponent(token)}` : (game?.has_video ? media(game, 'video') : '')) : '';
+      const source = enabled ? (platformPath ? apiPath(`/api/platform/video?platform=${encodeURIComponent(game.platform)}&token=${encodeURIComponent(token)}`) : (game?.has_video ? media(game, 'video') : '')) : '';
       if (!source) {
         backdrop.hidden = true;
         backdrop.pause();

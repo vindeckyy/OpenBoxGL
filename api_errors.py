@@ -30,11 +30,25 @@ class BadRequest(ApiError):
     code = "BAD_REQUEST"
 
 
-class V1ApiDisabled(ApiError):
-    """The /api/v1 surface is off unless OPENBOX_ENABLE_V1_API=1 (ADR 0091)."""
+class V1ApiRemoved(ApiError):
+    """The /api/v1 surface was removed in 2.1 (ADR 0103)."""
 
     status = 410
-    code = "V1_API_DISABLED"
+    code = "V1_API_REMOVED"
+
+
+class ApiVersionRequired(ApiError):
+    """An unversioned API path is no longer served; use its /api/v2 twin (ADR 0103)."""
+
+    status = 410
+    code = "API_VERSION_REQUIRED"
+
+
+class HostChannelRetired(ApiError):
+    """A legacy native-host path was removed; hosts must use /api/host (ADR 0103)."""
+
+    status = 410
+    code = "HOST_CHANNEL_RETIRED"
 
 
 class NotFound(ApiError):
@@ -146,7 +160,8 @@ def problem_payload(status, payload, *, request_id="", instance=""):
     so both survive rewording. ``error`` duplicates ``detail`` for one major cycle.
     """
     title = _STATUS_TITLES.get(status, "Request failed")
-    message = str(payload.get("error") or payload.get("detail") or title)
+    detail_value = payload.get("detail")
+    message = str(payload.get("error") or (detail_value if isinstance(detail_value, str) else "") or title)
     code = str(payload.get("code") or f"HTTP_{status}")
     body = dict(payload)
     body.update({
@@ -158,6 +173,8 @@ def problem_payload(status, payload, *, request_id="", instance=""):
         "error": message,
         "retryable": status in _RETRYABLE_STATUSES or "retry_after" in payload,
     })
+    if isinstance(detail_value, dict):
+        body["context"] = detail_value
     if request_id:
         body["request_id"] = request_id
     if instance:
@@ -175,6 +192,13 @@ class BackupFormatUnsupported(BadRequest):
     """A backup manifest declares a format this build cannot read or write (ADR 0093)."""
 
     code = "BACKUP_FORMAT_UNSUPPORTED"
+
+
+class BackupFormatRetired(ApiError):
+    """A backup write requested a format this build no longer writes (ADR 0104)."""
+
+    status = 410
+    code = "BACKUP_FORMAT_RETIRED"
 
 
 class MovePlanStale(Conflict):

@@ -84,7 +84,7 @@ class AdminHttpTests(unittest.TestCase):
             "notifications": [],
         })
         request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/api/bigbox/startup-video",
+            f"http://127.0.0.1:{self.port}/api/v2/bigbox/startup-video",
             headers={"X-OpenBox-Token": "admin-feature-token"},
         )
         with urllib.request.urlopen(request, timeout=3) as response:
@@ -95,7 +95,7 @@ class AdminHttpTests(unittest.TestCase):
         status, payload = self.request("/api/v2/platform/rename", {"old": "NES", "new": "Famicom", "migrate_media": False})
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"], 1)
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         platforms = {game["name"]: game["platform"] for game in library["games"]}
         self.assertEqual(platforms, {"Alpha": "Famicom", "Beta": "SNES"})
 
@@ -103,7 +103,7 @@ class AdminHttpTests(unittest.TestCase):
         status, payload = self.request("/api/v2/platform/delete", {"name": "NES", "confirm": "NES"})
         self.assertEqual(status, 200)
         self.assertEqual(payload["games"], 1)
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         self.assertEqual([game["name"] for game in library["games"]], ["Beta"])
         _, trash = self.request("/api/v2/library/trash")
         self.assertEqual(len(trash["items"]), 1)
@@ -119,18 +119,18 @@ class AdminHttpTests(unittest.TestCase):
             {"name": "First", "path": str(first)},
             {"name": "Second", "path": str(second)},
         ]
-        status, _ = self.request("/api/platform/documents", {"platform": platform, "documents": documents})
+        status, _ = self.request("/api/v2/platform/documents", {"platform": platform, "documents": documents})
         self.assertEqual(status, 200)
-        status, _ = self.request("/api/platform/documents", {
+        status, _ = self.request("/api/v2/platform/documents", {
             "platform": platform,
             "documents": list(reversed(documents)),
             "reorder": True,
         })
         self.assertEqual(status, 200)
-        _, payload = self.request(f"/api/platform/documents?platform={platform}")
+        _, payload = self.request(f"/api/v2/platform/documents?platform={platform}")
         self.assertEqual([item["name"] for item in payload["documents"]], ["Second", "First"])
         with self.assertRaises(urllib.error.HTTPError) as caught:
-            self.request("/api/platform/documents", {
+            self.request("/api/v2/platform/documents", {
                 "platform": platform,
                 "documents": documents[:1],
                 "reorder": True,
@@ -146,7 +146,7 @@ class AdminHttpTests(unittest.TestCase):
                 "id": plugin_id, "name": "Drop", "version": "1", "hooks": [],
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
-        status, _ = self.request("/api/plugins/install", {"path": str(package)})
+        status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
         self.assertEqual(status, 200)
         self.save_state({
             "games": [
@@ -160,10 +160,10 @@ class AdminHttpTests(unittest.TestCase):
             "queue": [],
             "notifications": [],
         })
-        status, payload = self.request("/api/plugins/toggle", {"id": plugin_id, "enabled": False})
+        status, payload = self.request("/api/v2/plugins/toggle", {"id": plugin_id, "enabled": False})
         self.assertEqual(status, 200)
         self.assertFalse(payload["enabled"])
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         self.assertEqual([game["name"] for game in library["games"]], ["Alpha"])
 
     def test_bigbox_startup_video_rejects_paths_outside_media(self):
@@ -177,7 +177,7 @@ class AdminHttpTests(unittest.TestCase):
             "notifications": [],
         })
         with self.assertRaises(urllib.error.HTTPError) as caught:
-            self.request("/api/bigbox/startup-video")
+            self.request("/api/v2/bigbox/startup-video")
         self.assertEqual(caught.exception.code, 404)
         caught.exception.close()
 
@@ -191,7 +191,7 @@ class AdminHttpTests(unittest.TestCase):
                 "id": plugin_id, "name": "Remove", "version": "1", "hooks": [],
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
-        status, _ = self.request("/api/plugins/install", {"path": str(package)})
+        status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
         self.assertEqual(status, 200)
         self.save_state({
             "games": [
@@ -205,11 +205,11 @@ class AdminHttpTests(unittest.TestCase):
             "queue": [],
             "notifications": [],
         })
-        status, payload = self.request("/api/plugins/remove", {"id": plugin_id})
+        status, payload = self.request("/api/v2/plugins/remove", {"id": plugin_id})
         self.assertEqual(status, 200)
         self.assertEqual(payload["removed"], plugin_id)
         self.assertFalse((Path(self.tempdir.name) / "plugins" / plugin_id).exists())
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         self.assertEqual([game["name"] for game in library["games"]], ["Alpha"])
         # The recorded local package is gone, so Repair cannot resurrect it.
         with mock.patch.object(extensions, "fetch_plugin_catalog", return_value=[]):
@@ -228,7 +228,7 @@ class AdminHttpTests(unittest.TestCase):
                 "settings": {"type": "object", "properties": {"mode": {"type": "string", "default": "fast"}}},
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
-        status, _ = self.request("/api/plugins/install", {"path": str(package)})
+        status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
         self.assertEqual(status, 200)
         status, _ = self.request("/api/v2/plugins/trust", {"id": plugin_id, "trusted": True})
         self.assertEqual(status, 200)
@@ -274,7 +274,7 @@ class AdminHttpTests(unittest.TestCase):
         self.assertEqual(installed["version"], "1")
 
     def test_bulk_find_replace_preview_then_apply(self):
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         ids = {game["name"]: game["game_id"] for game in library["games"]}
         status, preview = self.request("/api/v2/bulk/find-replace", {
             "ids": list(ids.values()), "field": "name", "find": "a", "replace": "A", "dry_run": True,
@@ -286,18 +286,18 @@ class AdminHttpTests(unittest.TestCase):
         })
         self.assertEqual(status, 200)
         self.assertEqual(applied["matched"], 1)
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         self.assertEqual({game["name"] for game in library["games"]}, {"ALPHA", "Beta"})
 
     def test_achievement_override_is_projected_and_clearable(self):
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game_id = next(item["game_id"] for item in library["games"] if item["name"] == "Alpha")
         status, payload = self.request("/api/v2/achievements/override", {
             "game_id": game_id, "source": "steam", "earned": 3, "total": 5,
         })
         self.assertEqual(status, 200)
         self.assertEqual(payload["earned"], 3)
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game = next(item for item in library["games"] if item["game_id"] == game_id)
         self.assertEqual(game["achievement_sources"]["steam"]["earned"], 3)
         self.assertTrue(game["achievement_sources"]["steam"]["manual"])
@@ -306,7 +306,7 @@ class AdminHttpTests(unittest.TestCase):
             "game_id": game_id, "source": "steam", "clear": True,
         })
         self.assertEqual(status, 200)
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game = next(item for item in library["games"] if item["game_id"] == game_id)
         self.assertNotIn("steam", game["achievement_sources"])
 
@@ -327,7 +327,7 @@ class AdminHttpTests(unittest.TestCase):
                 }]},
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
-        status, _ = self.request("/api/plugins/install", {"path": str(package)})
+        status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
         self.assertEqual(status, 200)
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.request("/api/v2/emulators/settings", {
@@ -341,7 +341,7 @@ class AdminHttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
 
     def test_plugin_metadata_apply_persists_provider(self):
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game_id = next(item["game_id"] for item in library["games"] if item["name"] == "Alpha")
         updated = {
             "game_id": game_id,
@@ -364,12 +364,12 @@ class AdminHttpTests(unittest.TestCase):
             item for item in openbox.load_state()["games"] if item.get("game_id") == game_id
         )
         self.assertEqual(stored["metadata_provider"], "plugin:vendor.meta")
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game = next(item for item in library["games"] if item["game_id"] == game_id)
         self.assertEqual(game["developer"], "Plugin Studio")
 
     def test_plugin_stats_merge_into_library_projection(self):
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game = next(item for item in library["games"] if item["name"] == "Alpha")
         package = Path(self.tempdir.name) / "stats-provider.zip"
         with zipfile.ZipFile(package, "w") as archive:
@@ -381,7 +381,7 @@ class AdminHttpTests(unittest.TestCase):
                 "capabilities": {"stats": {"id": "vendor.stats", "name": "Vendor Stats"}},
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
-        status, _ = self.request("/api/plugins/install", {"path": str(package)})
+        status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
         self.assertEqual(status, 200)
         stats_dir = Path(self.tempdir.name) / "plugin-stats"
         stats_dir.mkdir(parents=True, exist_ok=True)
@@ -397,7 +397,7 @@ class AdminHttpTests(unittest.TestCase):
         }), encoding="utf-8")
         from pkg.state.cache import invalidate_state_cache
         invalidate_state_cache()
-        _, library = self.request("/api/library")
+        _, library = self.request("/api/v2/library")
         game = next(item for item in library["games"] if item["name"] == "Alpha")
         self.assertEqual(game["playtime_seconds"], 7200)
         self.assertEqual(game["last_played"], "2025-01-01T12:00:00")
@@ -413,7 +413,7 @@ class AdminHttpTests(unittest.TestCase):
         old = cache / "old.bin"
         old.write_bytes(b"x")
         os.utime(old, (0, 0))
-        status, payload = self.request("/api/media/cache/cleanup", {"days": 30})
+        status, payload = self.request("/api/v2/media/cache/cleanup", {"days": 30})
         self.assertEqual(status, 200)
         self.assertEqual(payload["deleted"], 1)
         self.assertFalse(old.exists())
@@ -438,7 +438,7 @@ class AdminHttpTests(unittest.TestCase):
         self.assertTrue(payload["saved"])
         _, tokens = self.request("/api/v2/integration-tokens")
         self.assertEqual(tokens["tokens"]["igdb"], "supe…en")
-        _, settings = self.request("/api/settings")
+        _, settings = self.request("/api/v2/settings")
         self.assertTrue(settings["integration_tokens"]["igdb"])
         self.assertNotIn("super-secret-token", json.dumps(settings))
         status, payload = self.request("/api/v2/integration-tokens/remove", {"provider": "igdb"})

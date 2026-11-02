@@ -21,6 +21,8 @@ select = ["E4", "E7", "E9", "F", "B", "PLW1510", "EXE001", "UP035", "E402"]
 "test_demo_purge.py" = ["E402"]
 # webapp_state is the top-level compatibility re-export shim.
 "webapp_state.py" = ["F401"]
+# Local promotional-video helper is not part of the runtime or release.
+"scripts/make_promo_video.py" = ["B905", "F841"]
 [tool.coverage.run]
 source = ["."]
 omit = [

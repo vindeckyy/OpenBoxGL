@@ -117,14 +117,19 @@ def main() -> int:
     docs_index = ROOT / "docs" / "README.md"
     if docs_index.is_file():
         docs_index_text = docs_index.read_text(encoding="utf-8")
-        if f"**v{version}**" not in docs_index_text:
-            print(f"docs/README.md: shipped-release line does not mention v{version}")
-            failures.append("docs README")
+        shipped = re.search(r"current shipped release is \*\*v([0-9.]+)\*\*", docs_index_text)
+        if not shipped or shipped.group(1) != version:
+            print(f"docs/README.md: current shipped release is {shipped.group(1) if shipped else 'missing'}, expected {version}")
+            failures.append("docs README shipped release")
 
 
     release_notes_path = _doc_path("RELEASE_NOTES.md")
     if release_notes_path.is_file():
         release_notes = release_notes_path.read_text(encoding="utf-8")
+        first_line = release_notes.splitlines()[0] if release_notes.splitlines() else ""
+        if first_line != f"# OpenBox {version}":
+            print(f"RELEASE_NOTES.md: first line is {first_line!r}, expected '# OpenBox {version}'")
+            failures.append("RELEASE_NOTES heading")
         if f"...v{version}" not in release_notes and f"v{version}" not in release_notes:
             print(f"RELEASE_NOTES.md: compare link does not mention v{version}")
             failures.append("RELEASE_NOTES")

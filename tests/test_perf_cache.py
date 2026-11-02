@@ -207,7 +207,7 @@ class PerfCacheTests(unittest.TestCase):
         handler.send_json = mock.Mock()
         handler.authorized = mock.Mock(return_value=True)
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/settings?token=test"
+        handler.path = "/api/v2/settings?token=test"
         handler.do_GET()
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 200)
@@ -221,7 +221,7 @@ class PerfCacheTests(unittest.TestCase):
         handler = self.make_handler()
         handler.authorized = mock.Mock(return_value=True)
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/theme.css?name=test-theme&token=test"
+        handler.path = "/api/v2/theme.css?name=test-theme&token=test"
         handler.do_GET()
         status, headers, body = _parse_response(handler.wfile.getvalue())
         self.assertEqual(status, "200")
@@ -235,7 +235,7 @@ class PerfCacheTests(unittest.TestCase):
         handler.headers["Host"] = "127.0.0.1"
         handler.authorized = mock.Mock(return_value=True)
         handler.do_GET = Handler.do_GET.__get__(handler, Handler)
-        handler.path = "/api/theme.css?name=test-theme&token=test"
+        handler.path = "/api/v2/theme.css?name=test-theme&token=test"
         handler.do_GET()
         status, headers, body = _parse_response(handler.wfile.getvalue())
         self.assertEqual(status, "304")
@@ -371,22 +371,22 @@ class PerfCacheTests(unittest.TestCase):
 
         # 1) Missing ids parameter
         with self.assertRaises(BadRequest) as ctx:
-            handler._api_get_api_library_delta(urlparse("/api/library/delta?token=test"))
+            handler._api_get_api_library_delta(urlparse("/api/v2/library/delta?token=test"))
         self.assertEqual(ctx.exception.message, "Missing ids parameter")
 
         # 2) Empty ids parameter
         with self.assertRaises(BadRequest) as ctx:
-            handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=&token=test"))
+            handler._api_get_api_library_delta(urlparse("/api/v2/library/delta?ids=&token=test"))
         self.assertEqual(ctx.exception.message, "Missing ids parameter")
 
         # 3) Too many IDs (>1000)
         too_many = ",".join(f"id_{i}" for i in range(1001))
         with self.assertRaises(BadRequest) as ctx:
-            handler._api_get_api_library_delta(urlparse(f"/api/library/delta?ids={too_many}&token=test"))
+            handler._api_get_api_library_delta(urlparse(f"/api/v2/library/delta?ids={too_many}&token=test"))
         self.assertEqual(ctx.exception.message, "Too many IDs (max 1000)")
         # 4) Successful delta query by game_id and legacy_game_ids
         handler.send_json.reset_mock()
-        handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=legacy-g1,game-gamma,nonexistent&token=test"))
+        handler._api_get_api_library_delta(urlparse("/api/v2/library/delta?ids=legacy-g1,game-gamma,nonexistent&token=test"))
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 200)
         self.assertEqual(len(payload["games"]), 2)
@@ -395,7 +395,7 @@ class PerfCacheTests(unittest.TestCase):
 
         # 5) Successful delta query by int id and deduplication
         handler.send_json.reset_mock()
-        handler._api_get_api_library_delta(urlparse("/api/library/delta?ids=0,0,game-alpha&token=test"))
+        handler._api_get_api_library_delta(urlparse("/api/v2/library/delta?ids=0,0,game-alpha&token=test"))
         status, payload = handler.send_json.call_args[0]
         self.assertEqual(status, 200)
         self.assertEqual(len(payload["games"]), 1)

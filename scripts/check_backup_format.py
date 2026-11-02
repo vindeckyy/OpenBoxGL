@@ -23,7 +23,8 @@ def live_contract() -> dict:
     return {
         "version": 1,
         "format": backup.BACKUP_FORMAT_VERSION,
-        "supported_formats": list(backup.SUPPORTED_BACKUP_FORMATS),
+        "readable_formats": list(backup.READABLE_BACKUP_FORMATS),
+        "writable_formats": list(backup.WRITABLE_BACKUP_FORMATS),
         "manifest_fields_v2": [
             "format", "app_version", "state_schema", "library_id", "created_by", "encryption", "items", "created",
             "redacted_secrets", "files",
@@ -53,7 +54,7 @@ def main(argv: list[str]) -> int:
         print("FAIL: backup format drifted from scripts/contracts/backup.json: " + ", ".join(drift))
         print("Regenerate with --update after a deliberate change and commit it with the change.")
         return 1
-    print(f"backup format contract OK: format {live['format']}, reads {live['supported_formats']}")
+    print(f"backup format contract OK: format {live['format']}, reads {live['readable_formats']}, writes {live['writable_formats']}")
     return 0
 
 

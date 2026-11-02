@@ -1,4 +1,4 @@
-"""API v2 contract: every public operation has a /api/v2 name, the host channel is separate, v1 is opt-in."""
+"""API contract: /api/v2 is public, /api/host is the native channel, retired surfaces are gone."""
 
 import json
 import os
@@ -11,12 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import routes  # noqa: E402
-from api_errors import HostApiUnsupported, V1ApiDisabled, problem_payload  # noqa: E402
+from api_errors import ApiVersionRequired, HostApiUnsupported, HostChannelRetired, V1ApiRemoved, problem_payload  # noqa: E402
 from routes import registry  # noqa: E402
 
 
 def _probe(env_overrides):
-    """Import routes in a fresh interpreter so the v1 bridge flag is read at import time."""
+    """Import routes in a fresh interpreter so the environment is read once."""
     code = (
         "import json, routes\n"
         "print(json.dumps({'get': sorted(routes.GET_TABLE), 'post': sorted(routes.POST_TABLE)}))\n"
@@ -32,18 +32,17 @@ def _probe(env_overrides):
 
 
 class V2AliasTests(unittest.TestCase):
-    def test_every_unversioned_public_base_path_has_a_v2_twin(self):
+    def test_every_unversioned_base_path_has_a_v2_twin(self):
         for table, name in ((routes.GET_TABLE, "GET"), (routes.POST_TABLE, "POST")):
             for path in table:
                 if not path.startswith("/api/") or path.startswith(("/api/v1/", "/api/v2/", "/api/host/")):
                     continue
                 twin = "/api/v2" + path[len("/api"):]
                 with self.subTest(method=name, path=path):
-                    # Explicit /api/v2 handlers take precedence over generated twins, so check presence.
                     self.assertIn(twin, table)
 
-    def test_native_host_legacy_names_have_host_channel_twins(self):
-        self.assertEqual(routes.HOST_CHANNEL_ALIASES, {
+    def test_native_host_legacy_names_map_to_the_host_channel(self):
+        self.assertEqual(routes.RETIRED_HOST_PATHS, {
             "/api/launch": "/api/host/launch",
             "/api/shutdown": "/api/host/shutdown",
             "/api/native/capabilities": "/api/host/capabilities",
@@ -58,24 +57,45 @@ class V2AliasTests(unittest.TestCase):
         self.assertIsNotNone(routes._lookup_registry("POST", "/api/host/resume"))
         self.assertEqual(routes._lookup_registry("POST", "/api/host/resume"), routes._lookup_registry("POST", "/api/v2/resume"))
 
+    def test_all_four_host_operations_are_registered(self):
+        from routes.registry import all_routes
+        host = {(route.method, route.path) for route in all_routes() if route.visibility == "host"}
+        host.update(("GET", path) for path in routes.GET_TABLE if path.startswith("/api/host/"))
+        host.update(("POST", path) for path in routes.POST_TABLE if path.startswith("/api/host/"))
+        self.assertEqual(host, {
+            ("GET", "/api/host/capabilities"),
+            ("POST", "/api/host/launch"),
+            ("POST", "/api/host/resume"),
+            ("POST", "/api/host/shutdown"),
+        })
 
-class V1BridgeTests(unittest.TestCase):
-    def test_v1_surface_is_absent_by_default(self):
-        tables = _probe({})
-        self.assertFalse([path for path in tables["get"] + tables["post"] if path.startswith("/api/v1/")])
 
-    def test_bridge_on_reproduces_every_frozen_v1_alias(self):
-        tables = _probe({"OPENBOX_ENABLE_V1_API": "1"})
-        present = set(tables["get"]) | set(tables["post"])
-        for path in routes.V1_ALIASED_PREFIXES:
-            with self.subTest(path=path):
-                self.assertIn("/api/v1" + path[len("/api"):], present)
+class RetiredSurfaceTests(unittest.TestCase):
+    def test_v1_surface_is_gone_even_with_the_old_environment_variable(self):
+        for overrides in ({}, {"OPENBOX_ENABLE_V1_API": "1"}):
+            tables = _probe(overrides)
+            self.assertFalse([path for path in tables["get"] + tables["post"] if path.startswith("/api/v1/")])
 
-    def test_disabled_v1_request_is_gone_with_a_stable_code(self):
-        with self.assertRaises(V1ApiDisabled) as raised:
-            routes._guard_v1("/api/v1/library")
+    def test_v1_request_is_gone_with_a_stable_code(self):
+        with self.assertRaises(V1ApiRemoved) as raised:
+            routes._guard_retired(None, "GET", "/api/v1/library")
         self.assertEqual(raised.exception.status, 410)
-        self.assertEqual(raised.exception.code, "V1_API_DISABLED")
+        self.assertEqual(raised.exception.code, "V1_API_REMOVED")
+        self.assertEqual(raised.exception.detail["use"], "/api/v2/library")
+
+    def test_unversioned_public_request_points_at_v2(self):
+        with self.assertRaises(ApiVersionRequired) as raised:
+            routes._guard_retired(None, "GET", "/api/library")
+        self.assertEqual(raised.exception.status, 410)
+        self.assertEqual(raised.exception.code, "API_VERSION_REQUIRED")
+        self.assertEqual(raised.exception.detail["use"], "/api/v2/library")
+
+    def test_legacy_host_request_points_at_the_host_channel(self):
+        with self.assertRaises(HostChannelRetired) as raised:
+            routes._guard_retired(None, "POST", "/api/launch")
+        self.assertEqual(raised.exception.status, 410)
+        self.assertEqual(raised.exception.code, "HOST_CHANNEL_RETIRED")
+        self.assertEqual(raised.exception.detail["use"], "/api/host/launch")
 
 
 class VisibilityTests(unittest.TestCase):
@@ -86,10 +106,6 @@ class VisibilityTests(unittest.TestCase):
     def test_host_routes_must_live_under_the_host_channel(self):
         with self.assertRaises(ValueError):
             registry.register("GET", "/api/v2/widgets", spec="x", visibility="host")
-
-    def test_v1_alias_cannot_be_public(self):
-        with self.assertRaises(ValueError):
-            registry.register("GET", "/api/v2/unused-probe", spec="x", visibility="public", v1=True)
 
     def test_default_visibility_follows_the_path_prefix(self):
         self.assertEqual(registry.default_visibility("/api/v2/library"), "public")

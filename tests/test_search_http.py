@@ -128,7 +128,7 @@ class SearchHttpTests(unittest.TestCase):
             status, payload = self.request(query)
             assert status == 200
             bodies[enabled] = payload
-            status, payload = self.request("/api/explorer/facets?field=genre")
+            status, payload = self.request("/api/v2/explorer/facets?field=genre")
             assert status == 200
             facets[enabled] = payload
 

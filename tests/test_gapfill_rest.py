@@ -1488,7 +1488,7 @@ class LibraryHttpTests(HttpTestBase):
     def test_save_game_accepts_real_file_path(self):
         with tempfile.NamedTemporaryFile(suffix=".exe") as handle:
             status, payload = self.http(
-                "/api/game",
+                "/api/v2/game",
                 {"game": {"name": "Pathed", "path": handle.name}},
             )
         self.assertEqual(status, 200)

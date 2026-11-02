@@ -58,7 +58,7 @@ class CiGatesTests(unittest.TestCase):
             "flatpak-validate must dry-run or validate the manifest",
         )
         self.assertIn("./scripts/ui_smoke.sh", ci, "the ui-smoke job must run the browser smoke")
-        self.assertIn('"--v2", "--check"', (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8"),
+        self.assertIn('"gen_api_docs.py"), "--check"', (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8"),
                       "the local gate must verify docs/api-v2.md is fresh")
         self.assertIn("python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5", ci)
         self.assertIn("python3 -B scripts/check_changed_coverage.py --fail-under=95", ci)
