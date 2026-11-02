@@ -1568,7 +1568,7 @@ def _mousedown_handler_body(source: str):
     return source[brace + 1:i - 1]
 
 
-# ── 1.13.1 P0 regression pins (§2.1 of docs/NEXT_UPDATE_PLAN-1.13.1.md) ──
+# ── 1.13.1 P0 regression pins ──
 
 def test_a11y_dialog_hosts_are_not_hidden():
     # Row 1 (probable commit a461edd): lazy utility dialogs were rendered

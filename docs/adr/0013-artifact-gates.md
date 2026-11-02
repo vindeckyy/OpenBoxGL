@@ -6,11 +6,9 @@ Amended: 2026-09-02 by ADR 0024 (ARM64 un-deferred for 1.8.0).
 
 This ADR records the v1.7/1.8 artifact decision and its historical support
 matrix. The 1.10.0 release workflow and evidence are retained as historical
-context in `docs/CONTRIBUTING.md`, `docs/SUPPORT.md`, and the release closure in
-`docs/archive/NEXT_UPDATE_EXECUTION.md`. Current 1.11.0 evidence is recorded in
-`docs/archive/NEXT_UPDATE_EXECUTION-1.11.md`; these documents qualify physical
-hardware and Flathub claims instead of treating build output as hardware
-validation.
+context in `docs/CONTRIBUTING.md` and `docs/SUPPORT.md`; those documents qualify
+physical hardware and Flathub claims instead of treating build output as
+hardware validation.
 
 ## Context
 

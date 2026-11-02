@@ -145,7 +145,7 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 | Retired API surfaces | The v1, unversioned, or legacy host paths return to the public surface | Removed in 2.1; requests get `410` with a replacement, and the environment variable cannot re-enable them | `tests/test_retired_surfaces.py`, `tests/test_api_v2_contract.py` |
 | Frontend requests | A request reaches an unversioned or unknown endpoint | Every `api()` call site resolves to an `/api/v2` route; direct asset URLs must be versioned | `tests/test_frontend_endpoint_contract.py`, `scripts/check_api_paths.py` |
 | Failure messages | A code is shown raw or not at all | Five codes map to explanations; a test requires an English explanation for each | `tests/test_api_problem_details.py` |
-| macOS bundle | An ad-hoc build is described as notarized | Notarization is claimed only with `spctl` evidence; the entitlements file is empty by default; the gate checks the pipeline | `tests/test_macos_release.py`, `docs/archive/HANDOFF-MACOS-NOTARY.md` |
+| macOS bundle | An ad-hoc build is described as notarized | Notarization is claimed only with `spctl` evidence; the entitlements file is empty by default; the gate checks the pipeline | `tests/test_macos_release.py` |
 
 Gaps (not controls):
 

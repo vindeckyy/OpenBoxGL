@@ -28,7 +28,7 @@ Paths under the library folder are stored as `@library/<relative path>`. Anythin
 - A library folder on a removable drive must be mounted before launch. A missing folder is reported as `LIBRARY_ROOT_MISSING`.
 - Matching is lexical: symlinks are not resolved, so a link inside the library folder that points outside it is tokenized like any other path under the folder. The stored token still cannot escape the folder — `..`, a drive prefix, a leading separator, a NUL byte, or a Windows alternate data stream name is refused at decode.
 - Case is folded on Windows and macOS only. Unicode spellings are compared in NFC, and the stored spelling is kept.
-- The Windows and Linux path rules are tested as pure functions on every platform. Running the library on each operating system is a manual step (see `docs/archive/2.0-PLATFORM-EVIDENCE.md`).
+- The Windows and Linux path rules are tested as pure functions on every platform. Running the library on each operating system is a manual step.
 
 ## Checking the library
 

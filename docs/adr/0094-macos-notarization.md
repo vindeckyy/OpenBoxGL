@@ -1,6 +1,6 @@
 # ADR 0094: macOS notarization
 
-Status: Not adopted for 2.0 (2026-10-29); still conditional in 2.1 (ADR 0102). The maintainer decided the 2.0 macOS bundle ships ad-hoc signed, so no notarized artifact is produced and no Developer ID secrets are needed. The machinery below stays in the tree for a later release; the hardened-runtime dry run passed locally with an ad-hoc identity (`docs/archive/HANDOFF-MACOS-NOTARY.md`).
+Status: Not adopted for 2.0 (2026-10-29); still conditional in 2.1 (ADR 0102). The maintainer decided the 2.0 macOS bundle ships ad-hoc signed, so no notarized artifact is produced and no Developer ID secrets are needed. The machinery below stays in the tree for a later release; the hardened-runtime dry run passed locally with an ad-hoc identity.
 
 ## Context
 
@@ -31,6 +31,6 @@ Absent by design: `allow-jit`, `allow-unsigned-executable-memory`, `allow-dyld-e
 
 ## Verification
 
-- Dry run: `docs/archive/HANDOFF-MACOS-NOTARY.md` (W0-06, ad-hoc identity, 2026-10-29).
+- Dry run: ad-hoc identity, 2026-10-29 (W0-06).
 - `docs/reliability.md` row 137 (manual procedure, Developer ID build).
 - `scripts/check_macos_release.py` (W5-01) verifies the entitlements file and the signing flags in the build script. It is a static gate; it does not replace `spctl`.

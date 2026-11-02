@@ -17,7 +17,7 @@ Status: Accepted and implemented (2026-10-29)
 
 ## Consequences
 
-- A v7 library cannot be read by 1.19.x. The 1.19.2 preflight release that would have added a clean refusal message was declined (decision D-04, `docs/archive/NEXT_UPDATE_PLAN-1.19.2.md`), so the migration keeps `library.v6.backup.json` and `openbox --rollback-library` as the downgrade path.
+- A v7 library cannot be read by 1.19.x. The 1.19.2 preflight release that would have added a clean refusal message was declined (decision D-04), so the migration keeps `library.v6.backup.json` and `openbox --rollback-library` as the downgrade path.
 - Tests pin the schema through `scripts/contracts/state.json` (ratchet, ADR 0060).
 
 ## Verification

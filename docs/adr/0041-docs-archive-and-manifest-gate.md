@@ -7,9 +7,9 @@
 
 A stale-information sweep after the 1.10.0 release found three drift problems:
 
-1. Superseded planning documents (`NEXT_UPDATE_PLAN.md`, `NEXT_UPDATE_EXECUTION.md`)
-   and historical release notes for older versions sat in the active `docs/` root,
-   and `docs/README.md` did not index most of the files that actually exist.
+1. Superseded planning documents and historical release notes for older
+   versions sat in the active `docs/` root, and `docs/README.md` did not index
+   most of the files that actually exist.
 2. `scripts/check_runtime_modules.py` enforced manifest coverage for `handlers/`,
    `pkg/state/`, `pkg/parity/`, and `routes/` but not for root `*.py` modules, even
    though AGENTS.md requires every runtime module to be listed.

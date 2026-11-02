@@ -20,8 +20,6 @@ The files under this `docs/` folder are engineering, process, and release docume
 - `flathub-checklist.md` — Flatpak submission readiness and the steps that stay with the maintainer
 - `upgrade-2.0.md` — what changes for a user upgrading from 1.19, and how to roll back
 - `upgrade-2.1.md` — what changes for a user upgrading from 2.0, the API migration table, and the backup-format window
-- `development/2.0-LEDGER.md` — the 2.0 task ledger: every plan task with its status and evidence
-- `development/2.1-LEDGER.md` — the 2.1 task ledger: every plan task with its status and evidence
 - `development/REPRODUCIBILITY.md` — the reproducible-build report for the macOS bundle
 - `development/SETTINGS-AUDIT.md` — the settings retirement audit for 2.0
 - `development/` — development conventions: `DESIGN.md` (design system: colors, typography, components), `HANDLER_CONVENTIONS.md`, `PERF.md` (performance budgets and measurements)
@@ -86,6 +84,6 @@ archives, not an unfinished active roadmap.
 
 ## Archive
 
-- `archive/` — superseded planning documents and historical release notes kept for traceability: `NEXT_UPDATE_PLAN.md` (the executed 1.9.0→1.10.0 plan), `NEXT_UPDATE_PLAN-1.11.md` (the executed 1.11.0 planning record), `NEXT_UPDATE_PLAN-1.12.md` (the executed 1.12.0 plan), `NEXT_UPDATE_PLAN-1.14.1.md` (the 1.14.1 plan, folded into 1.15 and never cut as a patch release), `NEXT_UPDATE_EXECUTION.md` (the executed 1.9.0→1.10.0 ledger), `NEXT_UPDATE_EXECUTION-1.11.md` (the executed 1.11.0 ledger), `NEXT_UPDATE_EXECUTION-1.17.md` (the 1.17.0 implementation and verification record, shipped in 1.17.0), `HANDOFF-WINDOWS-PORT.md` (the Windows port handoff, shipped under ADR 0048), `HANDOFF-1.16.0.md` (the 1.16.0 execution record), `release-notes-1.7.2.md`, `release-notes-1.8.0.md`, `release-notes-1.11.0.md`, `release-notes-1.12.x-1.13.x.md`, `release-notes-1.14.0.md`, `release-notes-1.15.0.md`, `release-notes-1.16.0.md`, `release-notes-1.16.1.md`, plus the 2.0-program records `2.0-PLATFORM-EVIDENCE.md`, `HANDOFF-MACOS-NOTARY.md` (the notarization evidence for ADR 0094), `HANDOFF-WINDOWS-ARM64.md` (the ARM64 lane evidence for ADR 0095), `NEXT_UPDATE_PLAN-1.19.2.md` (the declined preflight plan), `NEXT_UPDATE_PLAN-2.0.md` (the 2.0 program plan), `release-notes-2.0.0.md` (the superseded 2.0.0 notes), and `v1_contracts.json` (the frozen v1 route list, retired per ADR 0099)
+- `archive/` — historical release notes kept for traceability: `release-notes-1.7.2.md`, `release-notes-1.8.0.md`, `release-notes-1.11.0.md`, `release-notes-1.12.x-1.13.x.md`, `release-notes-1.14.0.md`, `release-notes-1.15.0.md`, `release-notes-1.16.0.md`, `release-notes-1.16.1.md`, `release-notes-2.0.0.md` (the superseded 2.0.0 notes), and `v1_contracts.json` (the frozen v1 route list, retired per ADR 0099)
 
 Do not add user-facing markdown here. Edit the docs site repo instead.

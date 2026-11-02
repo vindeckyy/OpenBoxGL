@@ -1,6 +1,6 @@
 # ADR 0095: Windows ARM64 channel
 
-Status: Accepted (2026-10-29); the 2.1 release re-verifies the tagged lane. The ARM64 lane is in the release workflow and the installer selects it by architecture. The gates below hold on the record the repo can check: the WebView2 arm64 static loader is in the pinned SDK (docs/archive/HANDOFF-WINDOWS-ARM64.md) and the windows-11-arm CI job builds the host and runs the suite. The actual ARM64 build and run is external to this workstation; the first green tagged run is the remaining proof.
+Status: Accepted (2026-10-29); the 2.1 release re-verifies the tagged lane. The ARM64 lane is in the release workflow and the installer selects it by architecture. The gates below hold on the record the repo can check: the WebView2 arm64 static loader is in the pinned SDK and the windows-11-arm CI job builds the host and runs the suite. The actual ARM64 build and run is external to this workstation; the first green tagged run is the remaining proof.
 
 ## Context
 
