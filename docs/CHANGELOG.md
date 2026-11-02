@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
-## [2.1.0] - 2026-12-09
+## [2.1.0] - 2026-11-02
 
 ### Added
 - **Media checksum toggle.** Settings > Library > Record media checksums controls whether downloads and captures are recorded in `media/manifest.json`. Turning it off skips manifest writes and media hashing; the integrity report says the manifest is disabled instead of reporting every file as untracked.
