@@ -47,9 +47,10 @@ from pkg.parity.parity_steamgrid import (
 )
 from pkg.parity.parity_metadata_providers import APPLY_FIELDS, apply_candidate, search_all
 from pkg.parity.parity_premium import download_bytes
+from pkg.state.machines import job_result_state
 from pkg.state.operations import get_operation_service
 from routes.registry import route
-from webapp_state import DATA, JOB_MANAGER, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, RUNNING, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
+from webapp_state import DATA, JOB_MANAGER, MATCH_JOB, METADATA_DATABASE, METADATA_JOB, MEDIA_TYPES_ALL, PROCESS_LOCK, RUNNING, bump_media_epoch, game_from_payload, game_from_query, load_state_view, transact_state, update_steam_metadata
 
 
 def _parse_limit(raw, *, default: int, maximum: int) -> int:
@@ -68,12 +69,7 @@ def _match_preview_state_for_job(job_id: str | None) -> str:
     operation = get_operation_service().get(job_id)
     if not operation:
         return "ready"
-    state = str(operation.get("state") or "ready")
-    if state in {"queued", "running", "cancelling"}:
-        return state
-    if state in {"done", "partial", "error"}:
-        return "ready"
-    return state
+    return job_result_state(str(operation.get("state") or ""))
 
 
 class MetadataHandlers:
@@ -81,6 +77,7 @@ class MetadataHandlers:
     def _api_get_api_metadata_status(self, parsed):
         with PROCESS_LOCK:
             job = dict(METADATA_JOB)
+            match_job = dict(MATCH_JOB)
         state_view = load_state_view()
         games = state_view["games"]
         matched = sum(bool(game.get("launchbox_db_id")) for game in games)
@@ -93,7 +90,7 @@ class MetadataHandlers:
         }
         for field in sorted(MEDIA_TYPES_ALL):
             coverage[f"with_{field}"] = len(games) - _missing(field)
-        self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "coverage":coverage})
+        self.send_json(200, {"ready":METADATA_DATABASE.is_file(), "job":job, "match_job":match_job, "coverage":coverage})
         return
 
     @route("GET", "/api/metadata/search")
@@ -494,13 +491,13 @@ class MetadataHandlers:
             raise Conflict("Download the metadata database first.")
         platform = str(payload.get("platform", "all"))
         with PROCESS_LOCK:
-            if METADATA_JOB.get("state") == "running":
-                self.send_json(200, METADATA_JOB)
+            if MATCH_JOB.get("state") == "running":
+                self.send_json(200, MATCH_JOB)
                 return
-            METADATA_JOB.clear()
-            METADATA_JOB.update({"state":"running", "matched":0, "scanned":0, "errors":[]})
+            MATCH_JOB.clear()
+            MATCH_JOB.update({"state":"running", "matched":0, "scanned":0, "errors":[]})
 
-        def worker():
+        def _match():
             state = load_state()
             candidates = [
                 game for game in state["games"]
@@ -510,7 +507,7 @@ class MetadataHandlers:
             ]
             if not candidates:
                 with PROCESS_LOCK:
-                    METADATA_JOB.update({"state":"done", "scanned":0, "matched":0})
+                    MATCH_JOB.update({"state":"done", "scanned":0, "matched":0})
                 return
             titles = [(str(game["name"]).strip(), str(game.get("platform") or "")) for game in candidates]
             matches = batch_match(METADATA_DATABASE, titles)
@@ -538,7 +535,15 @@ class MetadataHandlers:
                 except Exception as error:
                     errors.append(f"Batch state update error: {error}")
             with PROCESS_LOCK:
-                METADATA_JOB.update({"state":"done", "scanned":len(candidates), "matched":matched, "errors":errors[-20:]})
+                MATCH_JOB.update({"state":"done", "scanned":len(candidates), "matched":matched, "errors":errors[-20:]})
+
+        def worker():
+            try:
+                _match()
+            except Exception as error:
+                with PROCESS_LOCK:
+                    MATCH_JOB.update({"state": "error", "error": str(error)})
+                raise
 
         JOB_MANAGER.submit("metadata-match", worker)
         self.send_json(202, {"state":"running"})

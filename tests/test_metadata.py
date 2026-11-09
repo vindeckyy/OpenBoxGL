@@ -879,7 +879,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
             hm.METADATA_JOB.clear()
             handler.match_metadata({"platform": "all"})
             self.assertEqual(handler.responses[-1][0], 202)
-            hm.METADATA_JOB.update({"state": "running"})
+            hm.MATCH_JOB.update({"state": "running"})
             handler.match_metadata({"platform": "all"})
             self.assertEqual(handler.responses[-1][0], 200)
 
@@ -1017,8 +1017,9 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
             mock_jm.submit.side_effect = lambda name, worker: worker()
             hm.METADATA_JOB.clear()
+            hm.MATCH_JOB.clear()
             handler.match_metadata({"platform": "all"})
-            self.assertEqual(hm.METADATA_JOB.get("state"), "done")
+            self.assertEqual(hm.MATCH_JOB.get("state"), "done")
 
     def test_apply_metadata_validation(self):
         handler = DummyMetadataHandler()

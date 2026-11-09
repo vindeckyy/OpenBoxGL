@@ -837,12 +837,14 @@ class FacadeSyncTests(unittest.TestCase):
         self.webapp_state = webapp_state
         webapp_state.INSTALLS.clear()
         webapp_state.METADATA_JOB.clear()
+        webapp_state.MATCH_JOB.clear()
         webapp_state.MEDIA_JOB.clear()
         self.manager = webapp_state.JOB_MANAGER
 
     def tearDown(self):
         self.webapp_state.INSTALLS.clear()
         self.webapp_state.METADATA_JOB.clear()
+        self.webapp_state.MATCH_JOB.clear()
         self.webapp_state.MEDIA_JOB.clear()
 
     def test_installs_facade_syncs_operation_progress(self):
@@ -904,15 +906,15 @@ class FacadeSyncTests(unittest.TestCase):
             release.set()
         _wait_for(self.manager, "update:ra", {"done", "error", "cancelled"})
 
-    def test_metadata_facade_uses_alternate_job_name(self):
-        from webapp_state import METADATA_JOB
+    def test_match_facade_targets_the_match_job(self):
+        from webapp_state import MATCH_JOB
 
         started = threading.Event()
         release = threading.Event()
         self.manager.submit("metadata-match", _blocked_worker(started, release))
         self.assertTrue(started.wait(POLL_TIMEOUT))
         try:
-            METADATA_JOB.update({"state": "running", "current": 2, "total": 5})
+            MATCH_JOB.update({"state": "running", "current": 2, "total": 5})
             job_id = self.manager.get_operation_id("metadata-match")
             op = get_operation_service().get(job_id)
             self.assertEqual(op["current"], 2)

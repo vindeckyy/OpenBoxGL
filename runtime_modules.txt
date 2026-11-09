@@ -102,6 +102,7 @@ pkg/state/launch.py
 pkg/state/registry.py
 pkg/state/commands.py
 pkg/state/imports.py
+pkg/state/machines.py
 pkg/state/sse.py
 pkg/state/_deps.py
 pkg/parity/parity_setup_preview.py

@@ -18,6 +18,7 @@ import { t } from './i18n.js';
 import { mountMomentsPanel, mountResumeAffordance } from './moments.js';
 import { openSetupCenter, setupDismissedPersisted } from './setup.js';
 import { initDnaSearch, dnaMoreLikeThis, dnaSearchMode } from './dna.js';
+import { isJobActive } from './machines.js';
 
 const DETAILS_WIDTH_KEY = 'openbox-details-width';
 // Folder grants made in this session, by game id. They let the Launch Doctor offer Remove access.
@@ -2835,7 +2836,7 @@ async function pollArtworkJob(jobId, {timeoutMs = 120000} = {}) {
   for (;;) {
     const page = await api('/api/v2/jobs?limit=100');
     const job = (page.jobs || []).find(entry => entry.job_id === jobId) || null;
-    if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
+    if (job && !isJobActive(job)) return job;
     const status = $('artworkDoctorProgress') || $('artworkDoctorStatus');
     if (status && job) status.textContent = t('artwork_doctor.fixing', {done: job.current ?? 0, total: job.total ?? 0});
     if (Date.now() >= deadline) throw new Error(`Timed out waiting for job ${jobId}`);

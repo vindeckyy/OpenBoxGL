@@ -15,6 +15,7 @@ from backend_io import atomic_write_text
 from crash_report import tokenize_home_paths
 from openbox import DATA
 from pkg.parity.parity_redact import REDACTED_KEYS
+from pkg.state.machines import MACHINES
 
 LOGGER = logging.getLogger("openbox.operations")
 
@@ -26,8 +27,9 @@ DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 100
 MAX_ITEMS_LIST_LIMIT = 200
 
-ACTIVE_STATES = frozenset({"queued", "running", "cancelling"})
-TERMINAL_STATES = frozenset({"done", "partial", "error", "cancelled", "interrupted"})
+OPERATION_MACHINE = MACHINES["operation"]
+ACTIVE_STATES = OPERATION_MACHINE.active
+TERMINAL_STATES = OPERATION_MACHINE.terminal
 
 SSE_EVENT_QUEUED = "job.queued"
 SSE_EVENT_PROGRESS = "job.progress"
@@ -471,7 +473,7 @@ class OperationService:
     def mark_running(self, job_id: str, *, phase: str | None = None, message: str = "") -> dict:
         with self._lock:
             record = self._operations.get(job_id)
-            if not record or record["state"] not in {"queued", "running"}:
+            if not record or not OPERATION_MACHINE.allows("start", record["state"], "running"):
                 raise JobStateConflictError(f"Operation {job_id} is not runnable.")
             record = dict(record)
             record["state"] = "running"
@@ -577,12 +579,12 @@ class OperationService:
         message: str | None = None,
         checkpoint: dict | None = None,
     ) -> dict:
-        if state not in TERMINAL_STATES:
-            raise ValueError(f"Invalid terminal state: {state}")
         with self._lock:
             record = self._operations.get(job_id)
             if not record:
                 raise JobStateConflictError(f"Operation {job_id} was not found.")
+            if not OPERATION_MACHINE.allows("finish", record["state"], state):
+                raise ValueError(f"Invalid terminal state: {state}")
             record = dict(record)
             record["state"] = state
             record["updated_at"] = _now()

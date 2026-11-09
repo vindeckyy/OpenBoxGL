@@ -750,7 +750,7 @@ async function watchMatchMetadata() {
       return;
     }
     const status = await api('/api/metadata/status');
-    const job = status.job || {};
+    const job = status.match_job || status.job || {};
     if (job.state === 'running') {
       $('metadataStatus').textContent = `Auto-matching: ${job.matched || 0} matched so far.`;
       return setTimeout(watchMatchMetadata, 1200);

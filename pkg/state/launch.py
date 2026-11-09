@@ -13,6 +13,7 @@ import time
 
 from automation import build_event
 from api_errors import Conflict
+from pkg.state.machines import SESSION_ABANDONED, SESSION_ACTIVE
 from pkg.state.registry import EVENT_SEQUENCE, PENDING_LAUNCHES, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
 from pkg.platform_compat import (
     IS_LINUX,
@@ -210,7 +211,7 @@ def reconcile_sessions_on_startup(state):
             reattached.append(session)
         else:
             # Mark abandoned — DON'T kill the PID
-            session['status'] = 'abandoned'
+            session['status'] = SESSION_ABANDONED
             abandoned.append(session)
     # Update state: keep reattached + abandoned (abandoned shown in UI)
     state['active_sessions'] = reattached + abandoned
@@ -718,7 +719,7 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "command_fingerprint": read_cmd(process.pid),
             "start_time": started.isoformat(timespec="seconds"),
             "perf_profile": effective_profile,
-            "status": "active"
+            "status": SESSION_ACTIVE
         }
         state.setdefault("active_sessions", []).append(session_record)
 

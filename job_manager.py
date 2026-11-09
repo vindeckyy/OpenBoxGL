@@ -12,8 +12,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from collections.abc import Callable
 
+from pkg.state.machines import MACHINES
+
 
 LOGGER = logging.getLogger("openbox.jobs")
+LEGACY_JOB_MACHINE = MACHINES["legacy_job"]
 MAX_ERROR_LENGTH = 800
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_MAX_JOBS = 128
@@ -147,7 +150,7 @@ def legacy_snapshot_fields(job: dict, operation: dict | None = None) -> dict:
             snapshot[key] = op[key]
     op_state = op.get("state")
     job_state = str(snapshot.get("state") or "")
-    if op_state and not (job_state in {"done", "error", "cancelled"} and op_state == "cancelling"):
+    if op_state and not (job_state in LEGACY_JOB_MACHINE.terminal and op_state == "cancelling"):
         snapshot["state"] = op_state
     error = op.get("error")
     if error:
@@ -396,7 +399,7 @@ class JobManager:
             del self._history[: max(0, len(self._history) - self._history_limit)]
 
     def _prune_finished_locked(self):
-        finished = {"done", "error", "cancelled"}
+        finished = LEGACY_JOB_MACHINE.terminal
         for name, job in list(self._jobs.items()):
             if len(self._jobs) < self._max_jobs:
                 return
@@ -607,7 +610,7 @@ class JobManager:
         notification = None
         with self._lock:
             job = self._jobs.get(name)
-            if not job or job.get("state") not in {"queued", "running"}:
+            if not job or job.get("state") not in LEGACY_JOB_MACHINE.active:
                 return False
             job_id = job.get("job_id")
             event = self._cancel_events.get(job_id)

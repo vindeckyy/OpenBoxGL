@@ -2,10 +2,9 @@ import { $, escapeHtml } from './util.js';
 import { api, notify } from './state.js';
 import { subscribe, onOpen } from './events.js';
 import { t } from './i18n.js';
+import { JOB_ACTIVE, JOB_ATTENTION } from './machines.js';
 
 const JOB_SSE_EVENTS = ['job.queued', 'job.progress', 'job.cancelling', 'job.finished', 'job.interrupted'];
-const ACTIVE_STATES = new Set(['queued', 'running', 'cancelling']);
-const ATTENTION_STATES = new Set(['partial', 'error', 'interrupted']);
 const RECENT_MS = 30 * 24 * 60 * 60 * 1000;
 const ROW_KEYS = ['job_id', 'type', 'title', 'state', 'phase', 'current', 'total', 'message', 'can_cancel', 'can_retry', 'can_resume'];
 
@@ -45,11 +44,11 @@ function blankOperation(jobId) {
 }
 
 function needsAttention(job) {
-  return ATTENTION_STATES.has(job.state) && (job.can_retry || job.can_resume);
+  return JOB_ATTENTION.has(job.state) && (job.can_retry || job.can_resume);
 }
 
 function isActive(job) {
-  return ACTIVE_STATES.has(job.state);
+  return JOB_ACTIVE.has(job.state);
 }
 
 function finishedWithinRecentWindow(job) {

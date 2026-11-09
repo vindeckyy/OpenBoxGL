@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+- **State machines are declared once (ADR 0107).** `pkg/state/machines.py` lists every lifecycle (operations, legacy jobs, facades, sessions, previews, storefront scans, media queue, and the declared-only UI machines) with its states and allowed transitions; the operation service validates against that table, and the UI pollers share one set of job-state literals instead of re-declaring them.
+
+### Fixed
+- Starting a metadata database sync while auto-match is running no longer wipes the match's visible progress, and vice versa: `/api/metadata/status` reports the sync as `job` and the match as `match_job`.
+- The Launch Audit keeps its run button in the running state when a run is `cancelling`, instead of offering a rerun mid-cancellation.
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

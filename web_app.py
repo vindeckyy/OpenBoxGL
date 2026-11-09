@@ -58,6 +58,7 @@ from webapp_state import (
     unregister_event_subscriber,
 )
 from pkg.state.imports import start_media_queue_worker
+from pkg.state.machines import SESSION_ACTIVE, SESSION_STOPPING
 from handlers.data import DataHandlers
 from handlers.discovery import DiscoveryHandlers
 from handlers.emulators import EmulatorsHandlers
@@ -747,6 +748,51 @@ def _health_rescan_worker():
         _health_rescan_tick()
 
 
+def reap_sessions_for_shutdown():
+    """Mark persisted sessions stopping, wait 2s, force-kill survivors, remove rows."""
+    try:
+        _state = load_state()
+        _active = [s for s in _state.get("active_sessions", []) if s.get("status") == SESSION_ACTIVE]
+        if not _active:
+            return
+
+        def _mark_stopping(state):
+            for sess in state.get("active_sessions", []):
+                if sess.get("status") == SESSION_ACTIVE:
+                    sess["status"] = SESSION_STOPPING
+
+        try:
+            update_state(_mark_stopping)
+        except Exception:
+            LOGGER.exception("Failed to mark sessions stopping")
+        # Give processes the shutdown window (2s) to exit gracefully, then
+        # force-kill the ones still alive.
+        import time as _time
+
+        deadline = _time.monotonic() + 2.0
+        while _time.monotonic() < deadline:
+            if not any(sess.get("pid") and process_alive(sess["pid"]) for sess in _active):
+                break
+            _time.sleep(0.2)
+        for sess in _active:
+            pid = sess.get("pid")
+            if not pid or not process_alive(pid):
+                continue
+            terminate_process_tree(pid, force=True, pgid=sess.get("pgid"))
+
+        def _remove_stopping(state):
+            state["active_sessions"] = [
+                s for s in state.get("active_sessions", []) if s.get("status") != SESSION_STOPPING
+            ]
+
+        try:
+            update_state(_remove_stopping)
+        except Exception:
+            LOGGER.exception("Failed to remove stopping sessions on shutdown")
+    except Exception:
+        LOGGER.exception("Graceful shutdown session cleanup failed")
+
+
 def main():
     from pkg.state import library_cli
 
@@ -939,51 +985,8 @@ def main():
                 control_game_session(launch_id, "stop")
             except ValueError:
                 pass
-        # Persist graceful shutdown for any remaining active_sessions (e.g., reattached ones not in RUNNING).
-        try:
-            _state = load_state()
-            _active = [s for s in _state.get("active_sessions", []) if s.get("status") == "active"]
-            if _active:
-                # Mark stopping and persist.
-                def _mark_stopping(state):
-                    for sess in state.get("active_sessions", []):
-                        if sess.get("status") == "active":
-                            sess["status"] = "stopping"
-                try:
-                    update_state(_mark_stopping)
-                except Exception:
-                    LOGGER.exception("Failed to mark sessions stopping")
-                # Give processes the shutdown window (2s) to exit gracefully, then force-kill known pgids.
-                import time as _time
-                _deadline = _time.monotonic() + 2.0
-                while _time.monotonic() < _deadline:
-                    _alive_any = False
-                    for sess in _active:
-                        _pid = sess.get("pid")
-                        if _pid:
-                            if process_alive(_pid):
-                                _alive_any = True
-                                break
-                    if not _alive_any:
-                        break
-                    _time.sleep(0.2)
-                for sess in _active:
-                    _pid = sess.get("pid")
-                    _pgid = sess.get("pgid")
-                    if _pid:
-                        if not process_alive(_pid):
-                            continue
-                        # Still alive after window: force-kill the group/tree.
-                        terminate_process_tree(_pid, force=True, pgid=_pgid)
-                # Persist final state: remove stopping entries before shutdown.
-                def _remove_stopping(state):
-                    state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("status") != "stopping"]
-                try:
-                    update_state(_remove_stopping)
-                except Exception:
-                    LOGGER.exception("Failed to remove stopping sessions on shutdown")
-        except Exception:
-            LOGGER.exception("Graceful shutdown session cleanup failed")
+        # Mark live sessions stopping, give them the shutdown window, then remove the rows.
+        reap_sessions_for_shutdown()
         # Lifecycle event (F1e): the app is shutting down. Best-effort and
         # bounded by the per-plugin timeout; never blocks teardown.
         emit_plugin_event(DATA.parent / "plugins", "app_shutdown", {})

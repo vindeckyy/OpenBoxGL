@@ -99,7 +99,7 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
     function connectSessionEvents() {
       if (sessionStreamSubscribed) return;
       sessionStreamSubscribed = true;
-      subscribe(['session.started', 'session.stopped', 'session.state', 'job.finished'], () => pollSessions());
+      subscribe(['session.started', 'session.stopped', 'job.finished'], () => pollSessions());
       subscribe('state.changed', () => {
         if (sessionRefreshTimer) clearTimeout(sessionRefreshTimer);
         sessionRefreshTimer = setTimeout(() => { sessionRefreshTimer = null; refresh().catch(() => {}); }, 500);

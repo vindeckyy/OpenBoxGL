@@ -23,6 +23,7 @@ from pkg.parity.parity_setup_preview import (
 )
 from pkg.parity.parity_compat import build_report, readiness_checks
 from pkg.parity.parity_backup import create_backup
+from pkg.state.machines import job_result_state
 from pkg.state.operations import get_operation_service
 from pkg.state import library_v7
 from routes.registry import route
@@ -91,14 +92,7 @@ def _preview_state_for_job(job_id: str | None) -> str:
     operation = get_operation_service().get(job_id)
     if not operation:
         return "ready"
-    state = str(operation.get("state") or "ready")
-    if state in {"queued", "running", "cancelling"}:
-        return state
-    if state in {"done", "partial"}:
-        return "ready"
-    if state == "error":
-        return "ready"
-    return state
+    return job_result_state(str(operation.get("state") or ""))
 
 
 class SetupHandlers:

@@ -5,6 +5,7 @@ import { applyLibraryMusic, syncPointerNavigator } from './bigbox.js';
 import { confirmAction, promptInput, closeDialog, openDialog } from './dialogs.js';
 import { openSetupCenter, markSetupDismissed, setupDismissedPersisted } from './setup.js';
 import { t } from './i18n.js';
+import { FACADE_ACTIVE } from './machines.js';
 import { emulatorFieldLabel, readEmulatorSettingsValues } from './emulators.js';
 import { initDefs } from './defs.js';
 import { openHealthScore, renderHealthScoreCard, initHealthSse } from './health.js';
@@ -1030,7 +1031,7 @@ import { initCompatReport } from './compat.js';
         const result = await api('/api/emulators');
         renderEmulators(result.emulators);
         const emulator = result.emulators.find(item => item.app_id === appId);
-        if (emulator?.job.state === 'installing') return setTimeout(() => watchEmulator(appId), 1500);
+        if (FACADE_ACTIVE.has(emulator?.job.state)) return setTimeout(() => watchEmulator(appId), 1500);
         if (emulator?.job.state === 'done') {
           const profiles = await api('/api/profiles');
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');
@@ -1042,7 +1043,7 @@ import { initCompatReport } from './compat.js';
       try {
         const result = await api('/api/emulators');
         renderEmulators(result.emulators);
-        if (result.install_all?.state === 'installing') return setTimeout(watchInstallAll, 2000);
+        if (FACADE_ACTIVE.has(result.install_all?.state)) return setTimeout(watchInstallAll, 2000);
         if (result.install_all?.state === 'done') {
           const profiles = await api('/api/profiles');
           $('profilesText').value = Object.entries(profiles.profiles).sort().map(([platform,command]) => `${platform} = ${command}`).join('\n');

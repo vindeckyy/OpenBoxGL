@@ -169,6 +169,7 @@
     "165:a-client-asks-2-1-to-write-backup-format-1",
     "166:media-checksum-tracking-is-turned-off",
     "167:a-deep-link-is-issued-while-a-server-is-already-running",
-    "168:a-2-0-build-opens-a-2-1-library"
+    "168:a-2-0-build-opens-a-2-1-library",
+    "169:a-metadata-database-sync-starts-while-auto-match-is-running-"
   ]
 }
