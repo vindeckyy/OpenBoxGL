@@ -35,7 +35,7 @@ from pkg.platform_compat import (
 
 logger = logging.getLogger("openbox")
 
-VERSION = "2.1.0"
+VERSION = "3.0.0"
 RELEASE_API = "https://api.github.com/repos/vindeckyy/OpenBoxGL/releases/latest"
 TRUSTED_RELEASE_PREFIX = "https://github.com/vindeckyy/OpenBoxGL/releases/download/"
 

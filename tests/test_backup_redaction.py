@@ -151,6 +151,7 @@ class TestBackupRedaction(unittest.TestCase):
                 "id": "vendor.store",
                 "name": "Vendor Store",
                 "version": "1.0.0",
+                "api_version": 2,
                 "hooks": ["storefront"],
                 "settings": {
                     "type": "object",

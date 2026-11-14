@@ -270,7 +270,16 @@ def _map_path(value: Any, options: dict[str, Any]) -> str:
         elif candidate_key == source_key:
             suffix = ""
         elif candidate_key.startswith(source_key.rstrip("/") + "/"):
-            suffix = candidate[len(source_norm):].lstrip("/")
+            # Slice the normalized path, not the raw source and not the
+            # casefolded key. `D:/Roms/.` collapses to `D:/Roms`, and the
+            # suffix must keep the original casing (`Pokémon`).
+            normalized_candidate = os.path.normpath(candidate.replace("\\", "/")).replace("\\", "/")
+            normalized_source = os.path.normpath(source_norm).replace("\\", "/")
+            prefix = normalized_source.rstrip("/")
+            if normalized_candidate[:len(prefix)].casefold() == prefix.casefold():
+                suffix = normalized_candidate[len(prefix):].lstrip("/")
+            else:
+                suffix = candidate_key[len(source_key.rstrip("/")):].lstrip("/")
         else:
             continue
         destination_norm = os.path.expanduser(str(destination).strip()).replace("\\", "/").rstrip("/")

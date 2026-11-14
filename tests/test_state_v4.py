@@ -21,6 +21,7 @@ from state_store import (
     STATE_SCHEMA_VERSION,
     JsonStateStore,
     StateCorruptError,
+    StateSchemaTooOldError,
     _apply_migrations,
     _migrate_v2_to_v3,
     _normalize_game_ids,
@@ -669,7 +670,7 @@ class StoreInternalsTests(unittest.TestCase):
                 store.update(lambda state: state["settings"].update({"n": 2}))
             self.assertTrue(store.path.is_file())
 
-    def test_ensure_loaded_normalizes_stale_on_disk_state(self):
+    def test_ensure_loaded_refuses_schema_older_than_7(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library.json"
             legacy = {
@@ -680,12 +681,12 @@ class StoreInternalsTests(unittest.TestCase):
                 "settings": {},
                 "playlists": [],
             }
-            path.write_text(json.dumps(legacy), encoding="utf-8")
+            raw = json.dumps(legacy)
+            path.write_text(raw, encoding="utf-8")
             store = JsonStateStore(path)
-            game = store.get_game_by_id("game-aaa")
-            self.assertEqual(game["name"], "Alpha")
-            persisted = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(persisted["schema_version"], STATE_SCHEMA_VERSION)
+            with self.assertRaises(StateSchemaTooOldError):
+                store.get_game_by_id("game-aaa")
+            self.assertEqual(path.read_text(encoding="utf-8"), raw)
 
     def test_snapshot_limit_zero_skips_rotation(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1225,6 +1225,7 @@
     "copy_details": "Copier les détails",
     "dismiss": "Ignorer l'erreur",
     "state_future_version": "Cette bibliothèque a été écrite par une version plus récente d'OpenBox. Installez cette version ou une plus récente ; rien n'a été modifié.",
+    "state_schema_too_old": "Cette bibliothèque utilise un format plus ancien. OpenBox 3.0 ne la met pas à niveau au démarrage. Le schéma 6 se met à niveau avec openbox --migrate-library ; les bibliothèques plus anciennes ont d'abord besoin d'OpenBox 2.1. Rien n'a été modifié.",
     "state_migration_failed": "La bibliothèque n'a pas pu être mise à niveau. Le fichier d'origine n'a pas été remplacé.",
     "move_plan_stale": "La bibliothèque a changé après l'aperçu. Refaites l'aperçu du déplacement avant de l'appliquer.",
     "backup_format_unsupported": "Cette sauvegarde utilise un format que cette version d'OpenBox ne peut pas lire. Installez une version plus récente pour la restaurer ; rien n'a été écrit.",
@@ -2020,7 +2021,7 @@
   },
   "migration": {
     "title": "Votre bibliothèque a été mise à niveau",
-    "intro": "OpenBox a mis à niveau le fichier de la bibliothèque vers le nouveau format. Rien n'est perdu : une copie de l'ancien fichier est conservée.",
+    "intro": "OpenBox a mis à niveau le fichier de la bibliothèque vers le nouveau format. Une copie de l'ancien fichier est conservée. OpenBox 3.0 ne revient pas en arrière ; OpenBox 2.1.0 peut restaurer library.v6.backup.json.",
     "from": "Avant",
     "to": "Après",
     "games": "Jeux",

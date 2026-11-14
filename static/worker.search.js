@@ -19,9 +19,10 @@ function indexTerms(values) {
   values.forEach(value => {
     (value.match(/[a-z0-9]+/g) || []).forEach(word => {
       const limited = word.slice(0, SEARCH_INDEX_MAX_TERM);
-      for (let end = 2; end <= Math.min(limited.length, 9); end++) terms.add(limited.slice(0, end));
-      for (let len = 2; len <= Math.min(limited.length, 9); len++) terms.add(limited.slice(limited.length - len));
-      for (let i = 0; i <= limited.length - 2; i++) terms.add(limited.slice(i, i + 2));
+      const longest = Math.min(limited.length, 9);
+      for (let len = 2; len <= longest; len++) {
+        for (let i = 0; i <= limited.length - len; i++) terms.add(limited.slice(i, i + len));
+      }
     });
     const words = value.match(/[a-z0-9]+/g) || [];
     if (words.length > 1) terms.add(words.map(w => w[0]).join(''));

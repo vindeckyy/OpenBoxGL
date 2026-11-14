@@ -12,6 +12,7 @@ here scrapes a whole library in the background.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 import threading
@@ -507,6 +508,28 @@ def is_configured():
 
 
 def clean_media_url(url):
-    """Reject non-https or injection-looking URLs before download."""
+    """Reject non-https URLs and literal private addresses before download.
+
+    Hostnames are checked again by ``download_file``, which also refuses a
+    redirect onto a private address. Resolving here would drop a provider URL
+    whenever DNS is briefly unavailable.
+    """
+    from urllib.parse import urlparse
+
+    from backend_io import is_public_ip, validate_http_url
+
     candidate = str(url or "").strip()
-    return candidate if re.match(r"^https://[A-Za-z0-9.\-]+/", candidate) else ""
+    if not candidate.lower().startswith("https://"):
+        return ""
+    try:
+        cleaned = validate_http_url(candidate)
+    except ValueError:
+        return ""
+    host = (urlparse(cleaned).hostname or "").strip().casefold().rstrip(".")
+    if not host or host == "localhost" or host.endswith(".localhost"):
+        return ""
+    try:
+        literal = ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        return cleaned
+    return cleaned if is_public_ip(literal) else ""

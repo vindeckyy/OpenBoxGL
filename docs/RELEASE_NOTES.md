@@ -1,112 +1,58 @@
-# OpenBox 2.1.0
+# OpenBox 3.0.0
 
-**OpenBox 2.1 is the release that makes the 2.0 contracts permanent: one public API, one native-host channel, one backup format to write, no library migration, and the temporary bridges 2.0 promised to remove are gone.**
+**OpenBox 3.0 keeps your library in one JSON file and removes the three bridges 2.1 scheduled for this release. The formal scale stays 20,000 games.**
 
-This is the release that clears the runway. There is one address for scripts, one format on disk, and one path through the code for every fix that comes next. Your library, settings, themes, plugins, and existing backups keep working exactly as they did. A 2.0 build can open a 2.1 library, and a 2.1 build opens a 2.0 library without migrating it.
+A library that is already schema 7 opens unchanged. Nothing in the file format moved: schema 7, backup format 2, sync format 3, and `/api/v2` are the same contracts 2.1 shipped. A 2.1 build can open a 3.0 library. A 3.0 build does not upgrade an older library just because you opened it.
 
-The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v2.0.0...v2.1.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.0.0...v2.1.0).
+The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v2.1.0...v3.0.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.1.0...v3.0.0). The upgrade steps are in [upgrade-3.0.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/upgrade-3.0.md).
 
 ## Three things that change
 
-### 1. Scripts get one address: `/api/v2`
+### 1. Opening a library no longer migrates it
 
-- **`/api/v1` is gone.** The routes are removed, and `OPENBOX_ENABLE_V1_API` no longer brings them back. A v1 caller gets a `410` problem document that names the `/api/v2` replacement.
-- **Unversioned `/api/*` paths are no longer a second way in.** They remain private implementation names used to build the `/api/v2` twins. Public calls to `/api/library`, `/api/jobs`, and the other base paths get the same `410` with `context.use` pointing at the replacement.
-- **The native-host channel is `/api/host`.** The legacy names `/api/launch`, `/api/shutdown`, and `/api/native/capabilities` are removed. Native windows shipped with 2.0 or later already use `/api/host` and keep working; a pre-2.0 host needs updating.
-- **Retired paths still authenticate first.** An unauthenticated caller receives `403`, not a `410` that would leak which routes exist.
+- **Schema 7 opens as it is.** There is no new library format in this release.
+- **Schema 6 waits for `openbox --migrate-library`.** Startup, including crash recovery, leaves the file byte for byte. The command still writes `library.v6.backup.json` before it replaces the primary file.
+- **Schema 1 through 5 needs OpenBox 2.1 first.** Open that library once on 2.1, then install 3.0, or stay on 2.1. 3.0 will not rewrite those files.
+- **The error is `STATE_SCHEMA_TOO_OLD`.** The UI explains it. Nothing was changed.
 
-### 2. Backups get one format to write: format 2
+### 2. Rollback and the v1 plugin runner are gone
 
-- **New backups write format 2 only.** Every file carries its SHA-256, and a restore checks every hash before writing anything.
-- **Format 1 archives still restore**, including archives written by 1.19 and the 2.0 compatibility export. New format 1 writes return `BACKUP_FORMAT_RETIRED`.
-- **Need a 1.19-readable archive?** Create it with a 2.0.x build before upgrading. 2.1 can restore it, but cannot create it.
+- **`openbox --rollback-library` exits 4 and changes no file.** It names OpenBox 2.1.0 as the build that restores `library.v6.backup.json`. Copies already on disk are left where they are.
+- **The rollback button is gone.** `POST /api/v2/setup/migration/rollback` stays registered so old clients get a `409` with `ROLLBACK_REMOVED` instead of a missing route. It does not restore anything and it does not shut the app down.
+- **Plugins must say `"api_version": 2`.** A missing version and an explicit `1` both fail with `PLUGIN_API_RETIRED`. The message is `Plugin api_version is required and must be 2. OpenBox 3.0 removed the v1 runner.` The v2 JSON Lines protocol is unchanged.
 
-### 3. The UI gets one versioned path per asset
+### 3. Python 3.11 is the floor
 
-- **Covers, theme CSS, theme sounds, RA badges, documents, platform videos, startup videos, and the reader all use `/api/v2`.** The unversioned request path is no longer a second entry point.
-- **The jobs panel reads `/api/v2/jobs`** list and cursor rows. The 1.19 job-name map and its `/api/jobs` route are gone.
+- **Source checkouts on Python 3.10 stop before the server binds.** The message names the interpreter you actually ran.
+- **3.12 is what the AppImage and the macOS bundle ship.** CI still tests 3.11 and 3.12. Do not use 3.12-only syntax.
+- **The AppImage is still built on Ubuntu 22.04** so the highest glibc symbol stays `GLIBC_2.35`. The build pins CPython `3.12.16-1+jammy1`.
 
 ## What stays the same
 
-| Contract | 2.0.0 | 2.1.0 |
+| Contract | 2.1.0 | 3.0.0 |
 |---|---|---|
-| Public API | `/api/v2` | `/api/v2` (same 358 paths / 387 operations) |
-| Native host channel | `/api/host` | `/api/host` (same 4 operations) |
-| Library schema | 7 | 7 (no migration) |
+| Public API | `/api/v2` | `/api/v2` |
+| Native host channel | `/api/host` | `/api/host` |
+| Library schema | 7 | 7 (no migration on open) |
 | Backup format | Write 2, read 1 and 2 | Write 2, read 1 and 2 |
-| Plugin API | 2, with the v1 adapter | 2, with the v1 adapter |
+| Plugin API | 2, with the v1 adapter | 2 only |
 | Sync format | 3 | 3 |
+| Canonical store | `library.json` | `library.json` |
 
-A 2.0 build reads a 2.1 library because the schema and required fields did not change. A 2.1 build reads a 2.0 library without running a migration. There is no new library format, no settings rewrite, and no plugin migration in this release.
+Deleting `sqlite_readmodel.db` still loses nothing. The projection rebuilds from the JSON file.
 
-## Upgrade in a minute
+## Also in this release
 
-1. Quit OpenBox.
-2. Install 2.1.0 over 2.0.0. The library opens as format 7; no migration runs.
-3. If a script calls `/api/v1`, an unversioned `/api/*` path, or a legacy host name, move it to `/api/v2` or `/api/host`. The `410` response names the replacement.
-4. If you may need a backup that a 1.19 install can read, create it on 2.0.x before upgrading.
-
-The detailed walkthrough is in [docs/upgrade-2.1.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/upgrade-2.1.md).
-
-### Coming from 1.19
-
-Upgrade to 2.0 first if you need the 1.19-compatible backup export. A direct 1.19 to 2.1 upgrade still migrates the library from schema 6 to 7, keeps `library.v6.backup.json`, and supports `openbox --rollback-library --yes`.
-
-## Breaking changes
-
-| Change | What it means | How to keep working |
-|---|---|---|
-| `/api/v1` removed | Scripts on v1 stop working; the environment bridge is gone | Move to `/api/v2` |
-| Unversioned `/api/*` removed | `/api/library`, `/api/jobs`, and other base paths return `410` | Use the `/api/v2` replacement in the error's `context.use` |
-| Legacy host names removed | Pre-2.0 native windows are refused | Update the native host; 2.0+ hosts already use `/api/host` |
-| Backup format 1 write removed | 2.1 cannot create a 1.19-readable archive | Create it on 2.0.x; format 1 reads still restore |
-| Python 3.10 deprecated | Still works; removal is planned for 3.0 | Use Python 3.12 for source installs |
-
-## Every supported platform
-
-- **Linux x86_64 and aarch64 AppImages** keep the glibc 2.35 floor and the signed zsync update path.
-- **Linux Flatpak moves to runtime 51.** `libwebkit2gtk-4.1.so.0` is present, and the full bundle build and install were verified in the 2.1 run.
-- **Windows x86_64 and ARM64 zips** ship with their native host; the installer and updater select the right build by CPU.
-- **macOS keeps the universal bundle.** The 2.1 bundle is ad-hoc signed; notarization remains the next platform step and is only claimed with `spctl` evidence.
-
-## Get OpenBox 2.1.0
-
-| Platform | Download | Notes |
-|---|---|---|
-| Linux x86_64 | `OpenBox-x86_64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux aarch64 | `OpenBox-aarch64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux Flatpak | `OpenBox-x86_64.flatpak` | x86_64 |
-| Windows x86_64 | `OpenBox-x86_64-windows.zip` | Includes the native host |
-| Windows ARM64 | `OpenBox-arm64-windows.zip` | Includes the ARM64 native host |
-| macOS | `OpenBox-macos.zip` | Universal; ad-hoc signed |
-
-The macOS installer pins the release tag:
-
-```bash
-VERSION=2.1.0
-curl --proto '=https' --tlsv1.2 --fail --location \
-  --output install-macos.sh \
-  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
-less install-macos.sh
-OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
-```
-
-On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`. On Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before.
-
-## Also fixed in 2.1.0
-
-- **Deep-link readiness uses a real route.** `openbox://` dispatch probes `GET /api/v2/version` instead of a GET health path that did not exist, so an already-running server is detected and a second server is not started.
-- **The media checksum toggle now does what it says.** Settings > Library > Record media checksums controls manifest writes, integrity hashing, and repair.
-- **`python web_app.py` registers every decorator-only route.** The v2 version endpoint, the native host routes, and the rest of the decorated surface load correctly instead of importing a second copy of `web_app`.
-- **Release notes and version surfaces agree.** `release.sh` uses the polished notes, and the version-sync gate checks the release-notes heading and the docs index shipped-release line.
+- **Lifecycles are declared in one table (ADR 0107).** Operations check that table. The jobs panel, metadata sync, and match job share one set of state names. `/api/metadata/status` reports a running sync as `job` and a running match as `match_job`, so one no longer clears the other's progress. Launch Audit stays on its running button while a run is `cancelling`.
+- **Five UI machines stay declared only.** Setup, the party wheel, the picker, Big Box overlays, and the repair wizard are listed and not enforced.
 
 ## Known limits
 
-- The macOS bundle is ad-hoc signed, so the first launch and each new build need the Privacy & Security confirmation.
-- Linux-only features remain unavailable on Windows and macOS by design; they are hidden rather than broken.
-- 1.19.x cannot read a format 7 library. Use `library.v6.backup.json` and `openbox --rollback-library` if you need to return to 1.19.
-- 2.1 cannot create a 1.19-compatible backup. Keep a 2.0.x build if you still need one.
-- Python 3.10 works but is deprecated; removal is planned for 3.0.
-- The formal library scale remains 20,000 games. 50,000 remains exploratory until the 3.0 storage decision.
+- The macOS bundle is ad-hoc signed. Notarization is unchanged.
+- Some features are Linux-only and hidden on Windows and macOS.
+- OpenBox 1.19 cannot read a schema 7 library.
+- Flathub is not submitted.
 
-The [changelog](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md) lists the main areas, not every change.
+## Not tagged
+
+The 50,000-game run on 2026-11-13 (Apple M4, Python 3.15.2) met the write budget and missed the RSS budget. Favorite mutation p95 was 1174.2 ms and bulk mutation p95 was 1319.5 ms, both under 1500 ms. Server RSS after the benchmark was 2163.3 MB, over the 1500 MB budget. The formal scale stays 20,000. Do not tag 3.0.0 on this measurement. No soak was run. The numbers are in `docs/development/PERF.md` and ADR 0108.

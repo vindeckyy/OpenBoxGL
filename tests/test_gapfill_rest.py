@@ -67,6 +67,7 @@ def make_plugin_package(root: Path, plugin_id: str, manifest_extra=None, entry_c
         "hooks": [],
     }
     manifest.update(manifest_extra or {})
+    manifest.setdefault("api_version", 2)
     (package / "plugin.json").write_text(json.dumps(manifest))
     (package / "plugin.py").write_text(entry_code)
     return package
@@ -381,7 +382,7 @@ class PluginMergeTests(unittest.TestCase):
                 plugins.read_manifest(root / "apiverplug")
 
     def test_run_manifest_hook_payload_too_large(self):
-        manifest = {"id": "hookplug", "entry": "plugin.py"}
+        manifest = {"id": "hookplug", "entry": "plugin.py", "api_version": 2}
         payload = {"data": "x" * (plugins.MAX_PLUGIN_PAYLOAD + 8)}
         with tempfile.TemporaryDirectory() as tmp:
             result, error = plugins._run_manifest_hook(
@@ -391,7 +392,7 @@ class PluginMergeTests(unittest.TestCase):
         self.assertIn("too large", error)
 
     def _run_with_stdout(self, payload_bytes):
-        manifest = {"id": "hookplug", "entry": "plugin.py"}
+        manifest = {"id": "hookplug", "entry": "plugin.py", "api_version": 2}
         payload = {"ping": True}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -407,14 +408,14 @@ class PluginMergeTests(unittest.TestCase):
                 return plugins._run_manifest_hook(root, manifest, "library", payload)
 
     def test_run_manifest_hook_output_too_large(self):
-        result, error = self._run_with_stdout(b"x" * (plugins.MAX_PLUGIN_PAYLOAD + 16))
+        result, error = self._run_with_stdout(b"x" * (plugins.MAX_PLUGIN_OUTPUT_V2 + 16))
         self.assertIsNone(result)
         self.assertIn("exceeded", error)
 
     def test_run_manifest_hook_empty_output(self):
         result, error = self._run_with_stdout(b"   \n")
         self.assertIsNone(result)
-        self.assertEqual(error, "")
+        self.assertIn("no response", error)
 
     def test_run_manifest_hook_non_dict_output(self):
         result, error = self._run_with_stdout(b"[1, 2]")

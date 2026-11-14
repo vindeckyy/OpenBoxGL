@@ -30,7 +30,7 @@ fetch() {
 command -v curl >/dev/null 2>&1 || die "curl is required."
 command -v shasum >/dev/null 2>&1 || die "shasum is required."
 command -v ditto >/dev/null 2>&1 || die "ditto is required."
-command -v python3 >/dev/null 2>&1 || die "python3 3.10 or newer is required to verify the release."
+command -v python3 >/dev/null 2>&1 || die "python3 3.11 or newer is required to verify the release."
 
 # Resolve the release tag, then require a stable semantic-version tag before
 # it is used in any download URL. OPENBOX_RELEASE_TAG pins a manually

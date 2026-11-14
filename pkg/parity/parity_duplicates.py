@@ -81,11 +81,14 @@ SCALAR_FILL_FIELDS = (
 )
 
 # Edition / region / dump markers that must not stop a real duplicate from
-# matching. Bracket contents are dropped wholesale; trailing tokens are only
-# removed when they look like markers, never arbitrary words.
+# matching. Bracket contents are dropped wholesale. Bare markers are removed
+# only at the end of the title, and only as whole tokens: "world" is a region
+# tag inside brackets, not a word in "Super Mario World", and "rev" must not
+# eat "Revelations".
 _BRACKET_RE = re.compile(r"[\(\[\{][^\)\]\}]{0,40}[\)\]\}]")
 _TRAILING_MARKER_RE = re.compile(
-    r"\b(usa|europe|japan|world|rev(ision)?\s*[a-z0-9]*|v\d+(\.\d+)*|disc\s*\d+|disk\s*\d+|en|jp|fr|de|es|pt|beta|proto|demo|unl|prg\d*)\b"
+    r"(?:[\s._-]+(?:usa|europe|japan|revision|rev(?:\s+\d+)?|v\d+(?:\.\d+)*|"
+    r"disc\s*\d+|disk\s*\d+|en|jp|fr|de|es|pt|beta|proto|demo|unl|prg\d*))+\s*$"
 )
 
 
@@ -207,6 +210,10 @@ def find_duplicates(
         if not isinstance(game, dict):
             continue
         path_key = normalize_path(game.get("path"))
+        rom_name = str(game.get("rom_name") or "").strip().casefold()
+        # MAME clones share the parent zip. The set name distinguishes them.
+        if path_key and rom_name:
+            path_key = f"{path_key}\x00{rom_name}"
         title_key = f"{normalize_title(game.get('name'))}\x00{str(game.get('platform') or '').casefold()}"
         for kind, bucket in buckets:
             if kind == KIND_PATH and path_key:

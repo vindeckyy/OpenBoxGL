@@ -41,6 +41,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="3.0.0" date="2026-11-13">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v3.0.0</url>
+      <description>
+        <p>OpenBox 3.0 keeps the library in JSON. The formal scale stays 20,000 games because the 50,000-game RSS budget was missed. Opening a library no longer migrates it: schema 6 upgrades only through openbox --migrate-library, and older libraries need OpenBox 2.1 first. Plugin API v1 and openbox --rollback-library are removed. Source checkouts need Python 3.11 or newer. A 2.1 build can still open a 3.0 library. This version is not tagged on the missed measurement.</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-12-09">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.1.0</url>
       <description>

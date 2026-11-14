@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import glob
 import json
 import re
 import shutil
@@ -215,12 +216,17 @@ def mame_highscore_path(home=None):
 
 def read_local_highscores(game, home=None):
     rom = str(game.get("rom_name") or Path(game.get("path", "")).stem).strip()
-    if not rom:
+    if not rom or any(char in rom for char in "*?[]"):
         return []
     root = mame_highscore_path(home)
     scores = []
-    for path in root.glob(f"{rom}*"):
+    root_resolved = root.resolve()
+    for path in root.glob(glob.escape(rom) + "*"):
         try:
+            if path.is_symlink():
+                continue
+            if root_resolved not in path.resolve().parents and path.resolve() != root_resolved:
+                continue
             size = path.stat().st_size
             scores.append({"file": path.name, "size": size, "label": path.stem})
         except OSError:

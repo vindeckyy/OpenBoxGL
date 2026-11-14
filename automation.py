@@ -468,7 +468,9 @@ def _reject_unsafe_address(address: str) -> None:
         ip = ipaddress.ip_address(address)
     except ValueError as error:
         raise ValueError("Webhook URL could not be resolved to a valid address.") from error
-    if not ip.is_global:
+    from backend_io import is_public_ip
+
+    if not is_public_ip(ip):
         raise ValueError("Webhook URLs may only target public addresses.")
 
 

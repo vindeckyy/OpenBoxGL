@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
+import socket
 import tempfile
+import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -22,6 +25,115 @@ def validate_http_url(url: str) -> str:
     if parsed.username or parsed.password:
         raise ValueError("URLs with embedded credentials are not supported.")
     return parsed.geturl()
+
+
+# Well-known prefixes that embed an IPv4 address. Python reports some of them
+# as global even though the embedded address is link-local or loopback.
+_NAT64_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+)
+_6TO4_NETWORK = ipaddress.ip_network("2002::/16")
+
+
+def _embedded_ipv4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return mapped
+    if any(ip in network for network in _NAT64_NETWORKS):
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    if ip in _6TO4_NETWORK:
+        return ipaddress.IPv4Address((int(ip) >> 80) & 0xFFFFFFFF)
+    return None
+
+
+def is_public_ip(address) -> bool:
+    """True when *address* is a globally routable unicast address.
+
+    Rejects loopback, private, link-local, multicast, reserved, and IPv6
+    forms that embed one of those (IPv4-mapped, NAT64, 6to4).
+    """
+    if isinstance(address, str):
+        address = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(address, ipaddress.IPv6Address):
+        embedded = _embedded_ipv4(address)
+        if embedded is not None:
+            address = embedded
+    if not isinstance(address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+        return False
+    if (
+        address.is_multicast
+        or address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+    ):
+        return False
+    return bool(address.is_global)
+
+
+def _addresses_for_host(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    host = str(host or "").strip().rstrip(".")
+    if not host:
+        raise ValueError("The download URL needs a host.")
+    if host.casefold() == "localhost" or host.casefold().endswith(".localhost"):
+        raise ValueError("Downloads may only target public addresses.")
+    try:
+        return [ipaddress.ip_address(host.split("%", 1)[0])]
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError as error:
+        raise ValueError("The download host could not be resolved.") from error
+    found = []
+    for info in infos:
+        try:
+            found.append(ipaddress.ip_address(str(info[4][0]).split("%", 1)[0]))
+        except (IndexError, ValueError) as error:
+            raise ValueError("The download host resolved to an invalid address.") from error
+    if not found:
+        raise ValueError("The download host could not be resolved.")
+    return found
+
+
+def assert_public_url(url: str) -> str:
+    """Return *url* when every resolved address is public. Fail closed."""
+    cleaned = validate_http_url(url)
+    host = urlparse(cleaned).hostname
+    if not host:
+        raise ValueError("The download URL needs a host.")
+    for address in _addresses_for_host(host):
+        if not is_public_ip(address):
+            raise ValueError("Downloads may only target public addresses.")
+    return cleaned
+
+
+def public_https_url(url: str) -> str:
+    """Return *url* when it is public HTTPS, otherwise an empty string."""
+    try:
+        cleaned = assert_public_url(url)
+    except ValueError:
+        return ""
+    if urlparse(cleaned).scheme != "https":
+        return ""
+    return cleaned
+
+
+class _PublicRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-check every redirect target before following it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        absolute = urljoin(getattr(req, "full_url", "") or "", newurl)
+        assert_public_url(absolute)
+        return super().redirect_request(req, fp, code, msg, headers, absolute)
+
+
+def guarded_urlopen(request, timeout=30):
+    """urlopen that refuses redirects onto a private or unresolved host."""
+    opener = urllib.request.build_opener(_PublicRedirectHandler)
+    return opener.open(request, timeout=timeout)
 
 
 def read_limited(response, max_bytes=MAX_RESPONSE_BYTES) -> bytes:
@@ -131,8 +243,11 @@ def download_file(
     sha256="",
     mode=0o644,
 ) -> Path:
-    url = validate_http_url(url)
+    use_guard = opener is None or opener is urlopen
+    url = assert_public_url(url) if use_guard else validate_http_url(url)
     request = Request(url, headers={"User-Agent": "OpenBox/1", **(headers or {})})
+    if use_guard:
+        opener = guarded_urlopen
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_name = None

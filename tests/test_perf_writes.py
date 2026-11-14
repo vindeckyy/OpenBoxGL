@@ -9,7 +9,13 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-from state_store import JsonStateStore, StateCorruptError, STATE_SCHEMA_VERSION, normalize_state
+from state_store import (
+    STATE_SCHEMA_VERSION,
+    JsonStateStore,
+    StateCorruptError,
+    StateSchemaTooOldError,
+    normalize_state,
+)
 
 
 class PerfWriteTests(unittest.TestCase):
@@ -477,22 +483,21 @@ class PerfWriteTests(unittest.TestCase):
         self.assertEqual(normalized["ui_state"], {})
         self.assertEqual(normalized["active_sessions"], [])
 
-    def test_load_and_load_readonly_auto_migrates_on_disk(self):
+    def test_load_and_load_readonly_refuse_schema_older_than_7(self):
         with tempfile.TemporaryDirectory() as directory:
             store = self.make_store(directory)
-            # Write a legacy v1 state to disk
             legacy = {"schema_version": 1, "games": [{"name": "Legacy", "path": "/bin/true"}]}
-            store.path.write_text(json.dumps(legacy), encoding="utf-8")
+            raw = json.dumps(legacy)
+            store.path.write_text(raw, encoding="utf-8")
 
-            # load() auto-migrates and writes to disk
-            loaded = store.load()
-            self.assertEqual(loaded["schema_version"], STATE_SCHEMA_VERSION)
+            with self.assertRaises(StateSchemaTooOldError):
+                store.load()
+            self.assertEqual(store.path.read_text(encoding="utf-8"), raw)
 
-            # Write another unmigrated state to disk
-            store.path.write_text(json.dumps(legacy), encoding="utf-8")
             store._clear_cache()
-            readonly = store.load_readonly()
-            self.assertEqual(readonly["schema_version"], STATE_SCHEMA_VERSION)
+            with self.assertRaises(StateSchemaTooOldError):
+                store.load_readonly()
+            self.assertEqual(store.path.read_text(encoding="utf-8"), raw)
 
     def test_recover_when_backup_corrupt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -508,18 +513,15 @@ class PerfWriteTests(unittest.TestCase):
             self.assertEqual(store.games_by_id, {})
             self.assertEqual(store.games_by_platform, {})
 
-    def test_ensure_loaded_auto_migrates_on_disk(self):
+    def test_ensure_loaded_refuses_schema_older_than_7(self):
         with tempfile.TemporaryDirectory() as directory:
             store = self.make_store(directory)
             legacy = {"schema_version": 1, "games": [{"name": "Legacy", "path": "/bin/true"}]}
-            store.path.write_text(json.dumps(legacy), encoding="utf-8")
-            # Directly call index lookup which triggers _ensure_loaded
-            game = store.get_game_by_id(list(store.games_by_id.keys())[0])
-            self.assertIsNotNone(game)
-            self.assertEqual(game["name"], "Legacy")
-            # Verify file was migrated on disk
-            raw = json.loads(store.path.read_text(encoding="utf-8"))
-            self.assertEqual(raw["schema_version"], STATE_SCHEMA_VERSION)
+            raw = json.dumps(legacy)
+            store.path.write_text(raw, encoding="utf-8")
+            with self.assertRaises(StateSchemaTooOldError):
+                store.get_game_by_id("legacy")
+            self.assertEqual(store.path.read_text(encoding="utf-8"), raw)
 
     def test_medium_library_above_compact_threshold_compacts(self):
         with tempfile.TemporaryDirectory() as directory:

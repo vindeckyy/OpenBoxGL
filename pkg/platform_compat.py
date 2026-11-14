@@ -770,7 +770,7 @@ def find_pids_by_name(pattern: str) -> list[int]:
         for entry in _windows_process_table():
             name = entry["name"].casefold()
             image = entry.get("image", "").casefold()
-            if needle in name or needle in image:
+            if needle in name:
                 matches.append(entry["pid"])
         return matches
     if IS_MACOS:  # pragma: no cover - macOS branch exercised on the macOS CI job
@@ -779,7 +779,9 @@ def find_pids_by_name(pattern: str) -> list[int]:
             path = _darwin_pid_path(candidate)
             if not path:
                 continue
-            if needle in Path(path).name.casefold() or needle in path.casefold():
+            # Match the executable name only. A short needle such as "os" or
+            # "app" is a substring of every MacOS bundle path.
+            if needle in Path(path).name.casefold():
                 matches.append(candidate)
         return matches
     else:  # pragma: no cover if IS_WINDOWS
@@ -792,7 +794,7 @@ def find_pids_by_name(pattern: str) -> list[int]:
             if not name.isdigit():
                 continue
             pid = int(name)
-            if needle in process_name(pid).casefold() or needle in process_command_line(pid).casefold():
+            if needle in process_name(pid).casefold():
                 matches.append(pid)
         return matches
 

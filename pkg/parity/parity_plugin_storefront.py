@@ -10,6 +10,8 @@ the normal storefront path.
 from __future__ import annotations
 
 import logging
+import os
+import shlex
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -33,6 +35,18 @@ MAX_CURSOR_LENGTH = 200
 MAX_SETTINGS_KEYS = 128
 
 _STORE_TEXT_FIELDS = ("path", "launch", "install_dir")
+_LAUNCH_INTERPRETERS = frozenset({
+    "sh", "bash", "zsh", "dash", "fish", "ksh", "csh", "tcsh",
+    "pwsh", "powershell", "powershell.exe", "cmd", "cmd.exe",
+    "python", "python3", "python.exe", "perl", "ruby", "node", "osascript", "busybox",
+})
+_SYSTEM_LAUNCH_ALLOW = frozenset({
+    "open", "xdg-open", "steam", "steam.exe", "lutris", "heroic", "heroic.exe",
+})
+_SYSTEM_BIN_DIRS = frozenset({
+    "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin",
+    "/usr/local/sbin",
+})
 _NETWORK_ERROR = "Grant network access to this plugin first."
 
 
@@ -192,7 +206,34 @@ def _clean_entry(raw, manifest, capability):
     for key in _STORE_TEXT_FIELDS:
         value = raw.get(key)
         entry[key] = value.strip()[:MAX_URI_LENGTH] if isinstance(value, str) else ""
+    try:
+        entry["launch"] = _clean_launch(entry.get("launch", ""))
+    except ValueError:
+        return None
     return entry
+
+
+def _clean_launch(command: str) -> str:
+    """Refuse a plugin launch command that would exec a shell or system tool.
+
+    Storefront rows are launched unsandboxed. A sandboxed plugin must not be
+    able to turn that into ``/bin/sh -c``. Openers and storefront clients
+    under the system bin directories stay allowed.
+    """
+    command = str(command or "").strip()
+    if not command:
+        return ""
+    parts = shlex.split(command, posix=(os.name != "nt"))
+    if not parts:
+        return ""
+    executable = Path(parts[0])
+    name = executable.name.casefold()
+    if name in _LAUNCH_INTERPRETERS or name.startswith("python"):
+        raise ValueError("Plugin launch command cannot start a shell or interpreter.")
+    parent = executable.parent.as_posix() if executable.is_absolute() else ""
+    if parent in _SYSTEM_BIN_DIRS and name not in _SYSTEM_LAUNCH_ALLOW:
+        raise ValueError("Plugin launch command cannot run a system binary.")
+    return command
 
 
 def _storefront_rows(plugin_id, settings=None, *, action, collection,

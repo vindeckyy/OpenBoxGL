@@ -23,7 +23,7 @@ def _make_plugin(root, *, plugin_id="vendor.stats", hooks=("stats",), capabiliti
         "id": plugin_id,
         "name": "Vendor Stats",
         "version": "1.0.0",
-        "api_version": 1,
+        "api_version": 2,
         "entry": "plugin.py",
         "hooks": list(hooks),
         "permissions": ["network"],

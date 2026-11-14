@@ -222,7 +222,11 @@ def sync_statistics(state, folder, now=None):
                 remote, remote_games = _load_remote_state(target)
                 remote_generated = _timestamp(remote.get("generated_at", ""))
                 last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
-                merged = {}
+                # Keep records this library does not have. Replacing the file
+                # with only local keys deletes the other device's counters.
+                merged = {
+                    key: value for key, value in remote_games.items() if isinstance(value, dict)
+                }
                 changed = 0
                 for game in state["games"]:
                     key = game_key(game)

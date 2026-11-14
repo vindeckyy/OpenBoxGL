@@ -216,7 +216,8 @@ def _map_path(value: Any, options: dict[str, Any]) -> str:
         if candidate_key == source_key:
             return destination
         if candidate_key.startswith(source_key + "/"):
-            return f"{destination}/{candidate[len(source):].lstrip('/')}"
+            suffix = candidate_key[len(source_key):].lstrip("/")
+            return f"{destination}/{suffix}"
     return candidate
 
 

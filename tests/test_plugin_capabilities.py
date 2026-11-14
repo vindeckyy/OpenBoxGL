@@ -19,7 +19,7 @@ def _package(root, plugin_id="cap.plugin", extra=None):
         "id": plugin_id,
         "name": "Capability Plugin",
         "version": "1.0.0",
-        "api_version": 1,
+        "api_version": 2,
         "hooks": [],
     }
     manifest.update(extra or {})

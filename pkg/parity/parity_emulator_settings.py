@@ -367,6 +367,7 @@ def apply_to_command(emulator_id, platform, argv, state, data_dir):
 PLUGIN_SETTINGS_PREFIX = "plugin:"
 _PLUGIN_ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 _PLUGIN_FORBIDDEN_ENV = {"LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME"}
+_PLUGIN_FORBIDDEN_ENV_PREFIXES = ("LD_", "DYLD_")
 
 
 def plugin_section_key(plugin_id, emulator_id):
@@ -457,7 +458,7 @@ def _clean_plugin_env(raw):
     for key, value in raw.items():
         if not isinstance(key, str) or not _PLUGIN_ENV_NAME.fullmatch(key):
             raise ValueError("Plugin emulator env keys must be uppercase identifiers.")
-        if key in _PLUGIN_FORBIDDEN_ENV:
+        if key in _PLUGIN_FORBIDDEN_ENV or key.startswith(_PLUGIN_FORBIDDEN_ENV_PREFIXES):
             raise ValueError(f"Plugin emulator env may not set {key}.")
         if not isinstance(value, str) or len(value) > 500 or "\0" in value:
             raise ValueError("Plugin emulator env values must be strings of at most 500 characters.")

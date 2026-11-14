@@ -182,10 +182,20 @@ def _indexed_days_since_last_play(game: dict, recent: dict[Any, datetime], now: 
             return max(0, (now - dt).days)
         except (TypeError, ValueError):
             pass
-    dt = recent.get(game.get("id"))
+    dt = _history_value(recent, game)
     if dt is None:
         return None
     return max(0, (now - dt).days)
+
+
+def _history_value(mapping, game):
+    """History is keyed by the stable game id. Projected rows also carry ``id``."""
+    if not isinstance(game, dict):
+        return None
+    for key in (game.get("game_id"), game.get("id")):
+        if key is not None and key in mapping:
+            return mapping[key]
+    return None
 
 
 def _indexed_fits_minutes(
@@ -198,7 +208,7 @@ def _indexed_fits_minutes(
     if not minutes:
         return True
     target = minutes * 60
-    values = sessions.get(game.get("id"))
+    values = _history_value(sessions, game)
     if values:
         return _median(values) <= target * 1.5
     if estimate_cache is not None:
@@ -439,7 +449,7 @@ def pick_games(
                     # Preserve the legacy fallback for naive timestamps.
                     days = None
         if days is None:
-            dt = history_recent.get(game.get("id"))
+            dt = _history_value(history_recent, game)
             if dt is not None:
                 days = max(0, (now - dt).days)
         reason_key = None

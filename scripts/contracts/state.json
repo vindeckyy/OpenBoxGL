@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "app_version": "2.1.0",
+  "app_version": "3.0.0",
   "schema_version": 7,
   "format": "openbox-library",
   "envelope_fields": [

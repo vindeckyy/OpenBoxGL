@@ -1,6 +1,6 @@
 [
   {
-    "api_version": 1,
+    "api_version": 2,
     "author": "OpenBox",
     "commands": [],
     "description": "Example after_session hook that keeps library statistics compatible with plugin workflows. Local-only: install the directory or a ZIP with POST /api/plugins/install, or via the Plugins manager.",
@@ -16,7 +16,7 @@
     "version": "1.0.0"
   },
   {
-    "api_version": 1,
+    "api_version": 2,
     "author": "OpenBox",
     "commands": [
       {

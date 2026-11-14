@@ -140,51 +140,46 @@ class CliBranchTests(unittest.TestCase):
         self.assertIn("OpenBox is running", err)
 
     def test_migrate_then_rollback_with_yes(self):
-        original = self.primary.read_bytes()
         code, out, _err = self._run("--migrate-library")
         self.assertEqual(code, library_cli.EXIT_OK)
         self.assertIn('"migrated": true', out)
-        code, _out, _err = self._run("--rollback-library", "--yes")
-        self.assertEqual(code, library_cli.EXIT_OK)
-        self.assertEqual(self.primary.read_bytes(), original)
+        migrated = self.primary.read_bytes()
+        code, _out, err = self._run("--rollback-library", "--yes")
+        self.assertEqual(code, library_cli.EXIT_USAGE)
+        self.assertIn("removed in 3.0", err)
+        self.assertEqual(self.primary.read_bytes(), migrated)
 
     def test_interactive_rollback_needs_the_typed_word(self):
         self._run("--migrate-library")
         migrated = self.primary.read_bytes()
-        fake_tty = mock.Mock()
-        fake_tty.isatty.return_value = True
-        with mock.patch("sys.stdin", fake_tty):
-            code, _out, err = self._run("--rollback-library", input_fn=lambda _prompt: "no")
-        self.assertEqual(code, library_cli.EXIT_REFUSED)
-        self.assertIn("cancelled", err)
+        code, _out, err = self._run("--rollback-library", input_fn=lambda _prompt: "no")
+        self.assertEqual(code, library_cli.EXIT_USAGE)
+        self.assertIn("removed in 3.0", err)
         self.assertEqual(self.primary.read_bytes(), migrated)
-        with mock.patch("sys.stdin", fake_tty):
-            code, _out, _err = self._run("--rollback-library", input_fn=lambda _prompt: "ROLLBACK")
-        self.assertEqual(code, library_cli.EXIT_OK)
+        code, _out, err = self._run("--rollback-library", input_fn=lambda _prompt: "ROLLBACK")
+        self.assertEqual(code, library_cli.EXIT_USAGE)
+        self.assertIn("2.1.0", err)
+        self.assertEqual(self.primary.read_bytes(), migrated)
 
     def test_rollback_without_yes_and_without_a_tty_refuses(self):
         self._run("--migrate-library")
-        not_a_tty = mock.Mock()
-        not_a_tty.isatty.return_value = False
-        with mock.patch("sys.stdin", not_a_tty):
-            code, _out, err = self._run("--rollback-library")
-        self.assertEqual(code, library_cli.EXIT_REFUSED)
-        self.assertIn("--yes", err)
+        migrated = self.primary.read_bytes()
+        code, _out, err = self._run("--rollback-library")
+        self.assertEqual(code, library_cli.EXIT_USAGE)
+        self.assertIn("removed in 3.0", err)
+        self.assertEqual(self.primary.read_bytes(), migrated)
 
     def test_rollback_refuses_when_the_prompt_gets_no_answer(self):
-        """A console-less child (Windows hands one a NUL stdin) must refuse, not crash."""
+        """A removed command exits 4 before it would have read stdin."""
         self._run("--migrate-library")
         migrated = self.primary.read_bytes()
-        fake_tty = mock.Mock()
-        fake_tty.isatty.return_value = True
 
         def no_answer(_prompt):
             raise EOFError
 
-        with mock.patch("sys.stdin", fake_tty):
-            code, _out, err = self._run("--rollback-library", input_fn=no_answer)
-        self.assertEqual(code, library_cli.EXIT_REFUSED)
-        self.assertIn("--yes", err)
+        code, _out, err = self._run("--rollback-library", input_fn=no_answer)
+        self.assertEqual(code, library_cli.EXIT_USAGE)
+        self.assertIn("removed in 3.0", err)
         self.assertEqual(self.primary.read_bytes(), migrated)
 
 

@@ -27,7 +27,7 @@ def _make_plugin(root, plugin_id="vendor.cfg", emulator_id="mame"):
         "id": plugin_id,
         "name": "Vendor Config",
         "version": "1.0.0",
-        "api_version": 1,
+        "api_version": 2,
         "entry": "plugin.py",
         "hooks": ["emulator"],
         "permissions": [],

@@ -110,6 +110,25 @@ class StateFutureVersionError(StateCorruptError):
     code = "STATE_FUTURE_VERSION"
 
 
+class StateSchemaTooOldError(StateCorruptError):
+    """The library is older than schema 7. Startup does not rewrite it (ADR 0108)."""
+
+    code = "STATE_SCHEMA_TOO_OLD"
+
+
+def schema_too_old_detail(version: int) -> str:
+    """Stable refusal text. Schema 6 names the migrate command; older schemas name OpenBox 2.1."""
+    if version == 6:
+        return (
+            "This library is schema 6. OpenBox 3.0 does not upgrade it on startup. "
+            "Run openbox --migrate-library to upgrade it. The file was not changed."
+        )
+    return (
+        f"This library is schema {version}. OpenBox 3.0 does not upgrade libraries older than schema 6. "
+        "Open it with OpenBox 2.1 first. The file was not changed."
+    )
+
+
 class StateMigrationError(StateCorruptError):
     """A library migration failed; the original primary was not replaced."""
 
@@ -525,8 +544,13 @@ def _validate_state(state: dict[str, Any]) -> None:
             raise StateCorruptError(f"OpenBox library.json has a game without an identity at index {index}.")
 
 
-def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
-    """Normalize legacy state through explicit migrations while retaining unknown fields."""
+def normalize_state(raw: Any, *, migrate: bool = True) -> tuple[dict[str, Any], bool]:
+    """Normalize legacy state through explicit migrations while retaining unknown fields.
+
+    ``migrate=False`` is the request path: a library older than schema 7 is refused
+    and nothing is rewritten. Callers that still apply history in memory (save,
+    recover, snapshot restore) keep the default.
+    """
     changed = False
     if isinstance(raw, list):
         state: dict[str, Any] = {"games": raw, "schema_version": 1}
@@ -547,9 +571,12 @@ def normalize_state(raw: Any) -> tuple[dict[str, Any], bool]:
         )
     if version < 1:
         raise StateCorruptError(f"OpenBox library.json uses unsupported schema version {version}.")
+    if not migrate and version < STATE_SCHEMA_VERSION:
+        raise StateSchemaTooOldError(schema_too_old_detail(version))
     if "games" in state and not isinstance(state.get("games"), list):
         raise StateCorruptError("OpenBox library.json has an invalid games collection.")
-    changed |= _apply_migrations(state, version)
+    if migrate:
+        changed |= _apply_migrations(state, version)
     changed |= _ensure_defaults(state)
     from settings_schema import prune_unknown_settings
     if prune_unknown_settings(state):
@@ -839,13 +866,11 @@ class JsonStateStore:
             raise StateCorruptError(
                 f"Unable to read {self.path}. The original file was preserved; restore or inspect it before continuing."
             ) from error
-        if raw_schema_version(raw) < STATE_SCHEMA_VERSION:
-            # Pre-v7 libraries migrate under this lock: the v6 copy, the v7
-            # primary and the report are all written before the load returns.
-            from pkg.state import library_v7
-
-            state, _report = library_v7.migrate_locked(self)
-            return state, False
+        version = raw_schema_version(raw)
+        if 1 <= version < STATE_SCHEMA_VERSION:
+            # Opening a library never migrates it. Schema 6 waits for
+            # --migrate-library; schema 1–5 still needs OpenBox 2.1 (ADR 0108).
+            raise StateSchemaTooOldError(schema_too_old_detail(version))
         if (
             isinstance(raw, dict)
             and raw.get("schema_version") == STATE_SCHEMA_VERSION
@@ -870,11 +895,22 @@ class JsonStateStore:
                 # Runtime sessions are never stored in library.json; they come back from sessions.json.
                 raw["active_sessions"] = read_sessions_file(self.path.parent)
                 _resolve_portable_paths(raw)
+                self._finish_migration_marker()
                 return raw, False
-        state, changed = normalize_state(raw)
+        state, changed = normalize_state(raw, migrate=False)
         # A v7 file that still carries active_sessions is rewritten without them.
         _resolve_portable_paths(state)
+        self._finish_migration_marker()
         return state, changed or (isinstance(raw, dict) and "active_sessions" in raw)
+
+    def _finish_migration_marker(self) -> None:
+        """Write a missing migration report, or drop a marker that outlived one."""
+        marker = self.path.parent / "migration-in-progress.json"
+        if not marker.is_file():
+            return
+        from pkg.state import library_v7
+
+        library_v7._finish_interrupted_migration(self.path.parent, self.path)
 
     def load(self) -> dict[str, Any]:
         with self._thread_lock:
@@ -906,8 +942,30 @@ class JsonStateStore:
             if not self.backup_path.is_file():
                 raise StateCorruptError(f"No last-known-good state exists at {self.backup_path}.")
             try:
-                state, _ = normalize_state(self._read_unlocked(self.backup_path))
-            except (OSError, _json_decode_error, UnicodeDecodeError, StateCorruptError) as error:
+                raw = self._read_unlocked(self.backup_path)
+            except (OSError, _json_decode_error, UnicodeDecodeError) as error:
+                raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
+            version = raw_schema_version(raw)
+            if version == 6:
+                # A schema 6 backup has to go through the migration writer so
+                # library.v6.backup.json keeps the bytes. In-memory normalize
+                # would replace the primary and the .bak with schema 7 and
+                # leave no v6 copy.
+                from backend_io import atomic_write_bytes
+                from pkg.state import library_v7
+
+                try:
+                    atomic_write_bytes(self.path, self.backup_path.read_bytes())
+                    state, _report = library_v7.migrate_locked(self)
+                except (OSError, StateCorruptError) as error:
+                    raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
+                if not isinstance(state, dict):
+                    raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}")
+                self._remember(state)
+                return state
+            try:
+                state, _ = normalize_state(raw)
+            except (OSError, StateCorruptError) as error:
                 raise StateCorruptError(f"The last-known-good state is also unusable: {self.backup_path}") from error
             self._write_unlocked(state, adopt=True)
             return state
@@ -986,8 +1044,10 @@ class JsonStateStore:
                 if backup_tmp.exists():
                     backup_tmp.unlink(missing_ok=True)
 
-            self._write_sessions_unlocked(state.get("active_sessions"))
             os.replace(temporary, self.path)
+            # Sessions are a second file. Unlinking them before the library
+            # replace drops crash recovery when the process dies in between.
+            self._write_sessions_unlocked(state.get("active_sessions"))
             # Every full write starts from the in-memory state, which already
             # carries any coalesced mutation, so a pending coalesced snapshot is
             # now older than the file. Flushing it later would roll this write

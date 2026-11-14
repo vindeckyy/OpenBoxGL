@@ -1225,27 +1225,36 @@ def _build_public_state():
         now = time.monotonic()
         cached = PLUGIN_LIBRARY_CACHE
         with PLUGIN_LIBRARY_LOCK:
-            if cached["payload"] is not None and cached.get("state_signature") == state_signature:
+            epoch = PLUGIN_EPOCH["value"]
+            if (
+                cached["payload"] is not None
+                and cached.get("state_signature") == state_signature
+                and cached.get("epoch") == epoch
+            ):
                 # Return cached result immediately; refresh in background if stale
                 result = cached["payload"]
                 if now - cached["at"] >= PLUGIN_LIBRARY_TTL and not _PLUGIN_REFRESH_IN_PROGRESS["value"]:
                     _PLUGIN_REFRESH_IN_PROGRESS["value"] = True
                     refresh_games = games
                     refresh_signature = state_signature
+                    refresh_epoch = epoch
 
-                    def _refresh_plugins(games_snapshot=refresh_games, expected_signature=refresh_signature):
+                    def _refresh_plugins(games_snapshot=refresh_games, expected_signature=refresh_signature, expected_epoch=refresh_epoch):
                         try:
                             fresh = run_pl(data_parent / "plugins", "library", {"games": games_snapshot})
                             with state_lock:
                                 if openbox.STATE_STORE.signature() != expected_signature:
                                     return
                                 with PLUGIN_LIBRARY_LOCK:
+                                    if PLUGIN_EPOCH["value"] != expected_epoch:
+                                        return
+                                    PLUGIN_EPOCH["value"] += 1
                                     PLUGIN_LIBRARY_CACHE.update({
                                         "at": time.monotonic(),
                                         "payload": fresh,
                                         "state_signature": expected_signature,
+                                        "epoch": PLUGIN_EPOCH["value"],
                                     })
-                                    PLUGIN_EPOCH["value"] += 1
                             with PUBLIC_STATE_LOCK:
                                 PUBLIC_STATE_CACHE.update({"signature": None, "payload": None, "raw": None, "raw_gzip": None, "games_by_id": None})
                         except Exception:
@@ -1258,13 +1267,14 @@ def _build_public_state():
             else:
                 # First call or changed state: block and populate cache
                 result = run_pl(data_parent / "plugins", "library", {"games": games})
-                cached.update({"at": now, "payload": result, "state_signature": state_signature})
+                cached.update({"at": now, "payload": result, "state_signature": state_signature, "epoch": epoch})
         decorated = result.get("games", games) if isinstance(result, dict) else games
     if isinstance(decorated, list) and len(decorated) == len(games) and all(isinstance(game, dict) for game in decorated):
         games = decorated
         for index, game in enumerate(games):
             game["id"] = index
-            game.setdefault("game_id", state["games"][index].get("game_id", ""))
+            source = raw_games[index] if index < len(raw_games) else {}
+            game.setdefault("game_id", source.get("game_id", "") if isinstance(source, dict) else "")
     # Importer plugins (F1d): merge `library_source` games with plugin-
     # namespaced ids and provenance. Runs on every build, so disabling or
     # removing a plugin drops its games on the next rebuild.

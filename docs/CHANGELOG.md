@@ -4,12 +4,28 @@ All notable changes to OpenBox are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [3.0.0] - 2026-11-13
+
+### Added
+- **JSON stays the canonical library (ADR 0108).** The 2026-11-13 Apple M4 run met the 1500 ms write budget (favorite p95 1174.2 ms, bulk p95 1319.5 ms) and missed the 1500 MB RSS budget (2163.3 MB after the benchmark). The formal scale stays 20,000. 3.0.0 is not tagged on this run. The SQLite file remains a derived read model.
+- **An upgrade guide.** `docs/upgrade-3.0.md` covers schema 6, schema 1–5, plugin API v2, and the Python 3.11 floor. A 2.1 build can still open a 3.0 library.
 
 ### Changed
-- **State machines are declared once (ADR 0107).** `pkg/state/machines.py` lists every lifecycle (operations, legacy jobs, facades, sessions, previews, storefront scans, media queue, and the declared-only UI machines) with its states and allowed transitions; the operation service validates against that table, and the UI pollers share one set of job-state literals instead of re-declaring them.
+- **Opening a library does not migrate it.** Schema 7 opens. Schema 6 and older raise `STATE_SCHEMA_TOO_OLD` and the file is left unchanged. `openbox --migrate-library` is the only writer that upgrades a schema 6 library. Schema 1–5 names OpenBox 2.1 as the build that can bring the library forward.
+- **Python 3.11 is the floor.** Source launches on 3.10 stop before bind. CI runs 3.11 and 3.12. The release container stays `ubuntu:22.04` and pins CPython `3.12.16-1+jammy1` so the AppImage's highest glibc symbol stays `GLIBC_2.35`.
+- **State machines are declared once (ADR 0107).** `pkg/state/machines.py` lists every lifecycle (operations, legacy jobs, facades, sessions, previews, storefront scans, media queue, and the declared-only UI machines) with its states and allowed transitions; the operation service validates against that table, and the UI pollers share one set of job-state literals instead of re-declaring them. `legacy_job` is exposed only through `/api/v2/jobs`.
+
+### Removed
+- `openbox --rollback-library`. The command exits 4, changes no file, and names OpenBox 2.1.0 as the build that restores `library.v6.backup.json`. Existing backup files are left in place. The HTTP route stays registered and returns `409` `ROLLBACK_REMOVED`.
+- The plugin API v1 runner. A manifest must set `"api_version": 2`. A missing version and an explicit `1` fail with `PLUGIN_API_RETIRED`. `plugin_runner.py` is gone.
+- Python 3.10 runtime support.
 
 ### Fixed
+- A schema 6 library no longer stops startup before the window can explain `STATE_SCHEMA_TOO_OLD`. Recovering a schema 6 backup writes `library.v6.backup.json` first. An interrupted migration report is finished on the next open, and a leftover marker does not rewrite a report that already exists.
+- Plugin ids `data`, `credentials`, and `plugins-state.json` are rejected. Sandboxed plugins cannot set `LD_*` or `DYLD_*` on an emulator, cannot read a data directory that sits inside the application tree, and cannot import a storefront row whose launch command is a shell or a system binary.
+- Media downloads refuse private, link-local, multicast, and NAT64 addresses, including a redirect onto one. ScreenScraper and SteamGridDB media URLs use that check.
+- Title duplicate matching no longer treats "Assassin's Creed" and "Revelations", or "Super Mario" and "Super Mario World", as the same game. Disc grouping understands `(Disc 1 of 3)` and does not merge `Hillside 1` with `Hillside 2`. MAME clones that share a parent zip stay separate. A file-root save restore cannot overwrite a sibling file.
+- Search matches a word in the middle of a title. A hash such as `#/q/game/game/42` keeps the selection. Holding Enter in Big Box launches once. Statistics sync keeps other devices' records. Backups redact the museum kiosk PIN. MAME is launched with `-rompath` and the set name. `open` / `xdg-open` no longer ends the session the moment the opener returns.
 - Starting a metadata database sync while auto-match is running no longer wipes the match's visible progress, and vice versa: `/api/metadata/status` reports the sync as `job` and the match as `match_job`.
 - The Launch Audit keeps its run button in the running state when a run is `cancelling`, instead of offering a rerun mid-cancellation.
 

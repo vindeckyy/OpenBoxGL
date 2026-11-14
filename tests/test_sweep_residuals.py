@@ -550,7 +550,7 @@ class TestM3uWritePermissions(unittest.TestCase):
             with mock.patch.object(openbox, "APP_DIR", data_dir), mock.patch.object(
                 openbox, "DATA", data_dir / "library.json"
             ), mock.patch.object(openbox, "STATE_STORE", JsonStateStore(data_dir / "library.json")):
-                openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}), encoding="utf-8")
+                openbox.STATE_STORE.save({"schema_version": 6, "games": [], "settings": {}})
                 preview = create_preview_record(
                     sources=[{"type": "files", "id": "f1", "paths": [str(disc1)]}],
                     options={},

@@ -27,7 +27,6 @@ from pkg.state.machines import job_result_state
 from pkg.state.operations import get_operation_service
 from pkg.state import library_v7
 from routes.registry import route
-from state_store import freeze_library_writes
 from webapp_state import DATA, JOB_MANAGER
 
 
@@ -60,14 +59,16 @@ def migration_acknowledge(handler, payload):
 
 @route("POST", "/api/v2/setup/migration/rollback", spec="handlers.setup.migration_rollback")
 def migration_rollback(handler, payload):
-    """Restore the copy of the old library. The server freezes its writes and stops after."""
-    if not bool(payload.get("confirmed")):
-        handler.send_json(200, library_v7.rollback(DATA.parent, confirmed=False))
+    """Refuse. OpenBox 3.0 does not restore library.v6.backup.json."""
+    try:
+        library_v7.rollback(
+            DATA.parent,
+            confirmed=bool(payload.get("confirmed")),
+            allow_running=True,
+        )
+    except library_v7.RollbackRefused as error:
+        handler.send_json(409, {"error": str(error), "code": "ROLLBACK_REMOVED"})
         return
-    result = library_v7.rollback(DATA.parent, confirmed=True, allow_running=True)
-    freeze_library_writes()
-    handler.send_json(200, result)
-    handler.shutdown({"force": False})
 
 
 @route("GET", "/api/v2/compat/report", spec="handlers.setup.compat_report")

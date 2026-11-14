@@ -113,25 +113,26 @@ class RollbackTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    def _assert_refused(self):
+        before = self.primary.read_bytes()
+        backup = (self.directory / "library.v6.backup.json").read_bytes()
+        with self.assertRaises(library_v7.RollbackRefused) as raised:
+            library_v7.rollback(self.directory, confirmed=True)
+        self.assertIn("removed in 3.0", str(raised.exception))
+        self.assertIn("library.v6.backup.json", str(raised.exception))
+        self.assertEqual(self.primary.read_bytes(), before)
+        self.assertEqual((self.directory / "library.v6.backup.json").read_bytes(), backup)
+        self.assertFalse((self.directory / "rollback-report.json").exists())
+
     def test_preview_changes_nothing(self):
         before = self.primary.read_bytes()
-        result = library_v7.rollback(self.directory, confirmed=False)
-        self.assertEqual(result["status"], "confirmation_required")
+        with self.assertRaises(library_v7.RollbackRefused):
+            library_v7.rollback(self.directory, confirmed=False)
         self.assertEqual(self.primary.read_bytes(), before)
 
     def test_rollback_restores_exact_v6_bytes_and_reports_discarded_edits(self):
         self.store.update(lambda state: state["games"].append({"game_id": "game-added", "name": "Added later"}))
-        v7_bytes = self.primary.read_bytes()
-        preview = library_v7.rollback(self.directory, confirmed=False)
-        self.assertEqual(preview["lost"]["games_added"], 1)
-        result = library_v7.rollback(self.directory, confirmed=True)
-        self.assertEqual(self.primary.read_bytes(), self.original)
-        self.assertEqual((self.directory / "library.json.bak").read_bytes(), self.original)
-        self.assertEqual((self.directory / result["kept"]).read_bytes(), v7_bytes)
-        self.assertEqual(result["lost"]["examples"]["games_added"], ["game-added"])
-        self.assertFalse((self.directory / "migration-report.json").exists())
-        restored = json.loads((self.directory / "rollback-report.json").read_text(encoding="utf-8"))
-        self.assertEqual(restored["restored"], "library.v6.backup.json")
+        self._assert_refused()
 
     def test_rollback_refuses_while_a_server_answers_on_the_recorded_port(self):
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -139,24 +140,21 @@ class RollbackTests(unittest.TestCase):
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
         (self.directory / "server.port").write_text(str(listener.getsockname()[1]), encoding="utf-8")
-        before = self.primary.read_bytes()
-        with self.assertRaises(library_v7.RollbackRefused):
-            library_v7.rollback(self.directory, confirmed=True)
-        self.assertEqual(self.primary.read_bytes(), before)
+        self._assert_refused()
 
     def test_rollback_refuses_while_sessions_are_recorded(self):
         (self.directory / "sessions.json").write_text(
             json.dumps({"format": 1, "sessions": [{"game_id": "game-00000"}]}), encoding="utf-8"
         )
-        before = self.primary.read_bytes()
-        with self.assertRaises(library_v7.RollbackRefused):
-            library_v7.rollback(self.directory, confirmed=True)
-        self.assertEqual(self.primary.read_bytes(), before)
+        self._assert_refused()
 
     def test_rollback_refuses_without_a_v6_copy(self):
         (self.directory / "library.v6.backup.json").unlink()
-        with self.assertRaises(library_v7.RollbackRefused):
+        before = self.primary.read_bytes()
+        with self.assertRaises(library_v7.RollbackRefused) as raised:
             library_v7.rollback(self.directory, confirmed=True)
+        self.assertIn("removed in 3.0", str(raised.exception))
+        self.assertEqual(self.primary.read_bytes(), before)
 
 
 class CheckAndRepairTests(unittest.TestCase):

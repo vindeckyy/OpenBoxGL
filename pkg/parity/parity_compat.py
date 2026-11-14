@@ -165,8 +165,8 @@ def build_report(data_dir: Path, *, root: Path) -> dict[str, Any]:
     }
 
 
-# The formal scale for 2.0 (plan section 13.1). A library above it is worth
-# saying out loud before the migration runs.
+# The formal scale stays 20,000. The 2026-11-13 50k run met the write budget
+# and missed the 1500 MB RSS budget, so ADR 0108 does not raise it.
 READINESS_LIBRARY_LIMIT = 20000
 
 

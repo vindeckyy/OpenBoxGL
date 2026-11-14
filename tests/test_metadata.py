@@ -460,7 +460,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("Metadata.xml", xml)
         build_database(package, self.db_path)
-        self.openbox.DATA.write_text(json.dumps(
+        self.openbox.STATE_STORE.save(
                 {
                     "schema_version": 6,
                     "games": [
@@ -470,7 +470,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            ), encoding="utf-8")
+            )
 
     def tearDown(self):
         close_db_connections()
@@ -624,7 +624,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         return dup_db
 
     def test_preview_import_batch_and_expiry(self):
-        self.openbox.DATA.write_text(json.dumps(
+        self.openbox.STATE_STORE.save(
                 {
                     "schema_version": 6,
                     "games": [
@@ -632,7 +632,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            ), encoding="utf-8")
+            )
         preview = create_match_preview_record(import_batch_id="batch-1", data_dir=self.openbox.DATA)
         self.assertEqual(preview["import_batch_id"], "batch-1")
         with self.assertRaises(PreviewNotFound):

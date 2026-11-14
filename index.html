@@ -12,7 +12,7 @@
   <section id="migrationGate" class="migration-gate" hidden aria-labelledby="migrationGateTitle">
     <div class="migration-gate-card">
       <h2 id="migrationGateTitle" data-i18n="migration.title">Your library was upgraded</h2>
-      <p data-i18n="migration.intro">OpenBox upgraded the library file to the new format. Nothing was lost: a copy of the old file is kept.</p>
+      <p data-i18n="migration.intro">OpenBox upgraded the library file to the new format. A copy of the old file is kept. OpenBox 3.0 does not roll it back; OpenBox 2.1.0 can restore library.v6.backup.json.</p>
       <dl class="migration-gate-facts">
         <dt data-i18n="migration.from">Before</dt><dd id="migrationFrom"></dd>
         <dt data-i18n="migration.to">After</dt><dd id="migrationTo"></dd>
@@ -26,7 +26,6 @@
       <div class="extras">
         <button type="button" class="icon-button" id="migrationBackupButton" data-i18n="migration.backup_first">Back up first</button>
         <button type="button" class="icon-button" id="migrationOpen" data-i18n="migration.open">Open the library</button>
-        <button type="button" class="icon-button" id="migrationRollback" data-i18n="migration.rollback">Roll back</button>
       </div>
       <p class="description" id="migrationStatus" aria-live="polite"></p>
     </div>

@@ -32,7 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 2.1.x | Yes (current) |
+| 3.0.x | Yes (current) |
+| 2.1.x | No — upgrade required |
 | 2.0.x | No — upgrade required |
 | 1.19.x | No — upgrade required |
 | 1.18.x | No — upgrade required |
@@ -61,7 +62,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 2.1.x line is the current supported line; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 3.0.x line is the current supported line; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
@@ -135,7 +136,7 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 | Extra-app paths (`applications`, `versions`, `documents`) | The same escape and rebase risks as game paths | The same token rules; a move rebases each path slot by its own key | `tests/test_portable_library.py` (`ExtraAppPathTests`) |
 | Move wizard | A stale preview applies to a library that has changed | Apply recomputes the plan under the store lock and refuses with `MOVE_PLAN_STALE` | `tests/test_library_move_http.py` |
 | Library migration v6 to v7 | A crash or full disk leaves a truncated library | Backup written and fsynced first; primary replaced atomically; a failed step leaves the original file | `tests/test_state_migration_rollback.py` |
-| Rollback | Rollback writes under a running server | Rollback refuses while a server answers on the recorded port | `tests/test_state_migration_rollback.py` |
+| Rollback | A 3.0 process restores the v6 copy | The command was removed in 3.0. It exits 4 and changes no file. OpenBox 2.1.0 restores library.v6.backup.json | `tests/test_state_migration_rollback.py` |
 | Library format newer than this build | An older build rewrites a newer library | Refused with `STATE_FUTURE_VERSION` without rewriting the file | `tests/test_state_v7.py` |
 | Backup restore (format 2) | A tampered or unlisted member is written | Every member's size and SHA-256 are checked before any write; unlisted and missing members refuse the archive | `tests/test_backup_format_v2.py` |
 | Backup archives | Path traversal and symlink members | Entries are validated before extraction; symlinks are refused | `tests/test_path_traversal.py`, `tests/test_symlink_refusals.py` |
@@ -144,7 +145,7 @@ This addendum lists what 2.0 adds to the attack surface, the control for each it
 | Host channel | A host built for another major API drives the server | `X-OpenBox-API-Version` is checked; a mismatch is refused with `HOST_API_UNSUPPORTED` before routing | `tests/test_api_v2_contract.py` |
 | Retired API surfaces | The v1, unversioned, or legacy host paths return to the public surface | Removed in 2.1; requests get `410` with a replacement, and the environment variable cannot re-enable them | `tests/test_retired_surfaces.py`, `tests/test_api_v2_contract.py` |
 | Frontend requests | A request reaches an unversioned or unknown endpoint | Every `api()` call site resolves to an `/api/v2` route; direct asset URLs must be versioned | `tests/test_frontend_endpoint_contract.py`, `scripts/check_api_paths.py` |
-| Failure messages | A code is shown raw or not at all | Five codes map to explanations; a test requires an English explanation for each | `tests/test_api_problem_details.py` |
+| Failure messages | A code is shown raw or not at all | Known codes, including STATE_SCHEMA_TOO_OLD, map to explanations; a test requires an English explanation for each | `tests/test_api_problem_details.py` |
 | macOS bundle | An ad-hoc build is described as notarized | Notarization is claimed only with `spctl` evidence; the entitlements file is empty by default; the gate checks the pipeline | `tests/test_macos_release.py` |
 
 Gaps (not controls):

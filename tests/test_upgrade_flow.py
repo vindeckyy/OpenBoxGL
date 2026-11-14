@@ -71,7 +71,8 @@ class MigrationStatusTests(unittest.TestCase):
         self.migrate()
         status = library_v7.migration_status(self.data)
         self.assertEqual(status["report"]["counts"]["games"], 2)
-        self.assertEqual(status["rollback_command"], "openbox --rollback-library")
+        self.assertNotIn("rollback_command", status)
+        self.assertNotIn("rollback", status["report"])
 
 
 class RollbackTests(unittest.TestCase):
@@ -85,26 +86,17 @@ class RollbackTests(unittest.TestCase):
         self.primary.write_bytes(self.original)
         JsonStateStore(self.primary).migrate_primary_to_v7()
 
-    def test_the_rollback_needs_confirmation(self):
-        preview = library_v7.rollback(self.data, confirmed=False)
-        self.assertEqual(preview["status"], "confirmation_required")
-        self.assertTrue(self.primary.is_file())
-        self.assertEqual(json.loads(self.primary.read_text(encoding="utf-8"))["schema_version"], 7)
-
-    def test_a_confirmed_rollback_restores_the_v6_file(self):
-        library_v7.rollback(self.data, confirmed=True, allow_running=True)
-        self.assertEqual(self.primary.read_bytes(), self.original)
-        self.assertTrue((self.data / "rollback-report.json").is_file())
-
-    def test_a_rollback_while_the_server_runs_is_refused_by_default(self):
-        import socket
-
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            listener.listen(1)
-            (self.data / "server.port").write_text(str(listener.getsockname()[1]), encoding="utf-8")
-            with self.assertRaises(library_v7.RollbackRefused):
-                library_v7.rollback(self.data, confirmed=True)
+    def test_rollback_is_refused_and_changes_no_file(self):
+        before = self.primary.read_bytes()
+        for confirmed, allow_running in ((False, False), (True, True)):
+            with self.subTest(confirmed=confirmed):
+                with self.assertRaises(library_v7.RollbackRefused) as raised:
+                    library_v7.rollback(self.data, confirmed=confirmed, allow_running=allow_running)
+                self.assertIn("removed in 3.0", str(raised.exception))
+                self.assertIn("2.1.0", str(raised.exception))
+                self.assertEqual(self.primary.read_bytes(), before)
+                self.assertFalse((self.data / "rollback-report.json").exists())
+                self.assertEqual(json.loads(self.primary.read_text(encoding="utf-8"))["schema_version"], 7)
 
 
 class FrozenWritesTests(unittest.TestCase):

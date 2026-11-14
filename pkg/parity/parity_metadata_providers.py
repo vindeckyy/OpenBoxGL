@@ -171,8 +171,10 @@ def clean_media_url(url, *, resolver=socket.getaddrinfo):
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
+    from backend_io import is_public_ip
+
     if literal is not None:
-        return candidate if literal.is_global else ""
+        return candidate if is_public_ip(literal) else ""
     if resolver is False:
         return candidate
     try:
@@ -181,7 +183,7 @@ def clean_media_url(url, *, resolver=socket.getaddrinfo):
         return ""
     for address in addresses:
         try:
-            if not ipaddress.ip_address(str(address).split("%", 1)[0]).is_global:
+            if not is_public_ip(str(address).split("%", 1)[0]):
                 return ""
         except ValueError:
             return ""

@@ -38,7 +38,7 @@ function Resolve-Python {
         $found = Get-Command $name -ErrorAction SilentlyContinue
         if ($found) { return $found.Source }
     }
-    throw 'No Python 3 interpreter found. Install Python 3.10+ or set OPENBOX_PYTHON.'
+    throw 'No Python 3 interpreter found. Install Python 3.11+ or set OPENBOX_PYTHON.'
 }
 
 function Find-NativeHost {

@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
-          - "3.10"
+          - "3.11"
           - "3.12"
 
     steps:
@@ -141,7 +141,7 @@ jobs:
       fail-fast: false
       matrix:
         runner: [macos-15, macos-15-intel]
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout
@@ -159,7 +159,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # The suite is standalone scripts. The runner's system python3 is
-      # older than the 3.10 floor, so the setup-python interpreter is put
+      # older than the 3.11 floor, so the setup-python interpreter is put
       # first on the PATH.
       - name: Run test suite
         run: |

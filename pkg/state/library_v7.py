@@ -1,4 +1,4 @@
-"""Library format v7: the v6 copy, migration report, rollback, integrity check, and repair.
+"""Library format v7: the v6 copy, migration report, integrity check, and repair.
 
 Every function here works on one data directory, the folder that holds
 ``library.json``. Files change only through atomic writers, and migration runs
@@ -11,8 +11,9 @@ Files written beside ``library.json``:
 - ``migration-in-progress.json``: written before the backup, removed once the
   report exists. Its presence after a crash means the report is still owed.
 - ``migration-report.json``: what the last migration did.
-- ``library.v7.kept-<stamp>.json``: the v7 primary that a rollback replaced.
-- ``rollback-report.json``: what a rollback restored and what it discarded.
+- ``library.v7.kept-<stamp>.json``: kept by OpenBox 2.1 when it restored a v6 copy.
+  3.0 does not write this file.
+- ``rollback-report.json``: written by OpenBox 2.1. 3.0 does not restore a library.
 """
 
 from __future__ import annotations
@@ -29,8 +30,6 @@ from pathlib import Path
 from typing import Any
 
 from backend_io import atomic_write_bytes
-from notifications import add_notification
-from pkg.platform_compat import try_file_lock
 from pkg.state import media_manifest
 from pkg.state import paths as library_paths
 from state_store import (
@@ -40,13 +39,14 @@ from state_store import (
     JsonStateStore,
     StateCorruptError,
     StateFutureVersionError,
+    StateSchemaTooOldError,
     StateBackupError,
     StateMigrationError,
     app_version,
+    schema_too_old_detail,
     normalize_state,
     prune_trash,
     raw_schema_version,
-    read_sessions_file,
 )
 
 LOGGER = logging.getLogger("openbox.state")
@@ -57,8 +57,11 @@ REPORT_NAME = "migration-report.json"
 MARKER_NAME = "migration-in-progress.json"
 ROLLBACK_REPORT_NAME = "rollback-report.json"
 REPORT_FORMAT = 1
-ROLLBACK_COMMAND = "openbox --rollback-library"
 EXAMPLE_LIMIT = 20
+ROLLBACK_REMOVED = (
+    "openbox --rollback-library was removed in 3.0. "
+    "Use OpenBox 2.1.0 to restore library.v6.backup.json."
+)
 
 Progress = Callable[[str, dict[str, Any]], None]
 
@@ -160,7 +163,6 @@ def _build_report(
         "pre_migration_snapshot": snapshot,
         "counts": counts,
         "warnings": warnings,
-        "rollback": ROLLBACK_COMMAND,
         "reconstructed": reconstructed,
     }
 
@@ -176,6 +178,15 @@ def _finish_interrupted_migration(data_dir: Path, primary: Path) -> dict[str, An
     marker = _read_json_file(data_dir / MARKER_NAME)
     if marker is None:
         return None
+    existing = _read_report(data_dir / REPORT_NAME)
+    if existing:
+        # The report already describes the migration. A leftover marker must
+        # not replace those counts with whatever the library looks like now.
+        try:
+            (data_dir / MARKER_NAME).unlink(missing_ok=True)
+        except OSError:
+            LOGGER.warning("The migration marker could not be removed.", exc_info=True)
+        return existing
     raw = _parse_primary(primary.read_bytes(), primary)
     state = raw if isinstance(raw, dict) else {}
     report = _build_report(
@@ -225,6 +236,12 @@ def migrate_locked(
         )
     if version == STATE_SCHEMA_VERSION:
         return None, _finish_interrupted_migration(data_dir, primary)
+    if version < 1:
+        raise StateCorruptError(
+            "OpenBox library.json must contain an object or legacy game list. The file was not changed."
+        )
+    if version < 6:
+        raise StateSchemaTooOldError(schema_too_old_detail(version))
 
     started_at = _utc_now()
     try:
@@ -257,13 +274,6 @@ def migrate_locked(
     store._rotate_snapshots(force=True)
     snapshot = _newest_snapshot(store)
     counts = counts_for(state)
-    add_notification(
-        state,
-        kind="library.migrated",
-        level="info",
-        title=f"Library upgraded to format {STATE_SCHEMA_VERSION}",
-        body=f"A v{version} copy is kept at {V6_BACKUP_NAME}. Settings > Library can roll it back.",
-    )
     emit("migrate", {"from_schema": version, "to_schema": STATE_SCHEMA_VERSION, "counts": counts})
 
     try:
@@ -347,7 +357,7 @@ def migration_status(data_dir: Path) -> dict[str, Any]:
     """What the last migration did, and whether the user has seen it yet.
 
     A migration is pending until the user acknowledges it, so the pre-app page can
-    show the report and offer a rollback before the library is used.
+    show the report before the library is used. 3.0 does not roll a library back.
     """
     data_dir = Path(data_dir)
     report = _read_report(data_dir / REPORT_NAME)
@@ -360,7 +370,6 @@ def migration_status(data_dir: Path) -> dict[str, Any]:
         "report": report,
         "backup_path": str(backup) if backup.is_file() else "",
         "acknowledged_at": str(acknowledged.get("acknowledged_at") or ""),
-        "rollback_command": ROLLBACK_COMMAND,
     }
 
 
@@ -376,71 +385,13 @@ def acknowledge_migration(data_dir: Path) -> dict[str, Any]:
 
 
 def rollback(data_dir: Path, *, confirmed: bool, allow_running: bool = False) -> dict[str, Any]:
-    """Restore the v6 copy as the primary library.
+    """Refuse. OpenBox 3.0 does not restore ``library.v6.backup.json``.
 
-    Without ``confirmed`` this only reports what would be discarded. Refuses
-    while OpenBox is running, while sessions are recorded, or when the copy
-    does not validate as v6. The replaced v7 file is kept, never deleted.
-
-    ``allow_running`` is for the in-app rollback only: the caller is the running
-    server, and it freezes the library writes and stops right after the restore.
+    The arguments are accepted so existing callers keep a stable signature.
+    Nothing is read and nothing is written.
     """
-    data_dir = Path(data_dir)
-    primary = data_dir / PRIMARY_NAME
-    backup = data_dir / V6_BACKUP_NAME
-    if not allow_running and server_running(data_dir):
-        raise RollbackRefused("OpenBox is running. Quit OpenBox before rolling back the library.")
-    if read_sessions_file(data_dir):
-        raise RollbackRefused(
-            "Sessions are still recorded in sessions.json. End the session before rolling back."
-        )
-    if not backup.is_file():
-        raise RollbackRefused(f"{V6_BACKUP_NAME} is missing, so there is no v6 copy to restore.")
-    backup_bytes = backup.read_bytes()
-    v6_raw = _parse_primary(backup_bytes, backup)
-    if raw_schema_version(v6_raw) >= STATE_SCHEMA_VERSION:
-        raise RollbackRefused(f"{V6_BACKUP_NAME} is not a v6 library, so it cannot be restored.")
-    try:
-        normalize_state(v6_raw)
-    except StateCorruptError as error:
-        raise RollbackRefused(f"{V6_BACKUP_NAME} does not validate: {error}") from error
-
-    current_bytes = primary.read_bytes() if primary.is_file() else b""
-    current_raw = _parse_primary(current_bytes, primary) if current_bytes else {}
-    lost = changes_since_migration(current_raw, v6_raw)
-    result: dict[str, Any] = {
-        "status": "rolled_back" if confirmed else "confirmation_required",
-        "backup": V6_BACKUP_NAME,
-        "lost": lost,
-    }
-    if not confirmed:
-        return result
-
-    with try_file_lock(data_dir / f".{PRIMARY_NAME}.lock") as held:
-        if not held:
-            raise RollbackRefused("Another OpenBox process is writing the library. Try again when it has exited.")
-        kept: Path | None = None
-        if current_bytes:
-            kept = data_dir / f"library.v7.kept-{_stamp()}.json"
-            atomic_write_bytes(kept, current_bytes)
-        atomic_write_bytes(primary, backup_bytes)
-        atomic_write_bytes(data_dir / f"{PRIMARY_NAME}.bak", backup_bytes)
-        (data_dir / REPORT_NAME).unlink(missing_ok=True)
-        (data_dir / MARKER_NAME).unlink(missing_ok=True)
-        report = {
-            "format": REPORT_FORMAT,
-            "app_version": app_version(),
-            "rolled_back_at": _utc_now(),
-            "restored": V6_BACKUP_NAME,
-            "restored_sha256": _sha256(backup_bytes),
-            "kept": kept.name if kept else None,
-            "lost": lost,
-            "warning": "Changes made after the migration are not in the restored library.",
-        }
-        _write_json(data_dir / ROLLBACK_REPORT_NAME, report)
-    result["kept"] = report["kept"]
-    result["report"] = report
-    return result
+    del data_dir, confirmed, allow_running
+    raise RollbackRefused(ROLLBACK_REMOVED)
 
 
 _SEVERITY = {
@@ -557,6 +508,8 @@ def check_library(data_dir: Path) -> dict[str, Any]:
     report["schema_version"] = version
     if version > STATE_SCHEMA_VERSION:
         findings.add("schema_future", f"schema {version}; this build supports {STATE_SCHEMA_VERSION}")
+    elif version < 6:
+        findings.add("schema_outdated", f"schema {version}; open it with OpenBox 2.1 before upgrading")
     elif version < STATE_SCHEMA_VERSION:
         findings.add("schema_outdated", f"schema {version}; run --migrate-library")
     if not isinstance(raw, dict):
@@ -621,7 +574,12 @@ def repair_library(data_dir: Path, *, refresh_backup: bool = False) -> dict[str,
     if server_running(data_dir):
         raise RollbackRefused("OpenBox is running. Quit OpenBox before repairing the library.")
     raw = _parse_primary(primary.read_bytes(), primary)
-    if raw_schema_version(raw) < STATE_SCHEMA_VERSION:
+    version = raw_schema_version(raw)
+    if version < 6:
+        raise RollbackRefused(
+            f"This library is schema {version}. Open it with OpenBox 2.1 before repairing it here."
+        )
+    if version < STATE_SCHEMA_VERSION:
         raise RollbackRefused("The library needs migration first. Run --migrate-library.")
     raw_trash = raw.get("trash") if isinstance(raw.get("trash"), list) else []
     trash_removed = len(raw_trash) - len(prune_trash(raw_trash))

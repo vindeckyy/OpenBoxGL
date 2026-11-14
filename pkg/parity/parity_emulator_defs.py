@@ -855,7 +855,20 @@ def build_adapter_argv(adapter, game, rom_path, prefix=None, data_dir="", which=
         if index and str(startup[index - 1]) == "-L":
             text = flatpak_core_path(text, prefix)
         args.append(text)
+    if _mame_rom_argument(adapter, args):
+        rom = Path(args[-1])
+        args[-1:] = ["-rompath", str(rom.parent), rom.stem]
     return args
+
+
+def _mame_rom_argument(adapter, args) -> bool:
+    """MAME treats a non-option argument as a driver name, not a zip path."""
+    if len(args) < 2:
+        return False
+    identity = f"{adapter.get('adapter_id', '')} {adapter.get('emulator_id', '')} {args[0]}".casefold()
+    if "mame" not in identity:
+        return False
+    return Path(str(args[-1])).suffix.casefold() in {".zip", ".7z"}
 
 
 def build_launch_command(definition, rom_path, prefix=None):
@@ -942,6 +955,20 @@ def _launch_emulator_id(game, args, emulator_id=""):
     return ""
 
 
+_TARGET_TOKENS = ("{path}", "{imagepath}", "{app_id}", "{lutris_id}", "{heroic_app_id}")
+
+
+def _command_includes_target(command: str) -> bool:
+    """True when the command already names the game, so the path must not be appended.
+
+    ``{Path}`` and storefront tokens (``{app_id}``, ``{lutris_id}``,
+    ``{heroic_app_id}``) are the target. Appending ``path`` again makes
+    ``open`` launch the opener binary and passes the ROM twice.
+    """
+    folded = str(command or "").casefold()
+    return any(token in folded for token in _TARGET_TOKENS)
+
+
 def resolve_launch(game, profiles, *, which=None, data_dir="", state=None, emulator_id=""):
     which = which or shutil.which
     path = str(game.get("path", "") or "")
@@ -957,7 +984,7 @@ def resolve_launch(game, profiles, *, which=None, data_dir="", state=None, emula
 
     if game_command:
         args = build_launch_args(game_command, game, path=launch_path, data_dir=data_dir)
-        if "{path}" not in game_command and "{ImagePath}" not in game_command:
+        if not _command_includes_target(game_command):
             args.append(launch_path)
         precedence = "game_launch"
     else:
@@ -972,7 +999,7 @@ def resolve_launch(game, profiles, *, which=None, data_dir="", state=None, emula
             profile_command = str(profiles.get(platform, "") or "").strip()
             if profile_command:
                 args = build_launch_args(profile_command, game, path=launch_path, data_dir=data_dir)
-                if "{path}" not in profile_command and "{ImagePath}" not in profile_command:
+                if not _command_includes_target(profile_command):
                     args.append(launch_path)
                 precedence = "platform_profile"
         if args is None:

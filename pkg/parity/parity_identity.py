@@ -54,8 +54,15 @@ def normalize_rom_name(filename: str) -> str:
     extensions = r"\.(zip|7z|rar|tar|gz|iso|bin|cue|chd|nes|sfc|smc|gba|nds|n64|z64|gcm|wbfs|pbp|pkg|xiso|xbe|mdf|mds|img|ccd|sub)$"
     name = re.sub(extensions, "", name, flags=re.IGNORECASE)
     
-    # Strip region/revision tags like (USA), [!], (En,Fr,De)
-    name = re.sub(r"\(.*?\)|\[.*?\]", "", name)
+    # Strip region/revision tags like (USA), [!], (En,Fr,De). Keep disc
+    # markers so "Final Fantasy VII (Disc 1)" stays distinct from disc 2.
+    def _strip_tag(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        if re.search(r"\b(?:disc|disk|cd|dvd|side)\s*[0-9a-d]+", tag, re.I):
+            return tag
+        return ""
+
+    name = re.sub(r"\(.*?\)|\[.*?\]", _strip_tag, name)
     
     # Lowercase, strip whitespace, and normalize multiple spaces to single
     name = name.lower().strip()

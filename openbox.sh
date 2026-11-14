@@ -44,8 +44,8 @@ if [ "$(uname -s)" = "Darwin" ]; then
   export PATH
 fi
 
-if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-  echo "OpenBox needs Python 3.10 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  echo "OpenBox needs Python 3.11 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
   exit 1
 fi
 

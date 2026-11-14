@@ -15,7 +15,6 @@ emulators.py
 retroachievements.py
 plugins.py
 plugin_runner_v2.py
-plugin_runner.py
 metadata.py
 archives.py
 saves.py

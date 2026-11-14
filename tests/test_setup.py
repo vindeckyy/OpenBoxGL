@@ -1,6 +1,5 @@
 """Tests for setup v2 HTTP handlers."""
 
-import json
 import os
 import sys
 import tempfile
@@ -36,8 +35,7 @@ class SetupHandlerTests(unittest.TestCase):
         openbox.APP_DIR = self.data_dir
         openbox.DATA = self.data_dir / "library.json"
         openbox.STATE_STORE = JsonStateStore(openbox.DATA)
-        openbox.DATA.write_text(
-            json.dumps(
+        openbox.STATE_STORE.save(
                 {
                     "schema_version": 6,
                     "games": [
@@ -73,7 +71,6 @@ class SetupHandlerTests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            )
         )
         (self.data_dir / "ready.nes").write_bytes(b"NES")
         (self.data_dir / "warn.nes").write_bytes(b"NES")

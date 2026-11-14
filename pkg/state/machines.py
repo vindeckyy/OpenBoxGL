@@ -133,7 +133,8 @@ MACHINES: dict[str, Machine] = {
         exposed_via="/api/v2/jobs, /api/jobs, job.* SSE",
         active=_OPERATION_ACTIVE,
     ),
-    # Process-memory mirror that serves /api/jobs and /api/v1/jobs.
+    # Process-memory mirror of the job the public jobs list used to expose.
+    # Public /api/jobs and /api/v1/jobs return 410. The live surface is /api/v2/jobs.
     "legacy_job": Machine(
         name="legacy_job",
         states=frozenset(_LEGACY_STATES),
@@ -148,7 +149,7 @@ MACHINES: dict[str, Machine] = {
         },
         storage="job_manager.JobManager._jobs[name]['state']",
         persisted=False,
-        exposed_via="/api/jobs, /api/v1/jobs",
+        exposed_via="/api/v2/jobs",
         active=frozenset({"queued", "running"}),
     ),
     # Legacy per-feature status dicts (INSTALLS, METADATA_JOB, MATCH_JOB, MEDIA_JOB).

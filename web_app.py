@@ -32,7 +32,13 @@ from pkg.parity.parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_gues
 from pkg.platform_compat import IS_LINUX, ensure_macos_tool_path, process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
-from state_store import StateCorruptError, StateFutureVersionError, StateMigrationError, secure_text_write
+from state_store import (
+    StateCorruptError,
+    StateFutureVersionError,
+    StateMigrationError,
+    StateSchemaTooOldError,
+    secure_text_write,
+)
 from api_errors import problem_payload
 from stock_themes import ensure_stock_themes
 from webapp_state import (
@@ -660,6 +666,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         except StateFutureVersionError as error:
             LOGGER.error("OpenBox library format is newer than this build: %s", error)
             self.send_json(409, {"error": str(error), "code": "STATE_FUTURE_VERSION", "request_id": request_id})
+        except StateSchemaTooOldError as error:
+            LOGGER.error("OpenBox library format is older than this build: %s", error)
+            self.send_json(409, {"error": str(error), "code": "STATE_SCHEMA_TOO_OLD", "request_id": request_id})
         except StateCorruptError as error:
             LOGGER.error("OpenBox state is unavailable: %s", error)
             self.send_json(503, {"error": "OpenBox library data needs recovery before this operation can continue.", "code": "STATE_UNAVAILABLE", "request_id": request_id})
@@ -794,6 +803,13 @@ def reap_sessions_for_shutdown():
 
 
 def main():
+    if sys.version_info < (3, 11):
+        running = ".".join(str(part) for part in sys.version_info[:3])
+        print(
+            f"OpenBox requires Python 3.11 or newer. This interpreter is Python {running}.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     from pkg.state import library_cli
 
     if library_cli.is_library_command(sys.argv[1:]):
@@ -804,11 +820,6 @@ def main():
     if os.environ.get("OPENBOX_ENABLE_V1_API"):
         LOGGER.warning(
             "OPENBOX_ENABLE_V1_API is no longer supported: the /api/v1 surface was removed in 2.1. Use /api/v2."
-        )
-    if sys.version_info < (3, 11):
-        LOGGER.warning(
-            "Python %s is deprecated for OpenBox: 2.1 still supports 3.10, and 3.0 will require 3.11 or newer.",
-            ".".join(str(part) for part in sys.version_info[:2]),
         )
     # An app started from Finder inherits a minimal PATH, so tools the user
     # installed with Homebrew would be invisible to the launcher and to the
@@ -852,7 +863,7 @@ def main():
         profiles.update(merge_profiles_from_definitions(profiles))
     try:
         update_state(bootstrap_state)
-    except (StateFutureVersionError, StateMigrationError) as error:
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError) as error:
         # Never recover automatically from these: the primary is a newer format or a
         # failed upgrade, and the copy in library.json.bak may be older.
         STARTUP_ERRORS.append(str(error))
@@ -906,13 +917,24 @@ def main():
     except Exception:
         LOGGER.exception("On-startup health rescan failed")
     server = OpenBoxServer(("127.0.0.1", 0), Handler)
-    run_configured_commands("startup_commands")
+    try:
+        run_configured_commands("startup_commands")
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError) as error:
+        LOGGER.error("Startup commands skipped because the library cannot be read: %s", error)
+        if not STARTUP_ERRORS:
+            STARTUP_ERRORS.append(str(error))
     # Lifecycle event (F1e): the app finished starting. Best-effort.
     emit_plugin_event(DATA.parent / "plugins", "app_startup", {})
     port = server.server_address[1]
     secure_text_write(DATA.parent / "server.port", str(port))
     secure_text_write(DATA.parent / "server.token", TOKEN)
-    _settings = load_state().get("settings", {})
+    try:
+        _settings = load_state().get("settings", {})
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError) as error:
+        LOGGER.error("Settings were not loaded because the library cannot be read: %s", error)
+        _settings = {}
+        if not STARTUP_ERRORS:
+            STARTUP_ERRORS.append(str(error))
     secure_text_write(
         DATA.parent / "native-host-flags",
         f"{int(bool(_settings.get('tray_enabled')))} {int(bool(_settings.get('minimize_to_tray')))}\n",
@@ -920,7 +942,7 @@ def main():
     try:
         from pkg.parity.parity_tray_recent import write_recent_games
         write_recent_games(DATA.parent, load_state())
-    except (OSError, ValueError):
+    except (OSError, ValueError, StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError):
         LOGGER.exception("Could not publish recent games for the tray")
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
     # Log without the token; the token-bearing URL is only printed to the

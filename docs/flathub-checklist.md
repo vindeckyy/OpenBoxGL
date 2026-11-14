@@ -1,6 +1,6 @@
 # Flathub submission checklist
 
-OpenBox 2.1.0 keeps the release-gated x86_64 Flatpak path and maintains the
+OpenBox 3.0.0 keeps the release-gated x86_64 Flatpak path and maintains the
 manifest/AppStream metadata ready for a future Flathub submission. **Submission
 itself remains a maintainer decision** (ADR 0013); this list tracks the manual
 steps that remain when that decision is made.
@@ -11,7 +11,7 @@ steps that remain when that decision is made.
 - [x] `scripts/validate_flatpak_manifest.py` and `tests/test_packaging.py::test_flatpak_manifest` updated to `'49'`.
 - [x] AppStream `<content_rating type="oars-1.1">` added (`social-info=mild`; the launcher itself ships no mature content).
 - [x] AppStream `<developer id="io.openboxgl">` and `<screenshots>` block added (four 1920×1080 16:9 screenshots).
-- [x] `openbox.metainfo.xml` release history current through 2.1.0.
+- [x] `openbox.metainfo.xml` release history current through 3.0.0.
 - [x] `scripts/capture_readme_screenshots.py` already produces 1920×1080 16:9 screenshots (no extension needed).
 - [x] The v1.11.0 release workflow established the x86_64 bundle gate against GNOME Platform/SDK 49.
 
@@ -44,7 +44,7 @@ The manifest, AppStream metadata, and the validation script are unchanged by 2.0
 `python3 -B scripts/validate_flatpak_manifest.py` reports `flatpak manifest validation: ok`.
 
 - [x] Manifest validator passes on the current tree (`scripts/validate_flatpak_manifest.py`), and `tests/test_packaging.py` covers the manifest.
-- [x] `openbox.metainfo.xml` release history ends at 2.1.0 — the entry is already in place (added with the version bump) and its date is finalized at the tag.
+- [x] `openbox.metainfo.xml` release history ends at 3.0.0 — the entry is already in place (added with the version bump) and its date is 2026-11-13.
 - [x] The Flatpak keeps the x86_64 bundle only. The Windows ARM64 artifact (plan W5-03) is not a Flatpak target, and the runtime re-verify below still covers the WebKit dependency.
 - [ ] **Runtime re-verify for the 2.0 tag.** Re-run the CI `flatpak-validate` job (`flatpak-builder --dry-run`) against runtime 49; the manifest is unchanged, but the release candidate is what the job must build.
 - [ ] **Submission steps stay with the maintainer.** Repo setup, the flathubbot PR, the AppStream review, and the release cadence are unchanged from the list above and remain open.

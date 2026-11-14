@@ -7,7 +7,7 @@
 | Field | Type | Rule |
 |---|---|---|
 | `format` | string | `openbox-library`. A file without it is not v7. |
-| `schema_version` | integer | `7`. A higher value is refused with `STATE_FUTURE_VERSION` and is never rewritten. |
+| `schema_version` | integer | `7`. A higher value is refused with `STATE_FUTURE_VERSION` and is never rewritten. Schema 6 is not upgraded on open: `openbox --migrate-library` is the only writer. Schema 1–5 is refused with `STATE_SCHEMA_TOO_OLD` and names OpenBox 2.1. |
 | `library_id` | string | 26 Crockford base32 characters, minted once. Never derived from a path. |
 | `created_with` | string | The app version that created or migrated the file. Informational. |
 | `path_mode` | string | `absolute` or `portable`. Mirrors `settings.path_mode`; settings are authoritative. |
@@ -40,9 +40,7 @@ A crash before step 5 leaves the v6 file in place and the next start retries. A 
 
 ## Rollback
 
-`openbox --rollback-library --yes` restores the v6 bytes. It keeps the replaced v7 file as `library.v7.kept-<stamp>.json`, writes `rollback-report.json` that lists game edits made after the migration, and removes the migration report. It refuses while OpenBox is answering on its port or while `sessions.json` holds sessions.
-
-The rollback command is deprecated in 2.1 and is planned for removal in 3.0. Keep `library.v6.backup.json` if you may return to 1.19.
+`openbox --rollback-library` was removed in 3.0. The command exits 4 and changes no file. OpenBox 2.1.0 is the last build that restores `library.v6.backup.json`. A backup already on disk is left in place.
 
 ## Integrity and repair
 

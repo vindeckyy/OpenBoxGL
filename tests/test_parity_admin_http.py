@@ -143,7 +143,7 @@ class AdminHttpTests(unittest.TestCase):
         package = Path(self.tempdir.name) / "drop.zip"
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("plugin.json", json.dumps({
-                "id": plugin_id, "name": "Drop", "version": "1", "hooks": [],
+                "id": plugin_id, "name": "Drop", "version": "1", "api_version": 2, "hooks": [],
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
         status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
@@ -188,7 +188,7 @@ class AdminHttpTests(unittest.TestCase):
         package = Path(self.tempdir.name) / "remove.zip"
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("plugin.json", json.dumps({
-                "id": plugin_id, "name": "Remove", "version": "1", "hooks": [],
+                "id": plugin_id, "name": "Remove", "version": "1", "api_version": 2, "hooks": [],
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
         status, _ = self.request("/api/v2/plugins/install", {"path": str(package)})
@@ -224,7 +224,7 @@ class AdminHttpTests(unittest.TestCase):
         package = Path(self.tempdir.name) / "local-repair.zip"
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("plugin.json", json.dumps({
-                "id": plugin_id, "name": "Local Repair", "version": "1", "hooks": [],
+                "id": plugin_id, "name": "Local Repair", "version": "1", "api_version": 2, "hooks": [],
                 "settings": {"type": "object", "properties": {"mode": {"type": "string", "default": "fast"}}},
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
@@ -256,13 +256,13 @@ class AdminHttpTests(unittest.TestCase):
         package = Path(self.tempdir.name) / "repair.zip"
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("plugin.json", json.dumps({
-                "id": plugin_id, "name": "Repair", "version": "1", "hooks": [],
+                "id": plugin_id, "name": "Repair", "version": "1", "api_version": 2, "hooks": [],
             }))
             archive.writestr("plugin.py", "VALUE = 1\n")
         plugins_root = Path(self.tempdir.name) / "plugins" / plugin_id
         plugins_root.mkdir(parents=True)
         (plugins_root / "plugin.json").write_text(json.dumps({
-            "id": plugin_id, "name": "Repair", "version": "1", "hooks": [],
+            "id": plugin_id, "name": "Repair", "version": "1", "api_version": 2, "hooks": [],
         }), encoding="utf-8")
         (plugins_root / "plugin.py").write_text("VALUE = 0\n", encoding="utf-8")
         with mock.patch.object(extensions, "fetch_plugin_catalog", return_value=[{"id": plugin_id}]), \
@@ -318,6 +318,7 @@ class AdminHttpTests(unittest.TestCase):
                 "id": plugin_id,
                 "name": "Scope",
                 "version": "1",
+                "api_version": 2,
                 "hooks": ["emulator"],
                 "capabilities": {"emulator_settings": [{
                     "emulator_id": "mame",
@@ -377,6 +378,7 @@ class AdminHttpTests(unittest.TestCase):
                 "id": "vendor.stats",
                 "name": "Vendor Stats",
                 "version": "1",
+                "api_version": 2,
                 "hooks": ["stats"],
                 "capabilities": {"stats": {"id": "vendor.stats", "name": "Vendor Stats"}},
             }))
