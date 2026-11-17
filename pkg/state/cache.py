@@ -435,7 +435,7 @@ class CacheEpoch:
         with _PLATFORM_CATEGORY_LOCK:
             _PLATFORM_CATEGORY_CACHE.clear()
         with PLUGIN_LIBRARY_LOCK:
-            PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None})
+            PLUGIN_LIBRARY_CACHE.update({"at": 0.0, "payload": None, "state_signature": None, "epoch": 0})
         with PUBLIC_STATE_LOCK:
             self.state.update({
                 "signature": None, "payload": None, "raw": None,
@@ -459,7 +459,7 @@ CACHE_EPOCH = CacheEpoch()
 # These point to the same dict objects owned by CACHE_EPOCH so that existing
 # ``from pkg.state.cache import PUBLIC_STATE_CACHE`` imports keep working.
 FILE_PROBE_CACHE = CACHE_EPOCH.file_probe
-PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None}
+PLUGIN_LIBRARY_CACHE = {"at": 0.0, "payload": None, "state_signature": None, "epoch": 0}
 PUBLIC_STATE_CACHE = CACHE_EPOCH.state
 PUBLIC_SETTINGS_CACHE = CACHE_EPOCH.settings
 _KNOWN_MEDIA_SET_CACHE = CACHE_EPOCH.media_set
