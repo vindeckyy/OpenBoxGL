@@ -72,8 +72,10 @@ _OPENER_NAMES = frozenset({"open", "xdg-open", "cmd", "cmd.exe", "explorer", "ex
 
 
 def _launched_name(process) -> str:
-    args = getattr(process, "args", None) or []
-    if not args:
+    args = getattr(process, "args", None)
+    if isinstance(args, str):
+        args = [args]
+    if not isinstance(args, (list, tuple)) or not args:
         return ""
     return Path(str(args[0])).name.casefold()
 
