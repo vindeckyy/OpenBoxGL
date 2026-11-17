@@ -14,7 +14,6 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
-import re
 import threading
 import time
 import zlib
