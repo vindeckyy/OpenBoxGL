@@ -761,7 +761,7 @@ def child_pids(pid) -> list[int]:
 
 
 def find_pids_by_name(pattern: str) -> list[int]:
-    """Return PIDs whose process name or command line contains *pattern*."""
+    """Return PIDs whose process name contains *pattern*."""
     needle = str(pattern or "").casefold()
     if not needle:
         return []
@@ -769,7 +769,6 @@ def find_pids_by_name(pattern: str) -> list[int]:
         matches = []
         for entry in _windows_process_table():
             name = entry["name"].casefold()
-            image = entry.get("image", "").casefold()
             if needle in name:
                 matches.append(entry["pid"])
         return matches
