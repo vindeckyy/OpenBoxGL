@@ -72,7 +72,7 @@ For ROMs, emulators, Big Box, RetroAchievements, and everything else, see [Getti
 
 ## Overview
 
-OpenBox Game Launcher is an open-source game library manager and launcher for Linux, Windows, and macOS. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save and library backups, launch profiles, and controller-ready Big Box mode. On Windows it also imports installed GOG, EA app, and Ubisoft Connect games natively. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
+OpenBox Game Launcher is an open-source game library manager and launcher for Linux, Windows, and macOS. It puts Steam, Heroic (Epic/GOG/Amazon), Lutris, Faugus, Gameyfin, ROM folders, ScummVM, RPCS3, Vita3K, and Eden Switch collections, and local executables in one searchable catalog with advanced search, ordered playlists, artwork galleries, session tracking, save snapshots (Save Vault) and library backups, offline RetroAchievements trail analytics, Player's Log time capsules and milestone cards, multi-week backlog itineraries, opt-in Steam deal watchlists, launch profiles, and controller-ready Big Box mode. On Windows it also imports installed GOG, EA app, and Ubisoft Connect games natively. No account, no vendor cloud lock-in, and no telemetry; optional mounted-folder sync stays under your control.
 
 OpenBox Game Launcher is unrelated to [Openbox](https://openbox.org/), the open-source Linux window manager. The projects have different maintainers, codebases, and purposes.
 
