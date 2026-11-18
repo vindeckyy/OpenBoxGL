@@ -14,7 +14,7 @@ from pkg.parity.parity_trail import (
 )
 from retroachievements import load_credentials
 from routes.registry import route
-from webapp_state import JOB_MANAGER, load_state_view
+from webapp_state import JOB_MANAGER, load_state_readonly
 
 
 def _ra_ready(state) -> tuple[bool, dict | None]:
@@ -29,7 +29,7 @@ def _ra_ready(state) -> tuple[bool, dict | None]:
 
 @route("GET", "/api/v2/ra/trail", spec="handlers.trail.trail_list")
 def trail_list(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     ready, _creds = _ra_ready(state)
     if not ready:
         handler.send_json(200, {
@@ -75,7 +75,7 @@ def trail_list(handler, parsed):
 
 @route("GET", "/api/v2/ra/trail/game", spec="handlers.trail.trail_game")
 def trail_game(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     ready, _creds = _ra_ready(state)
     if not ready:
         handler.send_json(200, {"available": False, "reason": "ra_disabled", "game": None})
@@ -99,7 +99,7 @@ def trail_refresh(handler, payload):
             raise BadRequest("game_ids must be a list.")
         game_ids = [str(item).strip() for item in raw_ids if str(item).strip()]
 
-    state = load_state_view()
+    state = load_state_readonly()
     ready, creds = _ra_ready(state)
     if not ready or not creds:
         raise RaDisabled("RetroAchievements must be configured and enabled to refresh trail caches.")

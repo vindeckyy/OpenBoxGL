@@ -15,6 +15,14 @@
 
 Every other top-level field (games, profiles, playlists, and any field this build does not know) is kept as written.
 
+### Additive 2.2 top-level keys (schema stays v7)
+
+- `deals` (`{"watchlist": [...], "prices": {...}, "last_poll_at": ""}`): bounded opt-in Deal Radar watchlist (`<= 200` items) and per-item retained price history (`<= 50` points per item); warn-and-repair prunes orphaned `prices` keys and malformed items on load.
+- `time_capsules` (`[...]`): Player's Log notes/questions unlocked once via durable `opened_at`. (`game_id` is display metadata, not a foreign key — deleting a game preserves its capsules.)
+- `itinerary` (`object | null`): single active Backlog Itinerary plan (`entries`, `later`, `capacity_hours`); warn-and-repair resets a malformed plan object to `null` rather than refusing startup.
+
+Large binary/derived artifacts stay outside `library.json`: `save-vault/` (Save Vault snapshots + self-healing `index.json`) and `cache/trail.json`, `cache/deals/`, `cache/igdb/` (`0o600` derived caches).
+
 ## Runtime sessions
 
 `active_sessions` is process state. It is mirrored to `sessions.json` (format 1) for crash recovery and is never written into `library.json`. When no session is active, `sessions.json` is removed.

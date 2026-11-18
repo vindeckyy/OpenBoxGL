@@ -382,3 +382,21 @@ Measured in the browser smoke on the reference workstation (Apple M4, macOS 27.2
 The counting no longer runs on the UI thread at all; what is left there is the copy of
 the platform values, and only when the library changed. The smoke also asserts that the
 worker and the UI thread count identically (`sameCounts`).
+
+## 2.2.0: Feature read paths & 10k/20k scale
+
+Measured via `python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --browser --memory --out build/perf-2.2.json` on 2026-11-17 (Linux x86_64):
+
+| Operation | 10,000 games median / p95 (ms) | 20,000 games median / p95 (ms) | Notes |
+|---|---:|---:|---|
+| `GET /api/v2/saves/vault/status` | 1.5 / 1.5 | 1.5 / 1.7 | `load_state_readonly()` |
+| `GET /api/v2/ra/trail` | 1.3 / 1.4 | 1.3 / 1.5 | Offline cache / disabled gate |
+| `GET /api/v2/deals` | 1.3 / 1.7 | 1.3 / 1.4 | Offline opt-in check |
+| `GET /api/v2/capsules` | 1.2 / 1.2 | 1.0 / 1.1 | Strict server redaction |
+| `GET /api/v2/itinerary` | 1.8 / 1.8 | 1.5 / 1.6 | Derived live projection |
+| `GET /api/v2/insights/milestones` | 185.7 / 188.7 | 374.5 / 520.7 | Paginated `?limit=100` (30.5 KB) |
+| `POST /api/v2/library/pick` | 41.5 / 42.1 | 81.4 / 83.1 | Gate: `< 200 ms` p95 |
+| `GET /api/v2/library/constellation?limit=400` | 236.2 / 249.0 | 242.0 / 242.5 | Gate: `< 1500 ms` p95 |
+| Write-path benchmark | 464.4 / 469.9 | 896.6 / 897.8 | Within 500 ms / 1000 ms gates |
+| Browser 20k `search_cls_max` | — | 0.0486 | Gate: `<= 0.1` (`4562.0 ms` first-render median) |
+

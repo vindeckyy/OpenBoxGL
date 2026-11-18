@@ -17,7 +17,7 @@ from pkg.parity.parity_save_vault import (
     vault_status,
 )
 from routes.registry import route
-from webapp_state import JOB_MANAGER, game_from_payload, game_from_query, load_state_view
+from webapp_state import JOB_MANAGER, game_from_payload, game_from_query, load_state_readonly
 
 
 def _require_save_management(state, *, read: bool = False):
@@ -45,7 +45,7 @@ def _game_from_payload_or_404(state, payload):
 
 @route("GET", "/api/v2/saves/vault", spec="handlers.savevault.vault_list")
 def vault_list(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     if not _require_save_management(state, read=True):
         handler.send_json(200, {"enabled": False, "snapshots": []})
         return
@@ -61,7 +61,7 @@ def vault_list(handler, parsed):
 
 @route("GET", "/api/v2/saves/vault/status", spec="handlers.savevault.vault_get_status")
 def vault_get_status(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     if not _require_save_management(state, read=True):
         handler.send_json(200, {"enabled": False, "snapshots": 0, "bytes": 0, "games": 0})
         return
@@ -77,7 +77,7 @@ def vault_get_status(handler, parsed):
 
 @route("POST", "/api/v2/saves/vault/snapshot", spec="handlers.savevault.vault_snapshot")
 def vault_snapshot(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_save_management(state)
     if not isinstance(payload, dict):
         raise BadRequest("Request body must be an object.")
@@ -110,7 +110,7 @@ def vault_snapshot(handler, payload):
 
 @route("GET", "/api/v2/saves/vault/diff", spec="handlers.savevault.vault_diff")
 def vault_diff(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_save_management(state)
     query = parse_qs(parsed.query or "")
     game = _game_from_query_or_404(state, query)
@@ -122,7 +122,7 @@ def vault_diff(handler, parsed):
 
 @route("POST", "/api/v2/saves/vault/restore", spec="handlers.savevault.vault_restore")
 def vault_restore(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_save_management(state)
     if not isinstance(payload, dict):
         raise BadRequest("Request body must be an object.")
@@ -167,7 +167,7 @@ def vault_restore(handler, payload):
 
 @route("POST", "/api/v2/saves/vault/delete", spec="handlers.savevault.vault_delete")
 def vault_delete(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_save_management(state)
     if not isinstance(payload, dict):
         raise BadRequest("Request body must be an object.")

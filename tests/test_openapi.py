@@ -23,8 +23,8 @@ import gen_openapi  # noqa: E402
 
 
 class SchemaCatalogTests(unittest.TestCase):
-    def test_the_catalog_holds_forty_schemas_and_they_are_all_declared(self):
-        self.assertEqual(len(api_schemas.SCHEMAS), 40)
+    def test_the_catalog_holds_all_declared_schemas(self):
+        self.assertEqual(len(api_schemas.SCHEMAS), 46)
         self.assertEqual(sorted(api_schemas.SCHEMAS), sorted(api_schemas.SCHEMA_NAMES))
 
     def test_every_required_field_is_also_a_property(self):

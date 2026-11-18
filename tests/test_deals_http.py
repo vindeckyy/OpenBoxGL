@@ -60,7 +60,7 @@ class DealsHttpTests(unittest.TestCase):
         self.fail(f"Timed out waiting for job {name}")
 
     def test_disabled_blocks_all_mutations_and_fetches(self):
-        with mock.patch.object(deals_handler, "load_state_view", return_value=self.state):
+        with mock.patch.object(deals_handler, "load_state_readonly", return_value=self.state):
             h_list = MockHandler()
             deals_handler.deals_list(h_list, SimpleNamespace(query=""))
             self.assertFalse(h_list.responses[0][1]["available"])
@@ -84,7 +84,7 @@ class DealsHttpTests(unittest.TestCase):
         details_json = json.loads((FIXTURES / "appdetails_sale.json").read_text(encoding="utf-8"))
 
         with mock.patch.object(deals_handler, "DATA", self.data_file), mock.patch.object(
-            deals_handler, "load_state_view", return_value=self.state
+            deals_handler, "load_state_readonly", return_value=self.state
         ), mock.patch.object(deals_handler, "transact_state", side_effect=self._transact), mock.patch.object(
             deals_handler, "JOB_MANAGER", self.jm
         ):

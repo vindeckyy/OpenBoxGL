@@ -15,12 +15,12 @@ from pkg.parity.parity_playerlog import (
     open_capsule,
 )
 from routes.registry import route
-from webapp_state import load_state_view, transact_state
+from webapp_state import load_state_readonly, transact_state
 
 
 @route("GET", "/api/v2/capsules", spec="handlers.playerlog.capsules_list")
 def capsules_list(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     query = parse_qs(parsed.query or "")
     game_id = str((query.get("game_id") or [""])[0]).strip()
     handler.send_json(200, list_capsules(state, game_id=game_id))
@@ -52,7 +52,7 @@ def capsules_delete(handler, payload):
 
 @route("GET", "/api/v2/capsules/next", spec="handlers.playerlog.capsules_next")
 def capsules_next(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     handler.send_json(200, next_capsule(state))
 
 
@@ -60,8 +60,12 @@ def capsules_next(handler, parsed):
 def insights_milestones(handler, parsed):
     query = parse_qs(parsed.query or "")
     mark_seen = str((query.get("mark_seen") or [""])[0]).strip().lower() in ("1", "true", "yes")
-    state = load_state_view()
-    report = compute_milestones(state, data_dir=DATA.parent)
+    try:
+        limit = max(1, min(500, int((query.get("limit") or ["100"])[0])))
+    except (TypeError, ValueError):
+        limit = 100
+    state = load_state_readonly()
+    report = compute_milestones(state, data_dir=DATA.parent, limit=limit)
     if mark_seen and report["unlocked"]:
         seen_ids = [item["id"] for item in report["unlocked"]]
 

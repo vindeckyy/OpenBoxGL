@@ -60,7 +60,7 @@ class ItineraryHttpTests(unittest.TestCase):
 
     def test_all_five_routes_error_codes_and_async_igdb(self):
         with mock.patch.object(itin_handler, "DATA", self.data_file), mock.patch.object(
-            itin_handler, "load_state_view", return_value=self.state
+            itin_handler, "load_state_readonly", return_value=self.state
         ), mock.patch.object(itin_handler, "transact_state", side_effect=self._transact), mock.patch.object(
             itin_handler, "JOB_MANAGER", self.jm
         ):

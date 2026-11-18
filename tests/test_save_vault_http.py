@@ -66,7 +66,7 @@ class SaveVaultHttpTests(unittest.TestCase):
     def _run_patches(self):
         return (
             mock.patch.object(savevault, "DATA", self.data_file),
-            mock.patch.object(savevault, "load_state_view", return_value=self.state),
+            mock.patch.object(savevault, "load_state_readonly", return_value=self.state),
             mock.patch.object(savevault, "JOB_MANAGER", self.jm),
         )
 

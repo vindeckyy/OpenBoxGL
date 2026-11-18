@@ -2102,7 +2102,7 @@
     "seal_dialog_title": "Sceller une capsule temporelle",
     "seal_honesty": "Les notes scellées restent masquées dans OpenBox jusqu’à minuit à la date choisie. Note : elles sont stockées en clair dans library.json.",
     "field_title": "Titre",
-    "field_kind": "Type",
+    "field_kind": "Catégorie",
     "kind_note": "Note pour plus tard",
     "kind_question": "Question à relire",
     "field_unlock_at": "Date d’ouverture",
@@ -2184,7 +2184,7 @@
     "log_price": "Noter un prix / modifier",
     "field_price": "Prix",
     "field_currency": "Devise (3 lettres)",
-    "field_note": "Note"
+    "field_note": "Remarque"
   },
   "itinerary": {
     "menu_title": "Itinéraire de backlog",

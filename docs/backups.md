@@ -42,6 +42,8 @@ archives written by 1.19 and by the 2.0.x export.
 
 Capability credentials under `plugins/credentials` are never included. Secrets are redacted from settings and plugin state. Media that a download wrote is listed in the media manifest in the data directory, but the manifest records what the app wrote, not a copy of the files outside the archive's items.
 
+**Save Vault (`save-vault/`) is also excluded from `BACKUP_ITEMS`.** Save Vault snapshots (captured manually, on game close, or on schedule via ADR 0107) are kept separately under `<data_dir>/save-vault/` so weekly ZIP archives remain fast and bounded. To back up Save Vault history onto external storage or cloud folders, copy `<data_dir>/save-vault/` manually alongside your ZIP backups.
+
 ## Retention
 
 Automatic backups keep the number set in settings. Manual backups are kept until you delete them.

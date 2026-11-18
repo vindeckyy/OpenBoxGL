@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [2.2.0] - 2026-11-17
+
+### Added
+- **Save Vault (ADR 0107).** Indexed, SHA-256-verified snapshots of game saves triggered manually, on session close (`save_vault_on_close`), or on schedule (`save_vault_auto_days`) through `/api/v2/saves/vault*` and a tabbed Save History dialog, with mandatory pre-restore safety snapshots (`trigger:"pre-restore"`, exempt from pruning), automatic exclusion of shared emulator roots, `>= 5 GiB` disk warnings, `512 MiB` / `5,000`-file bounds, and self-healing `index.json` rebuilds. Excluded from `BACKUP_ITEMS`.
+- **Achievement Trail (ADR 0108).** Offline RetroAchievements analytics over `cache/retroachievements/` via `/api/v2/ra/trail*` with signature-keyed `cache/trail.json` stale-while-rebuild (`>250` files), 8-week ISO velocity bar charts, confidence-rated ETAs, cheapest-first next-up queues, explicit cancellable refresh jobs, and additive `id`/`date_earned`/`date_earned_hardcore` fields on `retroachievements.py::game_progress` (old date-less caches degrade with an explicit notice).
+- **Deal Radar (ADR 0109).** Opt-in (`deals_enabled=false` by default) Steam price watchlist and manual entry tracker via `/api/v2/deals*`, hard-restricted to `https://store.steampowered.com` on requests and HTTP redirects, weekly poll default (`168 h`), unwatch history purge, and durable `last_notified_price_cents` deduplication immune to `CAP=200` feed eviction.
+- **Player's Log — Time Capsules & Milestone Cards (ADR 0110).** Server-redacted sealed notes/questions (`time_capsules`) unlocking once at local midnight via durable `opened_at` startup/hourly sweeps plus `/api/v2/capsules*`, alongside 9 deterministic library/game milestone kinds (`/api/v2/insights/milestones`) with binary-searched crossing dates and offline 1200×630 PNG card export via a shared canvas renderer refactored out of `static/moments.js`.
+- **Backlog Itinerary (ADR 0111).** Advisory multi-week play schedule stored in `state["itinerary"]` via `/api/v2/itinerary*`, featuring `quick-wins`, `comeback`, and `raided` strategies, IGDB (`cache/igdb/`, bounded concurrency-2 job) → own-history (`>= 3` samples) → labeled `8.0 h` default estimation with RetroAchievements progress refinement, derived `done`/`on_track`/`behind`/`stale` live statuses, and `done`-pinning replanning.
+- **Settings & contracts.** Eight new `KNOWN_SETTINGS` (`save_vault_enabled`, `save_vault_keep`, `save_vault_on_close`, `save_vault_auto_days`, `deals_enabled`, `deals_poll_hours`, `deals_min_drop_pct`, `deals_store_cc`), six typed OpenAPI schemas (`docs/openapi.json`), compat report `save_vault` + `deals` disclosures, 12 new `docs/reliability.md` tested rows (`169–180`), and `docs/upgrade-2.2.md`.
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

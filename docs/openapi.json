@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenBox local API",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "description": "Public HTTP surface of the local OpenBox server (/api/v2). Native-host calls live under /api/host and are not documented here. Errors are application/problem+json (RFC 9457 shape).",
     "license": {
       "name": "See LICENSE in the repository"
@@ -486,6 +486,16 @@
             "required": []
           },
           "sync": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "save_vault": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "deals": {
             "type": "object",
             "properties": {},
             "required": []
@@ -1301,6 +1311,169 @@
           "format",
           "files"
         ]
+      },
+      "SaveVaultStatus": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "snapshots": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "games": {
+            "type": "integer"
+          },
+          "over_5gb_warning": {
+            "type": "boolean"
+          },
+          "game_snapshots": {
+            "type": "integer"
+          },
+          "game_bytes": {
+            "type": "integer"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        },
+        "required": [
+          "enabled",
+          "snapshots",
+          "bytes",
+          "games"
+        ]
+      },
+      "TrailOverview": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "items"
+        ]
+      },
+      "DealsWatchlist": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "watchlist": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "last_poll_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "watchlist"
+        ]
+      },
+      "CapsuleList": {
+        "type": "object",
+        "properties": {
+          "capsules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "locked_count": {
+            "type": "integer"
+          },
+          "unlocked_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capsules",
+          "locked_count",
+          "unlocked_count"
+        ]
+      },
+      "MilestoneSummary": {
+        "type": "object",
+        "properties": {
+          "unlocked": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          },
+          "counts": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "ra_available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "unlocked",
+          "counts"
+        ]
+      },
+      "ItineraryOverview": {
+        "type": "object",
+        "properties": {
+          "plan": {}
+        },
+        "required": [
+          "plan"
+        ]
       }
     },
     "responses": {
@@ -1766,6 +1939,153 @@
         "x-openbox-schema": "untyped"
       }
     },
+    "/api/v2/capsules": {
+      "get": {
+        "operationId": "get_api_v2_capsules",
+        "summary": "GET /api/v2/capsules",
+        "tags": [
+          "capsules"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-redacted Player's Log time capsules.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapsuleList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_v2_capsules",
+        "summary": "POST /api/v2/capsules",
+        "tags": [
+          "capsules"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/capsules/delete": {
+      "post": {
+        "operationId": "post_api_v2_capsules_delete",
+        "summary": "POST /api/v2/capsules/delete",
+        "tags": [
+          "capsules"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/capsules/next": {
+      "get": {
+        "operationId": "get_api_v2_capsules_next",
+        "summary": "GET /api/v2/capsules/next",
+        "tags": [
+          "capsules"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/capsules/open": {
+      "post": {
+        "operationId": "post_api_v2_capsules_open",
+        "summary": "POST /api/v2/capsules/open",
+        "tags": [
+          "capsules"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
     "/api/v2/clips": {
       "get": {
         "operationId": "get_api_v2_clips",
@@ -1971,6 +2291,185 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      }
+    },
+    "/api/v2/deals": {
+      "get": {
+        "operationId": "get_api_v2_deals",
+        "summary": "GET /api/v2/deals",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opt-in Deal Radar watchlist and retained price history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealsWatchlist"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v2/deals/entry": {
+      "post": {
+        "operationId": "post_api_v2_deals_entry",
+        "summary": "POST /api/v2/deals/entry",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/deals/refresh": {
+      "post": {
+        "operationId": "post_api_v2_deals_refresh",
+        "summary": "POST /api/v2/deals/refresh",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/deals/search": {
+      "get": {
+        "operationId": "get_api_v2_deals_search",
+        "summary": "GET /api/v2/deals/search",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/deals/unwatch": {
+      "post": {
+        "operationId": "post_api_v2_deals_unwatch",
+        "summary": "POST /api/v2/deals/unwatch",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/deals/watch": {
+      "post": {
+        "operationId": "post_api_v2_deals_watch",
+        "summary": "POST /api/v2/deals/watch",
+        "tags": [
+          "deals"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
       }
     },
     "/api/v2/desktop/install": {
@@ -4753,6 +5252,35 @@
         "x-openbox-schema": "untyped"
       }
     },
+    "/api/v2/insights/milestones": {
+      "get": {
+        "operationId": "get_api_v2_insights_milestones",
+        "summary": "GET /api/v2/insights/milestones",
+        "tags": [
+          "insights"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Derived deterministic library milestones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MilestoneSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/v2/insights/radar": {
       "get": {
         "operationId": "get_api_v2_insights_radar",
@@ -5175,6 +5703,155 @@
         "summary": "POST /api/v2/integrations/steam/test",
         "tags": [
           "integrations"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/itinerary": {
+      "get": {
+        "operationId": "get_api_v2_itinerary",
+        "summary": "GET /api/v2/itinerary",
+        "tags": [
+          "itinerary"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active Backlog Itinerary with derived live statuses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItineraryOverview"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v2/itinerary/abandon": {
+      "post": {
+        "operationId": "post_api_v2_itinerary_abandon",
+        "summary": "POST /api/v2/itinerary/abandon",
+        "tags": [
+          "itinerary"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/itinerary/estimate": {
+      "get": {
+        "operationId": "get_api_v2_itinerary_estimate",
+        "summary": "GET /api/v2/itinerary/estimate",
+        "tags": [
+          "itinerary"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/itinerary/plan": {
+      "post": {
+        "operationId": "post_api_v2_itinerary_plan",
+        "summary": "POST /api/v2/itinerary/plan",
+        "tags": [
+          "itinerary"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/itinerary/replan": {
+      "post": {
+        "operationId": "post_api_v2_itinerary_replan",
+        "summary": "POST /api/v2/itinerary/replan",
+        "tags": [
+          "itinerary"
         ],
         "security": [
           {
@@ -10260,6 +10937,95 @@
         "x-openbox-schema": "untyped"
       }
     },
+    "/api/v2/ra/trail": {
+      "get": {
+        "operationId": "get_api_v2_ra_trail",
+        "summary": "GET /api/v2/ra/trail",
+        "tags": [
+          "ra"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offline RetroAchievements trail summary and hunt list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailOverview"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v2/ra/trail/game": {
+      "get": {
+        "operationId": "get_api_v2_ra_trail_game",
+        "summary": "GET /api/v2/ra/trail/game",
+        "tags": [
+          "ra"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/ra/trail/refresh": {
+      "post": {
+        "operationId": "post_api_v2_ra_trail_refresh",
+        "summary": "POST /api/v2/ra/trail/refresh",
+        "tags": [
+          "ra"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
     "/api/v2/reels": {
       "get": {
         "operationId": "get_api_v2_reels",
@@ -10888,6 +11654,185 @@
           }
         },
         "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault": {
+      "get": {
+        "operationId": "get_api_v2_saves_vault",
+        "summary": "GET /api/v2/saves/vault",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault/delete": {
+      "post": {
+        "operationId": "post_api_v2_saves_vault_delete",
+        "summary": "POST /api/v2/saves/vault/delete",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault/diff": {
+      "get": {
+        "operationId": "get_api_v2_saves_vault_diff",
+        "summary": "GET /api/v2/saves/vault/diff",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault/restore": {
+      "post": {
+        "operationId": "post_api_v2_saves_vault_restore",
+        "summary": "POST /api/v2/saves/vault/restore",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault/snapshot": {
+      "post": {
+        "operationId": "post_api_v2_saves_vault_snapshot",
+        "summary": "POST /api/v2/saves/vault/snapshot",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response. The schema is not pinned for this operation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "x-openbox-schema": "untyped"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openbox-schema": "untyped"
+      }
+    },
+    "/api/v2/saves/vault/status": {
+      "get": {
+        "operationId": "get_api_v2_saves_vault_status",
+        "summary": "GET /api/v2/saves/vault/status",
+        "tags": [
+          "saves"
+        ],
+        "security": [
+          {
+            "openboxToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Save Vault usage and settings summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveVaultStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     },
     "/api/v2/screenscraper/apply": {

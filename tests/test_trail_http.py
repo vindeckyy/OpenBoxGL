@@ -63,7 +63,7 @@ class TrailHttpTests(unittest.TestCase):
         fake_sig.signature.return_value = "sig-0"
         with mock.patch.object(trail_handler, "DATA", self.data_file), mock.patch.object(
             trail_handler, "STATE_STORE", fake_sig
-        ), mock.patch.object(trail_handler, "load_state_view", return_value=self.state):
+        ), mock.patch.object(trail_handler, "load_state_readonly", return_value=self.state):
             h_list = MockHandler()
             trail_handler.trail_list(h_list, SimpleNamespace(query=""))
             self.assertFalse(h_list.responses[0][1]["available"])
@@ -102,7 +102,7 @@ class TrailHttpTests(unittest.TestCase):
         }
         with mock.patch.object(trail_handler, "DATA", self.data_file), mock.patch.object(
             trail_handler, "STATE_STORE", fake_sig
-        ), mock.patch.object(trail_handler, "load_state_view", return_value=self.state), mock.patch.object(
+        ), mock.patch.object(trail_handler, "load_state_readonly", return_value=self.state), mock.patch.object(
             trail_handler, "JOB_MANAGER", self.jm
         ), mock.patch("retroachievements.api_get", return_value=ra_payload):
             h_ref = MockHandler()

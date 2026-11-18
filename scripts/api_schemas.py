@@ -20,6 +20,8 @@ SCHEMA_NAMES = (
     "Profile", "PlaylistList", "Playlist", "JobList", "Job", "EmulatorList", "Emulator",
     "MediaList", "MediaItem", "SearchResult", "Constellation", "SetupSummary", "TrashList",
     "Diagnostic", "CollectionList", "MediaManifest",
+    "SaveVaultStatus", "TrailOverview", "DealsWatchlist",
+    "CapsuleList", "MilestoneSummary", "ItineraryOverview",
 )
 
 
@@ -117,7 +119,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         "format": _str(), "version": _int(),
         "library": _obj({}), "themes": _arr({"$ref": "#/components/schemas/ThemeReport"}),
         "backups": _arr(_any()), "settings": _obj({}), "plugins": _arr(_any()),
-        "api": _obj({}), "sync": _obj({}),
+        "api": _obj({}), "sync": _obj({}), "save_vault": _obj({}), "deals": _obj({}),
     }, ["library", "themes", "api"]),
     "ThemeReport": _obj({
         "name": _str(), "missing": _arr(_str()), "unknown": _arr(_str()), "disposition": _str(),
@@ -220,6 +222,28 @@ SCHEMAS: dict[str, dict[str, Any]] = {
             "size": _int(), "mtime_ns": _int(), "sha256": _str(), "source": _str(),
         }),
     }, ["format", "files"]),
+    "SaveVaultStatus": _obj({
+        "enabled": _bool(), "snapshots": _int(), "bytes": _int(), "games": _int(),
+        "over_5gb_warning": _bool(), "game_snapshots": _int(), "game_bytes": _int(),
+        "settings": _obj({}),
+    }, ["enabled", "snapshots", "bytes", "games"]),
+    "TrailOverview": _obj({
+        "available": _bool(), "summary": _obj({}), "items": _arr(_obj({})),
+        "total": _int(), "offset": _int(), "limit": _int(), "stale": _bool(),
+    }, ["available", "items"]),
+    "DealsWatchlist": _obj({
+        "available": _bool(), "watchlist": _arr(_obj({})), "last_poll_at": _str(),
+    }, ["available", "watchlist"]),
+    "CapsuleList": _obj({
+        "capsules": _arr(_obj({})), "locked_count": _int(), "unlocked_count": _int(),
+    }, ["capsules", "locked_count", "unlocked_count"]),
+    "MilestoneSummary": _obj({
+        "unlocked": _arr(_obj({})), "upcoming": _arr(_obj({})),
+        "counts": _obj({}), "ra_available": _bool(),
+    }, ["unlocked", "counts"]),
+    "ItineraryOverview": _obj({
+        "plan": _any(),
+    }, ["plan"]),
 }
 
 # Operations whose response is pinned by a schema above. Everything else stays untyped.
@@ -233,6 +257,12 @@ OPERATIONS: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v2/library/move/apply"): ("MoveResult", "The result of an applied library move."),
     ("GET", "/api/v2/backups"): ("BackupList", "The backup archives in the data folder."),
     ("GET", "/api/v2/plugins"): ("PluginList", "The installed plugins."),
+    ("GET", "/api/v2/saves/vault/status"): ("SaveVaultStatus", "Save Vault usage and settings summary."),
+    ("GET", "/api/v2/ra/trail"): ("TrailOverview", "Offline RetroAchievements trail summary and hunt list."),
+    ("GET", "/api/v2/deals"): ("DealsWatchlist", "Opt-in Deal Radar watchlist and retained price history."),
+    ("GET", "/api/v2/capsules"): ("CapsuleList", "Server-redacted Player's Log time capsules."),
+    ("GET", "/api/v2/insights/milestones"): ("MilestoneSummary", "Derived deterministic library milestones."),
+    ("GET", "/api/v2/itinerary"): ("ItineraryOverview", "Active Backlog Itinerary with derived live statuses."),
 }
 
 

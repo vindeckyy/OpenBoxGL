@@ -17,7 +17,7 @@ from pkg.parity.parity_deals import (
     watch_game,
 )
 from routes.registry import route
-from webapp_state import JOB_MANAGER, load_state_view, transact_state
+from webapp_state import JOB_MANAGER, load_state_readonly, transact_state
 
 
 def _deals_enabled(state: dict) -> bool:
@@ -33,7 +33,7 @@ def _require_deals_enabled(state: dict) -> dict:
 
 @route("GET", "/api/v2/deals", spec="handlers.deals.deals_list")
 def deals_list(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     if not _deals_enabled(state):
         handler.send_json(200, {
             "available": False,
@@ -47,7 +47,7 @@ def deals_list(handler, parsed):
 
 @route("GET", "/api/v2/deals/search", spec="handlers.deals.deals_search")
 def deals_search(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     settings = _require_deals_enabled(state)
     query = parse_qs(parsed.query or "")
     q = str((query.get("q") or [""])[0]).strip()
@@ -58,7 +58,7 @@ def deals_search(handler, parsed):
 
 @route("POST", "/api/v2/deals/watch", spec="handlers.deals.deals_watch")
 def deals_watch(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_deals_enabled(state)
     _, created = transact_state(lambda current: watch_game(current, payload))
     handler.send_json(201, {"entry": created})
@@ -68,7 +68,7 @@ def deals_watch(handler, payload):
 def deals_unwatch(handler, payload):
     if not isinstance(payload, dict):
         raise BadRequest("Request body must be an object.")
-    state = load_state_view()
+    state = load_state_readonly()
     _require_deals_enabled(state)
     item_id = str(payload.get("id") or "").strip()
     if not item_id:
@@ -79,7 +79,7 @@ def deals_unwatch(handler, payload):
 
 @route("POST", "/api/v2/deals/entry", spec="handlers.deals.deals_entry")
 def deals_entry(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     _require_deals_enabled(state)
     _, updated = transact_state(lambda current: record_manual_entry(current, payload))
     handler.send_json(200, {"entry": updated})
@@ -87,7 +87,7 @@ def deals_entry(handler, payload):
 
 @route("POST", "/api/v2/deals/refresh", spec="handlers.deals.deals_refresh")
 def deals_refresh(handler, payload):
-    state = load_state_view()
+    state = load_state_readonly()
     settings = _require_deals_enabled(state)
     data_dir = DATA.parent
 

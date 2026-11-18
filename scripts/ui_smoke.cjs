@@ -2403,6 +2403,71 @@ const failures = [];
   });
   (!retryButton.present) && failures.push('the media manager has no Retry failed button');
   (retryButton.present && retryButton.disabled !== true) && failures.push('Retry failed must start disabled when no download has failed');
+  // 17. 2.2.0 surface smoke: Save Vault tab, Trail/Player's Log in Insights, Deal Radar opt-in, Itinerary wizard.
+  const smoke22 = await page.evaluate(async () => {
+    const out = {};
+    if (!document.getElementById('saveHistory')) {
+      document.querySelector('.card-main')?.click();
+      await new Promise(r => setTimeout(r, 250));
+    }
+    // Save Vault panel inside Save Version History dialog
+    document.getElementById('saveHistory')?.click();
+    await new Promise(r => setTimeout(r, 350));
+    out.vaultTab = Boolean(document.querySelector('[data-save-tab="vault"]') && document.getElementById('saveVaultPane'));
+    out.vaultSnapshotBtn = Boolean(document.getElementById('vaultSnapshotNow'));
+    document.querySelector('dialog[open] [data-close]')?.click();
+    await new Promise(r => setTimeout(r, 150));
+
+    // Insights Trail + Player's Log + Itinerary mount
+    const toggle = document.getElementById('insightsToggle');
+    const body = document.getElementById('insightsBody');
+    if (body && body.hidden && toggle) toggle.click();
+    document.getElementById('insightsPanel')?.scrollIntoView();
+    document.getElementById('insightsRefresh')?.click();
+    await new Promise(r => setTimeout(r, 500));
+    out.trailMount = Boolean(document.getElementById('trailShelfMount'));
+    out.playerLogRoot = Boolean(document.getElementById('playerLogRoot'));
+    out.sealMemoryBtn = Boolean(document.getElementById('playerlogSealMemory'));
+
+    // Seal a capsule dialog
+    document.getElementById('playerlogSealMemory')?.click();
+    await new Promise(r => setTimeout(r, 250));
+    const capForm = document.getElementById('sealCapsuleForm');
+    out.capsuleDialog = Boolean(capForm);
+    if (capForm) {
+      capForm.title.value = 'Smoke capsule';
+      capForm.unlock_at.value = '2099-01-01';
+      capForm.body.value = 'Top secret future note';
+      capForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 350));
+    }
+
+    // Deal Radar opt-in disclosure
+    document.getElementById('dealsButton')?.click();
+    await new Promise(r => setTimeout(r, 250));
+    const dealsBody = document.getElementById('dealsDialogBody')?.innerText || '';
+    out.dealsOptIn = dealsBody.includes('store.steampowered.com') && Boolean(document.getElementById('dealsEnableBtn'));
+    document.querySelector('dialog[open] [data-close]')?.click();
+    await new Promise(r => setTimeout(r, 150));
+
+    // Backlog Itinerary wizard
+    document.getElementById('itineraryButton')?.click();
+    await new Promise(r => setTimeout(r, 250));
+    const itinForm = document.getElementById('itineraryWizardForm');
+    out.itineraryWizard = Boolean(itinForm && itinForm.horizon_days && itinForm.strategy);
+    document.querySelector('dialog[open] [data-close]')?.click();
+    return out;
+  });
+  const capRes22 = await (await fetch(`http://127.0.0.1:${process.env.PORT}/api/v2/capsules`, {
+    headers: { 'X-OpenBox-Token': process.env.TOKEN },
+  })).json();
+  const smokeCap22 = (capRes22.capsules || []).find(c => c.title === 'Smoke capsule');
+  smoke22.capsuleRedacted = Boolean(smokeCap22 && !('body' in smokeCap22));
+  (!smoke22.vaultTab || !smoke22.vaultSnapshotBtn) && failures.push('smoke22: Save Vault tab & snapshot control present');
+  (!smoke22.trailMount || !smoke22.playerLogRoot || !smoke22.sealMemoryBtn) && failures.push('smoke22: Trail + Player Log mounted in Insights');
+  (!smoke22.capsuleDialog || !smoke22.capsuleRedacted) && failures.push('smoke22: Seal capsule dialog opened & server redacted body');
+  (!smoke22.dealsOptIn) && failures.push('smoke22: Deal Radar opt-in names store.steampowered.com');
+  (!smoke22.itineraryWizard) && failures.push('smoke22: Backlog Itinerary wizard renders');
   console.log('JS errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
   (errors.length) && failures.push("no page or console errors");
@@ -2595,7 +2660,7 @@ const failures = [];
   const expectedGroups = {
     start: ['metadataButton','mediaButton','healthButton','emulatorsButton','themesButton','settingsButton','helpButton'],
     library: ['constellationButton','masteryButton','bulkButton','tagsButton','playlistsButton','backupButton','historyButton','timeMachineButton','achievementsButton','saveFilterButton','savePresetButton'],
-    sources: ['storefrontButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','pico8Button','msu1Button','whdloadButton','arcadeRoomButton','householdButton'],
+    sources: ['storefrontButton','steamButton','heroicButton','lutrisButton','gogButton','eaButton','ubisoftButton','arcadeButton','pico8Button','msu1Button','whdloadButton','arcadeRoomButton','householdButton','dealsButton','itineraryButton'],
     more: ['discoveryButton','netplayButton','pluginsButton','whatsNewButton','fullscreenButton','reportIssueButton','webhooksButton','notificationsButton'],
   };
   for (const [key, ids] of Object.entries(expectedGroups)) {

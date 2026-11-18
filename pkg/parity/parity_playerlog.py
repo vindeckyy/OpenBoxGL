@@ -461,6 +461,7 @@ def compute_milestones(
     *,
     data_dir: Path | str | None = None,
     today: date | None = None,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     """Deterministically derive all 9 milestone kinds from *state* + RA cache."""
     today_val = _today(today)
@@ -515,9 +516,11 @@ def compute_milestones(
         if not gid:
             continue
         secs = max(0, total_playtime_seconds(game))
+        if secs < 3600:
+            continue
         hours = secs / 3600.0
         events = per_game_events.get(gid, [])
-        fallback = _fallback_date_for_game(game, today_str)
+        fallback = _fallback_date_for_game(game, today_str) if secs >= GAME_PLAYTIME_HOURS[0] * 3600 else ""
         next_target = None
         for h in GAME_PLAYTIME_HOURS:
             if secs >= h * 3600:
@@ -808,7 +811,7 @@ def compute_milestones(
         by_kind[k] = by_kind.get(k, 0) + 1
 
     return {
-        "unlocked": unlocked,
+        "unlocked": unlocked[:limit] if limit is not None else unlocked,
         "upcoming": upcoming[:8],
         "counts": {
             "unlocked": len(unlocked),

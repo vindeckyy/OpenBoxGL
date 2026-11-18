@@ -67,10 +67,7 @@ regenerated with `make contracts` after an intentional surface change.
 - `RELEASE_NOTES.md` — release notes for the current version
 - `flathub-checklist.md` — remaining steps toward Flathub store submission
 
-The current shipped release is **v2.1.0**. The next release is not yet
-scheduled; the planning records below are historical archives unless a new
-plan is added. The planning and execution records below are historical
-archives, not an unfinished active roadmap.
+The current shipped release is **v2.2.0** (see [`upgrade-2.2.md`](upgrade-2.2.md)). The planning records below are historical archives unless a new plan is added.
 
 ## Process and policies
 

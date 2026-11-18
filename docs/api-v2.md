@@ -27,6 +27,11 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/bigbox/mode` | `_api_post_api_bigbox_mode` |
 | GET | `/api/v2/bigbox/startup-video` | `_api_get_api_bigbox_startup_video` |
 | POST | `/api/v2/bulk/find-replace` | `_api_post_api_v2_bulk_find_replace` |
+| GET | `/api/v2/capsules` | `handlers.playerlog.capsules_list` |
+| POST | `/api/v2/capsules` | `handlers.playerlog.capsules_create` |
+| POST | `/api/v2/capsules/delete` | `handlers.playerlog.capsules_delete` |
+| GET | `/api/v2/capsules/next` | `handlers.playerlog.capsules_next` |
+| POST | `/api/v2/capsules/open` | `handlers.playerlog.capsules_open` |
 | GET | `/api/v2/clips` | `handlers.clips.clips_list` |
 | POST | `/api/v2/clips/capture` | `handlers.clips.capture_clip` |
 | POST | `/api/v2/cloud/sync` | `_api_post_api_cloud_sync` |
@@ -34,6 +39,12 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/collections` | `handlers.collections.collections_save` |
 | POST | `/api/v2/collections/delete` | `handlers.collections.collections_delete` |
 | GET | `/api/v2/compat/report` | `handlers.setup.compat_report` |
+| GET | `/api/v2/deals` | `handlers.deals.deals_list` |
+| POST | `/api/v2/deals/entry` | `handlers.deals.deals_entry` |
+| POST | `/api/v2/deals/refresh` | `handlers.deals.deals_refresh` |
+| GET | `/api/v2/deals/search` | `handlers.deals.deals_search` |
+| POST | `/api/v2/deals/unwatch` | `handlers.deals.deals_unwatch` |
+| POST | `/api/v2/deals/watch` | `handlers.deals.deals_watch` |
 | POST | `/api/v2/desktop/install` | `_api_post_api_desktop_install` |
 | GET | `/api/v2/diagnostic` | `_api_get_api_diagnostic` |
 | GET | `/api/v2/discovery` | `_api_get_api_discovery` |
@@ -127,6 +138,7 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/import/xbox360` | `_api_post_api_import_xbox360` |
 | GET | `/api/v2/insights/heatmap` | `_api_get_api_v2_insights_heatmap` |
 | GET | `/api/v2/insights/mastery` | `_api_get_api_v2_insights_mastery` |
+| GET | `/api/v2/insights/milestones` | `handlers.playerlog.insights_milestones` |
 | GET | `/api/v2/insights/radar` | `_api_get_api_v2_insights_radar` |
 | POST | `/api/v2/insights/radar/park` | `_api_post_api_v2_insights_radar_park` |
 | GET | `/api/v2/insights/radio` | `_api_get_api_v2_insights_radio` |
@@ -142,6 +154,11 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/integrations/steam` | `_api_post_api_v2_integrations_steam` |
 | POST | `/api/v2/integrations/steam/refresh` | `_api_post_api_v2_integrations_steam_refresh` |
 | POST | `/api/v2/integrations/steam/test` | `_api_post_api_v2_integrations_steam_test` |
+| GET | `/api/v2/itinerary` | `handlers.itinerary.itinerary_get` |
+| POST | `/api/v2/itinerary/abandon` | `handlers.itinerary.itinerary_abandon` |
+| GET | `/api/v2/itinerary/estimate` | `handlers.itinerary.itinerary_estimate` |
+| POST | `/api/v2/itinerary/plan` | `handlers.itinerary.itinerary_plan` |
+| POST | `/api/v2/itinerary/replan` | `handlers.itinerary.itinerary_replan` |
 | GET | `/api/v2/jobs` | `_api_get_api_v2_jobs` |
 | POST | `/api/v2/jobs/cancel` | `_api_post_api_v2_jobs_cancel` |
 | GET | `/api/v2/jobs/items` | `_api_get_api_v2_jobs_items` |
@@ -312,6 +329,9 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/ra/inject` | `_api_post_api_ra_inject` |
 | GET | `/api/v2/ra/settings` | `_api_get_api_ra_settings` |
 | POST | `/api/v2/ra/settings` | `_api_post_api_ra_settings` |
+| GET | `/api/v2/ra/trail` | `handlers.trail.trail_list` |
+| GET | `/api/v2/ra/trail/game` | `handlers.trail.trail_game` |
+| POST | `/api/v2/ra/trail/refresh` | `handlers.trail.trail_refresh` |
 | GET | `/api/v2/reels` | `handlers.clips.reel_manifest` |
 | POST | `/api/v2/reels/create` | `handlers.clips.create_reel_job` |
 | GET | `/api/v2/related` | `_api_get_api_related` |
@@ -333,6 +353,12 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | POST | `/api/v2/saves/restore/preview` | `_api_post_api_saves_restore_preview` |
 | GET | `/api/v2/saves/scan` | `_api_get_api_saves_scan` |
 | POST | `/api/v2/saves/scan/apply` | `_api_post_api_saves_scan_apply` |
+| GET | `/api/v2/saves/vault` | `handlers.savevault.vault_list` |
+| POST | `/api/v2/saves/vault/delete` | `handlers.savevault.vault_delete` |
+| GET | `/api/v2/saves/vault/diff` | `handlers.savevault.vault_diff` |
+| POST | `/api/v2/saves/vault/restore` | `handlers.savevault.vault_restore` |
+| POST | `/api/v2/saves/vault/snapshot` | `handlers.savevault.vault_snapshot` |
+| GET | `/api/v2/saves/vault/status` | `handlers.savevault.vault_get_status` |
 | POST | `/api/v2/screenscraper/apply` | `_api_post_api_v2_screenscraper_apply` |
 | POST | `/api/v2/screenscraper/info` | `_api_post_api_v2_screenscraper_info` |
 | POST | `/api/v2/screenscraper/match` | `_api_post_api_v2_screenscraper_match` |
@@ -400,7 +426,7 @@ The public API since 2.0 (ADR 0091). New work targets `/api/v2/*`; the surface i
 | GET | `/api/v2/wine/prefixes` | `_api_get_api_wine_prefixes` |
 | GET | `/api/v2/wine/protons` | `_api_get_api_wine_protons` |
 
-_387 routes._
+_413 routes._
 
 ## API host channel
 

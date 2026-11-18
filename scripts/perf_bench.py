@@ -349,6 +349,21 @@ def benchmark(data_dir, runs=5, memory=False):
             const_stats["note"] = "GET /api/v2/library/constellation?limit=400"
             result["constellation_build"] = const_stats
 
+        # 9d) 2.2.0 read endpoints (< 200 ms p95 target)
+        for op_key, route_path in (
+            ("save_vault_status", "/api/v2/saves/vault/status"),
+            ("trail_list", "/api/v2/ra/trail"),
+            ("deals_list", "/api/v2/deals"),
+            ("capsules_list", "/api/v2/capsules"),
+            ("milestones_list", "/api/v2/insights/milestones"),
+            ("itinerary_get", "/api/v2/itinerary"),
+        ):
+            r_stats, _, _ = _safe_request(origin, token, route_path, runs=runs)
+            if r_stats is not None:
+                r_stats["operation"] = op_key
+                r_stats["note"] = f"GET {route_path}"
+                result[op_key] = r_stats
+
         if memory:
             result["memory"]["end_rss_mb"] = _process_rss_mb(process.pid)
 

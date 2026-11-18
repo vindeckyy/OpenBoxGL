@@ -1,112 +1,37 @@
-# OpenBox 2.1.0
+# OpenBox 2.2.0
 
-**OpenBox 2.1 is the release that makes the 2.0 contracts permanent: one public API, one native-host channel, one backup format to write, no library migration, and the temporary bridges 2.0 promised to remove are gone.**
+**OpenBox 2.2 ("The Long Game") protects your saves across sessions, plans your backlog across weeks, lets you write notes to your future self, turns your RetroAchievements cache into a hunt planner, and optionally watches Steam deals — without changing the v7 library format or adding a single runtime dependency.**
 
-This is the release that clears the runway. There is one address for scripts, one format on disk, and one path through the code for every fix that comes next. Your library, settings, themes, plugins, and existing backups keep working exactly as they did. A 2.0 build can open a 2.1 library, and a 2.1 build opens a 2.0 library without migrating it.
+Your 2.0 and 2.1 libraries open without migration, and 2.1 still opens a 2.2 library cleanly (`docs/upgrade-2.2.md`). Everything works offline out of the box; only Deal Radar's opt-in `deals_enabled=true` mode talks to `store.steampowered.com`.
 
-The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v2.0.0...v2.1.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.0.0...v2.1.0).
+The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v2.1.0...v2.2.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.1.0...v2.2.0).
 
-## Three things that change
+## What's new in 2.2
 
-### 1. Scripts get one address: `/api/v2`
+### 1. Save Vault (`save-vault/`)
 
-- **`/api/v1` is gone.** The routes are removed, and `OPENBOX_ENABLE_V1_API` no longer brings them back. A v1 caller gets a `410` problem document that names the `/api/v2` replacement.
-- **Unversioned `/api/*` paths are no longer a second way in.** They remain private implementation names used to build the `/api/v2` twins. Public calls to `/api/library`, `/api/jobs`, and the other base paths get the same `410` with `context.use` pointing at the replacement.
-- **The native-host channel is `/api/host`.** The legacy names `/api/launch`, `/api/shutdown`, and `/api/native/capabilities` are removed. Native windows shipped with 2.0 or later already use `/api/host` and keep working; a pre-2.0 host needs updating.
-- **Retired paths still authenticate first.** An unauthenticated caller receives `403`, not a `410` that would leak which routes exist.
+- **Automatic or manual SHA-256 save snapshots.** Snapshot explicit `save_paths` and per-game discovered saves manually from the tabbed Save History dialog, automatically on game close (`save_vault_on_close`), or on a schedule (`save_vault_auto_days`). Automatic triggers exclude shared emulator roots (such as PCSX2 memory cards) unless explicitly added.
+- **Mandatory pre-restore safety snapshot.** Restoring any snapshot first captures live saves into an unpruned `pre-restore` safety snapshot; if that capture fails, restore aborts before touching disk (`VAULT_SAFETY_SNAPSHOT_FAILED`).
+- **Separate from `BACKUP_ITEMS`.** Snapshots live in `<data_dir>/save-vault/` so library ZIP backups stay bounded (`docs/backups.md`).
 
-### 2. Backups get one format to write: format 2
+### 2. Achievement Trail (offline RetroAchievements analytics)
 
-- **New backups write format 2 only.** Every file carries its SHA-256, and a restore checks every hash before writing anything.
-- **Format 1 archives still restore**, including archives written by 1.19 and the 2.0 compatibility export. New format 1 writes return `BACKUP_FORMAT_RETIRED`.
-- **Need a 1.19-readable archive?** Create it with a 2.0.x build before upgrading. 2.1 can restore it, but cannot create it.
+- Reads strictly from `cache/retroachievements/` and `cache/trail.json` with zero network calls during reads.
+- `game_progress` now stores `id`, `date_earned`, and `date_earned_hardcore` additively (older caches label `"no date data — refresh to populate"` honestly until refreshed).
+- Renders CSS-only 8-week unlock velocity charts, confidence-rated ETAs, 100-point milestones, and cheapest-first next-up queues in Insights and Game Details.
 
-### 3. The UI gets one versioned path per asset
+### 3. Deal Radar (opt-in Steam watchlist)
 
-- **Covers, theme CSS, theme sounds, RA badges, documents, platform videos, startup videos, and the reader all use `/api/v2`.** The unversioned request path is no longer a second entry point.
-- **The jobs panel reads `/api/v2/jobs`** list and cursor rows. The 1.19 job-name map and its `/api/jobs` route are gone.
+- **Off by default (`deals_enabled=false`).** Zero outbound connections until you review the host disclosure (`https://store.steampowered.com`, AppID & search queries only) and opt in.
+- Redirects off `store.steampowered.com` are refused on every hop; manual entries track non-Steam deals with zero polling.
+- Drop/target notifications use durable `last_notified_price_cents` tracking independent of notification feed eviction.
 
-## What stays the same
+### 4. Player's Log — Time Capsules & Milestone Cards
 
-| Contract | 2.0.0 | 2.1.0 |
-|---|---|---|
-| Public API | `/api/v2` | `/api/v2` (same 358 paths / 387 operations) |
-| Native host channel | `/api/host` | `/api/host` (same 4 operations) |
-| Library schema | 7 | 7 (no migration) |
-| Backup format | Write 2, read 1 and 2 | Write 2, read 1 and 2 |
-| Plugin API | 2, with the v1 adapter | 2, with the v1 adapter |
-| Sync format | 3 | 3 |
+- Seal notes or questions until a chosen local calendar date (`YYYY-MM-DD`); bodies are stripped server-side from every API payload until `unlock_at` passes and unlock once on startup/hourly sweeps or explicit open. ("Sealed" hides content in the app and is not on-disk encryption.)
+- Derives 9 deterministic milestone kinds (game/library playtime, first clears, sessions, RA points/mastery, full-history play streaks, library age anniversaries, collection size) and exports offline 1200×630 PNG cards using the shared canvas renderer from `static/moments.js`.
 
-A 2.0 build reads a 2.1 library because the schema and required fields did not change. A 2.1 build reads a 2.0 library without running a migration. There is no new library format, no settings rewrite, and no plugin migration in this release.
+### 5. Backlog Itinerary (multi-week planner)
 
-## Upgrade in a minute
-
-1. Quit OpenBox.
-2. Install 2.1.0 over 2.0.0. The library opens as format 7; no migration runs.
-3. If a script calls `/api/v1`, an unversioned `/api/*` path, or a legacy host name, move it to `/api/v2` or `/api/host`. The `410` response names the replacement.
-4. If you may need a backup that a 1.19 install can read, create it on 2.0.x before upgrading.
-
-The detailed walkthrough is in [docs/upgrade-2.1.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/upgrade-2.1.md).
-
-### Coming from 1.19
-
-Upgrade to 2.0 first if you need the 1.19-compatible backup export. A direct 1.19 to 2.1 upgrade still migrates the library from schema 6 to 7, keeps `library.v6.backup.json`, and supports `openbox --rollback-library --yes`.
-
-## Breaking changes
-
-| Change | What it means | How to keep working |
-|---|---|---|
-| `/api/v1` removed | Scripts on v1 stop working; the environment bridge is gone | Move to `/api/v2` |
-| Unversioned `/api/*` removed | `/api/library`, `/api/jobs`, and other base paths return `410` | Use the `/api/v2` replacement in the error's `context.use` |
-| Legacy host names removed | Pre-2.0 native windows are refused | Update the native host; 2.0+ hosts already use `/api/host` |
-| Backup format 1 write removed | 2.1 cannot create a 1.19-readable archive | Create it on 2.0.x; format 1 reads still restore |
-| Python 3.10 deprecated | Still works; removal is planned for 3.0 | Use Python 3.12 for source installs |
-
-## Every supported platform
-
-- **Linux x86_64 and aarch64 AppImages** keep the glibc 2.35 floor and the signed zsync update path.
-- **Linux Flatpak moves to runtime 51.** `libwebkit2gtk-4.1.so.0` is present, and the full bundle build and install were verified in the 2.1 run.
-- **Windows x86_64 and ARM64 zips** ship with their native host; the installer and updater select the right build by CPU.
-- **macOS keeps the universal bundle.** The 2.1 bundle is ad-hoc signed; notarization remains the next platform step and is only claimed with `spctl` evidence.
-
-## Get OpenBox 2.1.0
-
-| Platform | Download | Notes |
-|---|---|---|
-| Linux x86_64 | `OpenBox-x86_64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux aarch64 | `OpenBox-aarch64.AppImage` | glibc 2.35 floor; zsync available |
-| Linux Flatpak | `OpenBox-x86_64.flatpak` | x86_64 |
-| Windows x86_64 | `OpenBox-x86_64-windows.zip` | Includes the native host |
-| Windows ARM64 | `OpenBox-arm64-windows.zip` | Includes the ARM64 native host |
-| macOS | `OpenBox-macos.zip` | Universal; ad-hoc signed |
-
-The macOS installer pins the release tag:
-
-```bash
-VERSION=2.1.0
-curl --proto '=https' --tlsv1.2 --fail --location \
-  --output install-macos.sh \
-  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
-less install-macos.sh
-OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
-```
-
-On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`. On Linux, use the AppImage, the Flatpak, or `scripts/install.sh` as before.
-
-## Also fixed in 2.1.0
-
-- **Deep-link readiness uses a real route.** `openbox://` dispatch probes `GET /api/v2/version` instead of a GET health path that did not exist, so an already-running server is detected and a second server is not started.
-- **The media checksum toggle now does what it says.** Settings > Library > Record media checksums controls manifest writes, integrity hashing, and repair.
-- **`python web_app.py` registers every decorator-only route.** The v2 version endpoint, the native host routes, and the rest of the decorated surface load correctly instead of importing a second copy of `web_app`.
-- **Release notes and version surfaces agree.** `release.sh` uses the polished notes, and the version-sync gate checks the release-notes heading and the docs index shipped-release line.
-
-## Known limits
-
-- The macOS bundle is ad-hoc signed, so the first launch and each new build need the Privacy & Security confirmation.
-- Linux-only features remain unavailable on Windows and macOS by design; they are hidden rather than broken.
-- 1.19.x cannot read a format 7 library. Use `library.v6.backup.json` and `openbox --rollback-library` if you need to return to 1.19.
-- 2.1 cannot create a 1.19-compatible backup. Keep a 2.0.x build if you still need one.
-- Python 3.10 works but is deprecated; removal is planned for 3.0.
-- The formal library scale remains 20,000 games. 50,000 remains exploratory until the 3.0 storage decision.
-
-The [changelog](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md) lists the main areas, not every change.
+- Builds a dated weekly schedule from unfinished backlog games using `quick-wins`, `comeback`, or `raided` ordering, ignoring `"Abandoned"`, trashed, and hidden games.
+- Ranks estimates honestly (`IGDB` via bounded concurrency-2 job & 30-day `cache/igdb/` → `Own history` median from `>= 3` completed games → `Default` `8.0 h`) refined by RetroAchievements completion percentage, and derives live `done`/`on_track`/`behind`/`stale` statuses without cluttering settings.

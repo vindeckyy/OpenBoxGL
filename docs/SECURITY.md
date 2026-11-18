@@ -32,7 +32,8 @@ backported, so upgrading is the fix.
 
 | Version | Supported |
 | --- | --- |
-| 2.1.x | Yes (current) |
+| 2.2.x | Yes (current) |
+| 2.1.x | No — upgrade required |
 | 2.0.x | No — upgrade required |
 | 1.19.x | No — upgrade required |
 | 1.18.x | No — upgrade required |
@@ -61,7 +62,7 @@ backported, so upgrading is the fix.
 | 0.4.x | Best effort |
 | < 0.4.0 | No |
 
-Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 2.1.x line is the current supported line; the older rows document the historical support policy and should not be read as promises of backported fixes.
+Security fixes are provided for the latest release on the `master` branch. Fixes land on `master` going forward; older lines are not backported — upgrade to the latest release to receive them. The 2.2.x line is the current supported line; the older rows document the historical support policy and should not be read as promises of backported fixes.
 
 ## Reporting a vulnerability
 
@@ -151,6 +152,15 @@ Gaps (not controls):
 
 - The Linux and Windows native hosts send `X-OpenBox-API-Version`, but they are compiled only in CI. Compilation was not run on this workstation.
 - The macOS bundle is ad-hoc signed, not notarized. The maintainer decided 2.0 ships that way, so the Privacy & Security confirmation on first launch still applies (ADR 0094).
-- Plugin API v2 is implemented (ADR 0092). A v1 plugin keeps the v1 runner and the v1 payloads; a v2 plugin runs under the JSON Lines runner with an output cap.
+- The plugin API v2 is implemented (ADR 0092). A v1 plugin keeps the v1 runner and the v1 payloads; a v2 plugin runs under the JSON Lines runner with an output cap.
 - The pre-app migration page (W1-12) is implemented: the upgrade is reported before the library is used, and the rollback restores the copy of the old file.
+
+## 2.2 threat-model addendum
+
+| Surface added in 2.2 | Threat | Control | Test |
+|---|---|---|---|
+| Save Vault snapshot & restore | Symlink escape, path traversal, unbounded shared-memcard copy, or partial restore clobbering saves | `_reject_symlinks()` + `O_NOFOLLOW` + POSIX containment check before mutation, `512 MiB` / `5,000`-file caps, mandatory `pre-restore` safety snapshot aborting on failure (`VAULT_SAFETY_SNAPSHOT_FAILED`), automatic exclusion of shared roots | `tests/test_save_vault.py`, `tests/test_save_vault_faults.py` |
+| Deal Radar HTTP client | Unsolicited background traffic or HTTP redirects exfiltrating queries/tokens to non-Steam hosts | `deals_enabled=false` default with zero sockets opened when off; request + `_AllowlistedRedirectHandler` enforce `https://store.steampowered.com` cleanly with `DEALS_HOST_BLOCKED` on every hop; `appid` validated `^\d{1,10}$` | `tests/test_deals_privacy.py`, `tests/test_deals_http.py` |
+| Player's Log Time Capsules | Sealed note text leaking before unlock date via API inspection | Server-side redaction strips `body` from every API projection until `opened_at` is set; early opens return `409 CAPSULE_LOCKED`. Note: "sealed" is not on-disk encryption; `library.json` stores plaintext | `tests/test_playerlog.py`, `tests/test_playerlog_http.py` |
+| Backlog Itinerary IGDB fetch | Unconfigured IGDB calls or unbounded concurrent API bursts | Credentials check skips IGDB gracefully with zero sockets when absent; fetches run inside `JOB_MANAGER` capped at concurrency `2` and cached in `cache/igdb/` (`0o600`, 30-day TTL) | `tests/test_itinerary_igdb.py` |
 

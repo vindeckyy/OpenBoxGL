@@ -22,7 +22,7 @@ from pkg.parity.parity_itinerary import (
     replan_itinerary,
 )
 from routes.registry import route
-from webapp_state import JOB_MANAGER, game_from_query, load_state_view, transact_state
+from webapp_state import JOB_MANAGER, game_from_query, load_state_readonly, transact_state
 
 
 def _validate_plan_inputs(payload: dict) -> tuple[int, int, str, list[str] | None, bool]:
@@ -43,13 +43,13 @@ def _validate_plan_inputs(payload: dict) -> tuple[int, int, str, list[str] | Non
 
 @route("GET", "/api/v2/itinerary", spec="handlers.itinerary.itinerary_get")
 def itinerary_get(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     handler.send_json(200, project_live_itinerary(state))
 
 
 @route("GET", "/api/v2/itinerary/estimate", spec="handlers.itinerary.itinerary_estimate")
 def itinerary_estimate(handler, parsed):
-    state = load_state_view()
+    state = load_state_readonly()
     query = parse_qs(parsed.query or "")
     try:
         game = game_from_query(state, query)
@@ -72,7 +72,7 @@ def itinerary_estimate(handler, parsed):
 @route("POST", "/api/v2/itinerary/plan", spec="handlers.itinerary.itinerary_plan")
 def itinerary_plan(handler, payload):
     horizon, minutes, strategy, platforms, fetch_igdb = _validate_plan_inputs(payload if payload is not None else {})
-    state = load_state_view()
+    state = load_state_readonly()
     data_dir = DATA.parent
     eligible = [
         g for g in (state.get("games") or [])

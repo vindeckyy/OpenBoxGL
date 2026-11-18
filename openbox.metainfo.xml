@@ -41,6 +41,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.2.0" date="2026-11-17">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.2.0</url>
+      <description>
+        <p>OpenBox 2.2 ("The Long Game") adds indexed Save Vault save-file snapshots, offline Achievement Trail analytics, opt-in Steam Deal Radar tracking, Player's Log Time Capsules and PNG Milestone Cards, and multi-week Backlog Itinerary planning with zero schema migration (v7 remains compatible with 2.0 and 2.1).</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-12-09">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.1.0</url>
       <description>

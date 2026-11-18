@@ -58,7 +58,7 @@ class PlayerLogHttpTests(unittest.TestCase):
         due_date = today.isoformat()
 
         with mock.patch.object(handler_mod, "DATA", self.data_file), mock.patch.object(
-            handler_mod, "load_state_view", return_value=self.state
+            handler_mod, "load_state_readonly", return_value=self.state
         ), mock.patch.object(handler_mod, "transact_state", side_effect=self._transact):
             # Validation errors
             with self.assertRaises(CapsuleInvalidDate) as e_date:
