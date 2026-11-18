@@ -162,3 +162,5 @@ pkg/parity/parity_save_vault.py
 handlers/savevault.py
 pkg/parity/parity_playerlog.py
 handlers/playerlog.py
+pkg/parity/parity_trail.py
+handlers/trail.py

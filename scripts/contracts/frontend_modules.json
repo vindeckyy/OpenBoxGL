@@ -54,6 +54,7 @@
     "storefront.js",
     "timeline.js",
     "timemachine.js",
+    "trail.js",
     "util.js",
     "whatsnew.js",
     "worker.search.js",

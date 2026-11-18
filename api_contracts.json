@@ -456,6 +456,14 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/ra/trail"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/ra/trail/game"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/reels"
     },
     {
@@ -1385,6 +1393,10 @@
     {
       "method": "POST",
       "path": "/api/v2/ra/settings"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/ra/trail/refresh"
     },
     {
       "method": "POST",

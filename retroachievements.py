@@ -380,11 +380,14 @@ def game_progress(game_id, credentials, fetch=api_get):
         "beaten": beaten_count,
         "mastered": bool(earned_hardcore >= total > 0),
         "achievements": [{
+            "id": item.get("ID"),
             "title": item.get("Title", ""),
             "description": item.get("Description", ""),
             "points": item.get("Points", 0),
             "badge": re.sub(r"[^A-Za-z0-9_-]", "", str(item.get("BadgeName", ""))),
             "earned": bool(item.get("DateEarned") or item.get("DateEarnedHardcore")),
             "hardcore": bool(item.get("DateEarnedHardcore")),
+            "date_earned": item.get("DateEarned") or None,
+            "date_earned_hardcore": item.get("DateEarnedHardcore") or None,
         } for item in achievements],
     }

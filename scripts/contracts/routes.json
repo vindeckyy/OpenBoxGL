@@ -1742,6 +1742,24 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/ra/trail"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/ra/trail/game"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/ra/trail/refresh"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/reels"
     },
     {

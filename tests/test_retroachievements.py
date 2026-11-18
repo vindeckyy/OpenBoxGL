@@ -38,6 +38,9 @@ def test():
         assert (game_id, matched_hash) == (42, digest)
         progress = game_progress(game_id, {"username":"player","api_key":"key"}, fetch)
         assert progress["earned"] == 1 and progress["achievements"][0]["earned"]
+        assert progress["achievements"][0]["date_earned"] == "today"
+        assert progress["achievements"][0]["date_earned_hardcore"] is None
+        assert "id" in progress["achievements"][0]
 
         # A game-list entry with "Hashes": null must not abort the match.
         null_hash = hashlib.md5(b"other rom").hexdigest()

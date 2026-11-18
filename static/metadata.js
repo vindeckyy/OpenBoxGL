@@ -3,6 +3,7 @@ import { api, notify, AppState, token, gameIdOf } from './state.js';
 import { refresh, renderDetails } from './library.js';
 import { confirmAction, promptChoice, openDialog, closeDialog } from './dialogs.js';
 import { t } from './i18n.js';
+import { mountGameTrailCard } from './trail.js';
 
 const MATCH_FIELDS = ['title', 'platform', 'year', 'developer', 'publisher', 'genre', 'esrb', 'description', 'media_categories'];
 const REVIEW_CLASSES = ['exact_review', 'likely', 'possible', 'unmatched'];
@@ -802,7 +803,10 @@ function renderAchievementTabs(container, game, { raResult = null } = {}) {
   const source = sources[active];
   const tabs = keys.map(key => `<button type="button" class="icon-button${key === active ? ' primary' : ''}" data-achievement-tab="${escapeHtml(key)}">${escapeHtml(sources[key].name || key)} · ${sources[key].earned}/${sources[key].total}</button>`).join('');
   const corrected = source.manual ? ' · Corrected manually' : '';
-  container.innerHTML = `<div class="extras">${tabs}</div><p class="description">${source.earned} of ${source.total} earned · ${Number(source.progress_pct || 0).toFixed(1)}%${source.mastered ? ' · mastered' : ''}${corrected}</p><div class="form-grid"><label class="field"><span>Earned</span><input type="number" min="0" max="10000" id="achievementOverrideEarned" value="${Number(source.earned) || 0}"></label><label class="field"><span>Total</span><input type="number" min="0" max="10000" id="achievementOverrideTotal" value="${Number(source.total) || 0}"></label></div><div class="extras">${active === 'retroachievements' ? '' : '<button type="button" class="icon-button" id="refreshAchievementSource">Refresh</button>'}<button type="button" class="icon-button" id="saveAchievementOverride">Correct manually</button>${source.manual ? '<button type="button" class="icon-button" id="clearAchievementOverride">Clear correction</button>' : ''}</div><div class="achievement-list">${_achievementItems(source)}</div>`;
+  container.innerHTML = `<div class="extras">${tabs}</div><p class="description">${source.earned} of ${source.total} earned · ${Number(source.progress_pct || 0).toFixed(1)}%${source.mastered ? ' · mastered' : ''}${corrected}</p>${active === 'retroachievements' ? '<div id="achievementTrailMount"></div>' : ''}<div class="form-grid"><label class="field"><span>Earned</span><input type="number" min="0" max="10000" id="achievementOverrideEarned" value="${Number(source.earned) || 0}"></label><label class="field"><span>Total</span><input type="number" min="0" max="10000" id="achievementOverrideTotal" value="${Number(source.total) || 0}"></label></div><div class="extras">${active === 'retroachievements' ? '' : '<button type="button" class="icon-button" id="refreshAchievementSource">Refresh</button>'}<button type="button" class="icon-button" id="saveAchievementOverride">Correct manually</button>${source.manual ? '<button type="button" class="icon-button" id="clearAchievementOverride">Clear correction</button>' : ''}</div><div class="achievement-list">${_achievementItems(source)}</div>`;
+  if (active === 'retroachievements' && game?.game_id) {
+    mountGameTrailCard(container.querySelector('#achievementTrailMount'), game.game_id);
+  }
   const refreshButton = container.querySelector('#refreshAchievementSource');
   if (refreshButton) refreshButton.onclick = async () => {
     try {

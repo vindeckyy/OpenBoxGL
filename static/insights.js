@@ -10,6 +10,7 @@ import { api, AppState, notify } from './state.js';
 import { t } from './i18n.js';
 import { openWrapped } from './wrapped.js';
 import { mountPlayerLog } from './playerlog.js';
+import { mountTrailShelf } from './trail.js';
 
 const LEVEL_CLASS = ['level-0', 'level-1', 'level-2', 'level-3', 'level-4'];
 const RANGE_KEY = 'openbox-insights-range';
@@ -235,10 +236,12 @@ async function loadInsights() {
         </div>
         ${renderTopGames(top_games || [])}
         ${renderRadar(radarRes && radarRes.radar)}
+        <div id="trailShelfMount"></div>
         <div id="playerLogMount"></div>
       </div>
     `;
     bindRadioControls(body);
+    mountTrailShelf($('trailShelfMount'));
     mountPlayerLog($('playerLogMount'));
     loaded = true;
   } catch (error) {
