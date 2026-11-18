@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 import math
-import os
 from pathlib import Path
+import time
 from typing import Any
 
 from api_errors import RaNotLinked, TrailGameUnknown
@@ -604,7 +604,7 @@ def refresh_trail_progress(
                 if cancel_event.wait(spacing_seconds):
                     break
             else:
-                os.sched_yield()
+                time.sleep(spacing_seconds)
 
     return {"refreshed": refreshed, "total": total, "errors": errors[:20]}
 
