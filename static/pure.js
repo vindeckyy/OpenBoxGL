@@ -230,3 +230,18 @@ export function wrapWordsToWidth(text, measureWidth, maxWidth) {
   if (line) lines.push(line);
   return lines;
 }
+
+// Compute clamped Backlog Itinerary capacity hours for a horizon + daily pace.
+export function itineraryCapacityHours(horizonDays = 30, minutesPerDay = 60) {
+  const h = Math.max(7, Math.min(365, Math.trunc(Number(horizonDays) || 30)));
+  const m = Math.max(5, Math.min(960, Math.trunc(Number(minutesPerDay) || 60)));
+  return Math.round((h * m / 60) * 100) / 100;
+}
+
+// Compute 1-based week bucket given cumulative hours placed before an entry.
+export function itineraryWeekFor(cumulativeBefore, weeklyHours, maxWeeks) {
+  const safeWeekly = Math.max(0.01, Number(weeklyHours) || 7);
+  const safeMax = Math.max(1, Math.trunc(Number(maxWeeks) || 1));
+  const before = Math.max(0, Number(cumulativeBefore) || 0);
+  return Math.min(safeMax, Math.floor(before / safeWeekly) + 1);
+}

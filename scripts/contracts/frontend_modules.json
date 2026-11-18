@@ -24,6 +24,7 @@
     "i18n.js",
     "imports.js",
     "insights.js",
+    "itinerary.js",
     "library.js",
     "library_storage.js",
     "mastery.js",

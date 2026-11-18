@@ -11,6 +11,7 @@ import { t } from './i18n.js';
 import { openWrapped } from './wrapped.js';
 import { mountPlayerLog } from './playerlog.js';
 import { mountTrailShelf } from './trail.js';
+import { mountItineraryWidget, openItineraryDialog } from './itinerary.js';
 
 const LEVEL_CLASS = ['level-0', 'level-1', 'level-2', 'level-3', 'level-4'];
 const RANGE_KEY = 'openbox-insights-range';
@@ -122,7 +123,7 @@ function renderRadio(playlist) {
     </li>`; }).join('');
   return `
     <div class="insight-section radio-card">
-      <div class="radio-head"><h3 class="insight-title">${escapeHtml(t('radio.title'))}${badge}</h3><button type="button" class="icon-button" id="radioRefresh" aria-label="${escapeHtml(t('radio.refresh'))}" title="${escapeHtml(t('radio.refresh'))}">↻</button></div>
+      <div class="radio-head"><h3 class="insight-title">${escapeHtml(t('radio.title'))}${badge}</h3><button type="button" class="icon-button" id="radioPlanIt">${escapeHtml(t('itinerary.plan_it'))}</button><button type="button" class="icon-button" id="radioRefresh" aria-label="${escapeHtml(t('radio.refresh'))}" title="${escapeHtml(t('radio.refresh'))}">↻</button></div>
       <p class="muted radio-saved">${escapeHtml(t('radio.saved', { name: playlist.name || 'Backlog Radio' }))}</p>
       ${notice}
       <ol class="insight-rank">${rows || `<li class="muted">${escapeHtml(t('radio.empty'))}</li>`}</ol>
@@ -237,11 +238,14 @@ async function loadInsights() {
         ${renderTopGames(top_games || [])}
         ${renderRadar(radarRes && radarRes.radar)}
         <div id="trailShelfMount"></div>
+        <div id="itineraryMount"></div>
         <div id="playerLogMount"></div>
       </div>
     `;
     bindRadioControls(body);
+    body.querySelector('#radioPlanIt')?.addEventListener('click', () => openItineraryDialog());
     mountTrailShelf($('trailShelfMount'));
+    mountItineraryWidget($('itineraryMount'));
     mountPlayerLog($('playerLogMount'));
     loaded = true;
   } catch (error) {

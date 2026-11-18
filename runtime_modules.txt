@@ -166,3 +166,5 @@ pkg/parity/parity_trail.py
 handlers/trail.py
 pkg/parity/parity_deals.py
 handlers/deals.py
+pkg/parity/parity_itinerary.py
+handlers/itinerary.py

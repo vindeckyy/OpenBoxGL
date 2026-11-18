@@ -843,6 +843,36 @@
       "methods": [
         "GET"
       ],
+      "path": "/api/v2/itinerary"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/itinerary/abandon"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/itinerary/estimate"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/itinerary/plan"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/itinerary/replan"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
       "path": "/api/v2/jobs"
     },
     {

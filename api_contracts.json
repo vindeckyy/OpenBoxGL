@@ -200,6 +200,14 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/itinerary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/itinerary/estimate"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/jobs"
     },
     {
@@ -1001,6 +1009,18 @@
     {
       "method": "POST",
       "path": "/api/v2/integrations/steam/test"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/itinerary/abandon"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/itinerary/plan"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/itinerary/replan"
     },
     {
       "method": "POST",

@@ -180,6 +180,7 @@ def _ensure_handlers_loaded() -> None:
         "handlers.playerlog",
         "handlers.trail",
         "handlers.deals",
+        "handlers.itinerary",
         "web_app",
     )
     for mod in modules:
