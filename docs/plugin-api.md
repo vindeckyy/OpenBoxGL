@@ -3,10 +3,10 @@
 Status: **frozen** (ADR 0050). Additive changes (optional fields, new hooks)
 may ship in 1.x; removing fields or changing hook semantics requires API v2.
 
-> **Not deprecated, but superseded for new plugins.** API v1 stays valid for the whole 2.x line
-> and its payloads do not change. A new plugin should declare `"api_version": 2` and follow
-> [plugin-api-v2.md](plugin-api-v2.md) (ADR 0092): `min_openbox`, declared subscriptions, the
-> JSON Lines runner, and versioned host services. The v1 runner is removed in 3.0.
+> **Removed in 3.0.** OpenBox 3.0 does not run a v1 plugin. A manifest must set
+> `"api_version": 2`. A missing `api_version` and an explicit `1` both fail with
+> `PLUGIN_API_RETIRED`. Follow [plugin-api-v2.md](plugin-api-v2.md) (ADR 0092):
+> `min_openbox`, declared subscriptions, the JSON Lines runner, and versioned host services.
 
 Plugins are local packages under `<data>/plugins/<id>/` with a `plugin.json`
 manifest and a Python entry file. They run in a bubblewrap sandbox with no

@@ -27,6 +27,7 @@
     "itinerary.js",
     "library.js",
     "library_storage.js",
+    "machines.js",
     "mastery.js",
     "media.js",
     "metadata.js",

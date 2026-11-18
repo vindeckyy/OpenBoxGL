@@ -6,12 +6,12 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from backend_io import atomic_write_text
+from catalog import PROGRESS
 from notifications import record_cloud_sync_outcome
 from pkg.platform_compat import file_lock
 from saves import SAVE_SYNC_LOCK
 
 STAT_FIELDS = ("play_count", "playtime_seconds", "last_played", "progress", "rating", "favorite")
-PROGRESS = {"", "Unplayed", "Playing", "Paused", "Beaten", "Completed", "Mastered", "Abandoned"}
 
 
 class CloudSyncError(Exception):
@@ -222,7 +222,11 @@ def sync_statistics(state, folder, now=None):
                 remote, remote_games = _load_remote_state(target)
                 remote_generated = _timestamp(remote.get("generated_at", ""))
                 last_sync = _timestamp(state.get("settings", {}).get("last_cloud_sync", ""))
-                merged = {}
+                # Keep records this library does not have. Replacing the file
+                # with only local keys deletes the other device's counters.
+                merged = {
+                    key: value for key, value in remote_games.items() if isinstance(value, dict)
+                }
                 changed = 0
                 for game in state["games"]:
                     key = game_key(game)

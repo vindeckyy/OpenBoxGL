@@ -1,4 +1,4 @@
-/* Save Vault UI panel inside the Save History dialog and game detail saves card (ADR 0107). */
+/* Save Vault UI panel inside the Save History dialog and game detail saves card (ADR 0109). */
 import { escapeHtml } from './util.js';
 import { api, gameIdOf, notify, waitForJob } from './state.js';
 import { t } from './i18n.js';

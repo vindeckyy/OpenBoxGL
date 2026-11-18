@@ -77,10 +77,14 @@ def _get_bios_hints():
 BIOS_HINTS = _get_bios_hints()
 
 
+# Underscore is a word character, so \b does not split Shenmue_CD1. A letter
+# boundary still refuses the "side" inside Hillside.
 DISC_RE = re.compile(
-    r"[\s._-]*(?:\(|\[)?(?:disc|disk|cd|dvd|side)\s*([0-9a-d]+)(?:\)|\])?$",
+    r"[\s._-]*(?:\(|\[)?(?<![A-Za-z0-9])(?:disc|disk|cd|dvd|side)\s*([0-9a-d]+)"
+    r"(?:\s+of\s+\d+)?(?:\)|\])?\s*$",
     re.I,
 )
+_DISC_WORD_RE = re.compile(r"(?<![A-Za-z0-9])(?:disc|disk|cd|dvd|side)(?![A-Za-z])", re.I)
 
 
 def recommend_emulators(platform: str):
@@ -214,13 +218,7 @@ def group_multi_disc(paths: Iterable[Path | str]) -> list[list[Path]]:
             stem = name
             suffix = ""
         stem_lower = stem.casefold()
-        if (
-            "disc" not in stem_lower
-            and "disk" not in stem_lower
-            and "cd" not in stem_lower
-            and "dvd" not in stem_lower
-            and "side" not in stem_lower
-        ):
+        if _DISC_WORD_RE.search(stem_lower) is None:
             singles.append(path)
             continue
         match = DISC_RE.search(stem)

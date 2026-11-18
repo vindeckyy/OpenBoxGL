@@ -1,4 +1,4 @@
-"""Command-line library maintenance: check, repair, migrate, and roll back.
+"""Command-line library maintenance: check, repair, and migrate.
 
 Dispatched by ``web_app.py`` (and the launchers that exec it) before any
 server, window, or handler starts. Output is JSON on stdout; refusals and
@@ -21,7 +21,13 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable
 
-LIBRARY_COMMANDS = ("--check-library", "--repair-library", "--migrate-library", "--rollback-library")
+LIBRARY_COMMANDS = ("--check-library", "--repair-library", "--migrate-library")
+REMOVED_COMMANDS = {
+    "--rollback-library": (
+        "openbox --rollback-library was removed in 3.0. "
+        "Use OpenBox 2.1.0 to restore library.v6.backup.json."
+    ),
+}
 EXIT_OK = 0
 EXIT_WARNINGS = 1
 EXIT_ERRORS = 2
@@ -30,28 +36,12 @@ EXIT_USAGE = 4
 
 USAGE = (
     "usage: openbox --check-library | --repair-library [--refresh-backup] | "
-    "--migrate-library | --rollback-library [--yes]"
+    "--migrate-library"
 )
 
 
 def is_library_command(argv: list[str]) -> bool:
-    return any(arg in LIBRARY_COMMANDS for arg in argv)
-
-
-def _stdin_is_interactive() -> bool:
-    """True when stdin can carry a typed answer to a prompt.
-
-    A child started without a console (Windows hands one a NUL device) and a
-    closed stdin cannot answer: reading them raises EOFError, so asking there
-    would abort the command with a traceback instead of refusing cleanly.
-    """
-    stream = getattr(sys, "stdin", None)
-    if stream is None:
-        return False
-    try:
-        return bool(stream.isatty())
-    except (OSError, ValueError):
-        return False
+    return any(arg in LIBRARY_COMMANDS or arg in REMOVED_COMMANDS for arg in argv)
 
 
 def _print(payload: dict[str, Any]) -> None:
@@ -68,6 +58,11 @@ def main(
     from pkg.state import library_v7
     from state_store import JsonStateStore, StateCorruptError
 
+    del input_fn
+    removed = [arg for arg in argv if arg in REMOVED_COMMANDS]
+    if removed:
+        print(REMOVED_COMMANDS[removed[0]], file=sys.stderr)
+        return EXIT_USAGE
     commands = [arg for arg in argv if arg in LIBRARY_COMMANDS]
     if len(commands) != 1:
         print(USAGE, file=sys.stderr)
@@ -82,34 +77,11 @@ def main(
         if command == "--repair-library":
             _print(library_v7.repair_library(directory, refresh_backup="--refresh-backup" in argv))
             return EXIT_OK
-        if command == "--migrate-library":
-            if library_v7.server_running(directory):
-                raise library_v7.RollbackRefused("OpenBox is running. Quit OpenBox before migrating the library.")
-            store = JsonStateStore(directory / library_v7.PRIMARY_NAME)
-            state, report = store.migrate_primary_to_v7()
-            _print({"migrated": state is not None, "report": report})
-            return EXIT_OK
-        confirmed = "--yes" in argv
-        if not confirmed and _stdin_is_interactive():
-            preview = library_v7.rollback(directory, confirmed=False)
-            _print(preview)
-            try:
-                answer = input_fn("Type ROLLBACK to restore the v6 copy: ").strip()
-            except (EOFError, OSError):
-                # stdin ended without an answer: a console-less child (Windows
-                # hands one a NUL device) or a closed pipe. The confirmation
-                # cannot be given here, so refuse and say how to proceed.
-                print("Re-run with --yes to roll back. Nothing was changed.", file=sys.stderr)
-                return EXIT_REFUSED
-            if answer != "ROLLBACK":
-                print("Rollback cancelled; nothing was changed.", file=sys.stderr)
-                return EXIT_REFUSED
-            confirmed = True
-        if not confirmed:
-            _print(library_v7.rollback(directory, confirmed=False))
-            print("Re-run with --yes to roll back. Nothing was changed.", file=sys.stderr)
-            return EXIT_REFUSED
-        _print(library_v7.rollback(directory, confirmed=True))
+        if library_v7.server_running(directory):
+            raise library_v7.RollbackRefused("OpenBox is running. Quit OpenBox before migrating the library.")
+        store = JsonStateStore(directory / library_v7.PRIMARY_NAME)
+        state, report = store.migrate_primary_to_v7()
+        _print({"migrated": state is not None, "report": report})
         return EXIT_OK
     except (library_v7.RollbackRefused, StateCorruptError) as error:
         print(str(error), file=sys.stderr)

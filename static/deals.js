@@ -1,4 +1,4 @@
-/* Deal Radar — opt-in Steam price watch & manual entries UI (ADR 0109). */
+/* Deal Radar — opt-in Steam price watch & manual entries UI (ADR 0111). */
 import { escapeHtml } from './util.js';
 import { AppState, api, notify, waitForJob } from './state.js';
 import { t } from './i18n.js';

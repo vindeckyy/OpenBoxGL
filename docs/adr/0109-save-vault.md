@@ -1,4 +1,4 @@
-# ADR 0107: Save Vault — indexed save snapshots
+# ADR 0109: Save Vault — indexed save snapshots
 
 Status: Accepted (2026-11-17)
 

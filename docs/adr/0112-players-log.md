@@ -1,4 +1,4 @@
-# ADR 0110: Player's Log — Time Capsules and Milestone Cards
+# ADR 0112: Player's Log — Time Capsules and Milestone Cards
 
 Status: Accepted (2026-11-17)
 

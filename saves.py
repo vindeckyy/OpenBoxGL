@@ -765,6 +765,9 @@ def _compute_save_destinations(infos, roots):
         if index < 0 or index >= len(roots):
             raise ValueError("Invalid save backup manifest.")
         root_info = roots[index]
+        relative = Path(*parts[2:])
+        if root_info["file"] and relative != Path(root_info["path"].name):
+            raise ValueError("Save backup contains an unexpected file.")
         base = (root_info["path"].parent if root_info["file"] else root_info["path"]).resolve()
         _reject_symlink_components(root_info["path"])
         _reject_symlink_components(base)

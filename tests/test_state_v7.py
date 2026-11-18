@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fixtures.state.corpus import HUNDRED, make_v6_library  # noqa: E402
-from pkg.state import library_v7  # noqa: E402
+from pkg.state import library_cli  # noqa: E402
 from state_store import (  # noqa: E402
     LIBRARY_ID_RE,
     STATE_FORMAT,
@@ -18,6 +18,7 @@ from state_store import (  # noqa: E402
     JsonStateStore,
     StateCorruptError,
     StateFutureVersionError,
+    StateSchemaTooOldError,
     default_state,
 )
 
@@ -128,14 +129,18 @@ class MigrationTests(unittest.TestCase):
             store.update(lambda state: state.__setitem__("active_sessions", []))
             self.assertFalse((Path(directory) / "sessions.json").exists())
 
-    def test_plain_load_of_a_v6_file_migrates_it_and_writes_the_report(self):
+    def test_plain_load_of_a_v6_file_leaves_the_bytes_unchanged(self):
         with tempfile.TemporaryDirectory() as directory:
             primary = Path(directory) / "library.json"
             primary.write_text(json.dumps(v6_library(1)), encoding="utf-8")
-            state = JsonStateStore(primary).load()
-            self.assertEqual(state["schema_version"], 7)
-            self.assertTrue((Path(directory) / "library.v6.backup.json").is_file())
-            self.assertEqual(library_v7.read_report(Path(directory))["to_schema"], 7)
+            original = primary.read_bytes()
+            with self.assertRaises(StateSchemaTooOldError) as raised:
+                JsonStateStore(primary).load()
+            self.assertEqual(raised.exception.code, "STATE_SCHEMA_TOO_OLD")
+            self.assertIn("openbox --migrate-library", str(raised.exception))
+            self.assertIn("not changed", str(raised.exception))
+            self.assertEqual(primary.read_bytes(), original)
+            self.assertFalse((Path(directory) / "library.v6.backup.json").exists())
 
     def test_migrating_a_current_library_is_a_no_op(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -167,6 +172,7 @@ class MigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             primary = Path(directory) / "library.json"
             primary.write_bytes(HUNDRED.read_bytes())
+            JsonStateStore(primary).migrate_primary_to_v7()
             migrated = JsonStateStore(primary).load()
             self.assertEqual(migrated["schema_version"], STATE_SCHEMA_VERSION)
             self.assertEqual(len(migrated["games"]), 100)
@@ -193,6 +199,28 @@ class FutureAndCorruptTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, "STATE_FUTURE_VERSION")
             self.assertIsInstance(raised.exception, StateCorruptError)
             self.assertEqual(primary.read_bytes(), future)
+            self.assertFalse((Path(directory) / "library.v6.backup.json").exists())
+
+    def test_schema_5_is_refused_by_load_and_by_migrate_library(self):
+        import io
+        from contextlib import redirect_stderr
+
+        with tempfile.TemporaryDirectory() as directory:
+            primary = Path(directory) / "library.json"
+            raw = v6_library(1)
+            raw["schema_version"] = 5
+            original = json.dumps(raw).encode("utf-8")
+            primary.write_bytes(original)
+            with self.assertRaises(StateSchemaTooOldError) as raised:
+                JsonStateStore(primary).load()
+            self.assertIn("OpenBox 2.1", str(raised.exception))
+            self.assertEqual(primary.read_bytes(), original)
+            captured = io.StringIO()
+            with redirect_stderr(captured):
+                code = library_cli.main(["--migrate-library"], data_dir=Path(directory))
+            self.assertEqual(code, library_cli.EXIT_REFUSED)
+            self.assertIn("OpenBox 2.1", captured.getvalue())
+            self.assertEqual(primary.read_bytes(), original)
             self.assertFalse((Path(directory) / "library.v6.backup.json").exists())
 
     def test_truncated_and_malformed_inputs_fail_before_any_file_changes(self):

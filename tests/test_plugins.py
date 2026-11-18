@@ -44,7 +44,7 @@ def test():
         package = root / "source"
         package.mkdir()
         (package / "plugin.json").write_text(json.dumps({
-            "id":"test.plugin", "name":"Test", "version":"1", "hooks":["before_launch"],
+            "id":"test.plugin", "name":"Test", "version":"1", "api_version": 2, "hooks":["before_launch"],
             "sha256": hashlib.sha256(b"test.plugin v1").hexdigest(),
         }))
         (package / "plugin.py").write_text(
@@ -74,7 +74,7 @@ def test():
         broken = root / "broken"
         broken.mkdir()
         (broken / "plugin.json").write_text(json.dumps({
-            "id":"test.plugin", "name":"Test", "version":"2", "hooks":["before_launch"],
+            "id":"test.plugin", "name":"Test", "version":"2", "api_version": 2, "hooks":["before_launch"],
             "sha256": hashlib.sha256(b"test.plugin v2").hexdigest(),
         }))
         (broken / "plugin.py").write_text("raise RuntimeError('boom')\n", encoding="utf-8")
@@ -185,7 +185,7 @@ def test():
             "    return payload\n"
         )
         (plugin / "plugin.json").write_text(_json.dumps({
-            "id": "env.dump", "name": "env dump", "version": "1",
+            "id": "env.dump", "name": "env dump", "version": "1", "api_version": 2,
             "entry": "plugin.py", "hooks": ["before_launch"],
         }), encoding="utf-8")
         dump = root / "env.json"
@@ -212,7 +212,7 @@ def _make_plugin(root, plugin_id, code, hooks=("before_launch",), version="1"):
     package = Path(root) / plugin_id
     package.mkdir(parents=True, exist_ok=True)
     (package / "plugin.json").write_text(json.dumps({
-        "id": plugin_id, "name": plugin_id, "version": version,
+        "id": plugin_id, "name": plugin_id, "version": version, "api_version": 2,
         "hooks": list(hooks),
     }), encoding="utf-8")
     (package / "plugin.py").write_text(code, encoding="utf-8")
@@ -473,7 +473,7 @@ def test_plugin_api_v1():
         package.mkdir()
         (package / "plugin.json").write_text(_json.dumps({
             "id": "command.plugin", "name": "Command", "version": "1.0.0",
-            "api_version": 1, "hooks": ["command"],
+            "api_version": 2, "hooks": ["command"],
             "commands": [{"id": "do-it", "label": "Do it", "description": "test"}],
         }))
         (package / "plugin.py").write_text(
@@ -486,7 +486,7 @@ def test_plugin_api_v1():
         listed = _plugins.list_plugins(root)
         by_id = {item["id"]: item for item in listed}
         assert by_id["command.plugin"]["valid"] is True
-        assert by_id["command.plugin"]["api_version"] == 1
+        assert by_id["command.plugin"]["api_version"] == 2
         assert by_id["broken.plugin"]["valid"] is False
         assert by_id["broken.plugin"]["error"]
         assert by_id["broken.plugin"]["sandbox"] in {"ready", "unavailable", "disabled"}
@@ -524,6 +524,25 @@ def test_plugin_api_v1():
         (newer / "plugin.py").write_text("def command(payload):\n    return payload\n")
         entry = next(item for item in _plugins.list_plugins(root) if item["id"] == "newer.plugin")
         assert entry["valid"] is False and "API v99" in entry["error"]
+
+        retired = root / "retired.plugin"
+        retired.mkdir()
+        (retired / "plugin.json").write_text(_json.dumps({
+            "id": "retired.plugin", "name": "Retired", "version": "1",
+            "api_version": 1, "hooks": ["command"],
+        }))
+        (retired / "plugin.py").write_text("def command(payload):\n    return payload\n")
+        omitted = root / "omitted.plugin"
+        omitted.mkdir()
+        (omitted / "plugin.json").write_text(_json.dumps({
+            "id": "omitted.plugin", "name": "Omitted", "version": "1", "hooks": ["command"],
+        }))
+        (omitted / "plugin.py").write_text("def command(payload):\n    return payload\n")
+        listed = {item["id"]: item for item in _plugins.list_plugins(root)}
+        for plugin_id in ("retired.plugin", "omitted.plugin"):
+            assert listed[plugin_id]["valid"] is False
+            assert listed[plugin_id]["code"] == "PLUGIN_API_RETIRED"
+            assert "must be 2" in listed[plugin_id]["error"]
     print("  plugin api v1: ok")
 
 
@@ -549,7 +568,7 @@ def test_plugin_routes():
         package.mkdir(parents=True)
         (package / "plugin.json").write_text(_json.dumps({
             "id": "command.plugin", "name": "Command", "version": "1.0.0",
-            "api_version": 1, "hooks": ["command"],
+            "api_version": 2, "hooks": ["command"],
             "commands": [{"id": "do-it", "label": "Do it"}],
         }))
         (package / "plugin.py").write_text(
@@ -563,7 +582,7 @@ def test_plugin_routes():
             commands = Dummy()
             commands._api_get_api_v2_plugins_commands(SimpleNamespace(query=""))
             status, payload = commands.responses[-1]
-            assert status == 200 and payload["api_version"] == 1
+            assert status == 200 and payload["api_version"] == 2
             assert payload["commands"][0]["id"] == "do-it"
             assert payload["commands"][0]["plugin_id"] == "command.plugin"
 
@@ -635,7 +654,7 @@ def _make_20_plugin(root, plugin_id, code, manifest_extra=None):
     package.mkdir(parents=True, exist_ok=True)
     manifest = {
         "id": plugin_id, "name": plugin_id, "version": "1.0.0",
-        "api_version": 1, "hooks": ["events"],
+        "api_version": 2, "hooks": ["events"],
     }
     manifest.update(manifest_extra or {})
     (package / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")

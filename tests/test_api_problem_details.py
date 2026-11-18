@@ -18,10 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import api_errors  # noqa: E402
-from state_store import StateFutureVersionError, StateMigrationError  # noqa: E402
+from state_store import StateFutureVersionError, StateMigrationError, StateSchemaTooOldError  # noqa: E402
 
 EXPLAINED_CODES = {
     "STATE_FUTURE_VERSION": StateFutureVersionError,
+    "STATE_SCHEMA_TOO_OLD": StateSchemaTooOldError,
     "STATE_MIGRATION_FAILED": StateMigrationError,
     "MOVE_PLAN_STALE": api_errors.MovePlanStale,
     "BACKUP_FORMAT_UNSUPPORTED": api_errors.BackupFormatUnsupported,

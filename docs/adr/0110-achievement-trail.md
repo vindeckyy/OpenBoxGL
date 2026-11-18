@@ -1,4 +1,4 @@
-# ADR 0108: Achievement Trail — offline RetroAchievements hunt analytics
+# ADR 0110: Achievement Trail — offline RetroAchievements hunt analytics
 
 Status: Accepted (2026-11-17)
 

@@ -2,6 +2,21 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 3.0 candidate: 50k on this machine (2026-11-13)
+
+Machine: Apple M4, macOS 27.2 (arm64), Python 3.15.2, 16 GiB. Working tree based on `e63e3b2`. Command: `python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate --memory --out build/perf-3.0-50k.json`. This is three measured passes, not a soak. The artifact is under `build/` and is not committed.
+
+| Metric | Result | Budget (ADR 0098 / ADR 0108) |
+|---|---:|---|
+| Favorite mutation p95 | 1174.2 ms | write p95 ≤ 1500 ms: met |
+| Bulk mutation p95 | 1319.5 ms | write p95 ≤ 1500 ms: met |
+| Server RSS after warm-up | 1190.0 MB | |
+| Server RSS after the benchmark | **2163.3 MB** | 1500 MB: **missed** |
+
+The write budget is met. The RSS budget is not. The formal scale stays 20,000 games, and 3.0.0 is not tagged on this run. `scripts/perf_bench.py` was not retuned. The same process also ran the script's built-in write-path checks: 10k write p95 219.3 ms (gate 500 ms) and 20k write p95 470.0 ms (gate 1000 ms), both inside the code gates on this host.
+
+The October M4 write numbers and the November Ryzen RSS number remain the split-host evidence that allowed the attempt. They are not this result.
+
 ## 2.1 verification: 10k / 20k / 50k memory (2026-11-01)
 
 Machine: Linux 7.3.0-9-generic, AMD Ryzen 5 4600H (6 cores / 12 threads, about 85% scaling), Python 3.14.8, 15 GiB RAM. Commands:
@@ -13,18 +28,19 @@ Times are p95 milliseconds.
 |---|---:|---:|---|
 | library | 36.6 | 71.3 | read path |
 | library_gzip | 2.2 | 3.2 | read path |
-| favorite_mutation | 431.5 | 889.4 | write budget at 20k is 2000 ms: met |
+| favorite_mutation | 431.5 | 889.4 | favorite gate at 20k is 4000 ms: met |
 | filtered_query | 14.0 | 13.5 | read path |
 | facet | 253.9 | 530.7 | UI-thread facet gate at 20k is 2000 ms: met |
 | picker_score | 33.7 | 66.3 | 200 ms gate: met |
 | constellation_build | 283.2 | 218.7 | 1500 ms gate: met |
-| write (`10k_write` / `20k_write`) | 580.8 | 918.8 | **10k write missed its 500 ms gate on this host; 20k is inside the 2000 ms gate** |
+| write (`10k_write` / `20k_write`) | 580.8 | 918.8 | **10k write missed its 500 ms gate on this host; 20k is inside the 1000 ms gate** |
 
 The 10k write result is a host measurement, not a comparison: these numbers are from a Linux
 Ryzen 5 4600H, while the 2.0 baseline table above was measured on an Apple M4. The same code
 path is unchanged in 2.1. The fixed gate still fails on this host, so the release comparison
 must be run on the reference machine before the 2.1 tag; the server-level 20k write remains
-inside its 2000 ms budget.
+inside its 1000 ms budget. The code gate is `GATES_20K["20k_write_ms_p95"]` = 1000 ms. The
+facet gate at 20k is a different 2000 ms budget.
 
 ### 50k memory
 

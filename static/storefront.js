@@ -3,6 +3,7 @@ import { api, notify, AppState } from './state.js';
 import { refresh, render, renderDetails } from './library.js';
 import { filteredBigBoxGames, renderBigBox } from './bigbox.js';
 import { t } from './i18n.js';
+import { STOREFRONT_PENDING } from './machines.js';
 import { renderPluginSettings } from './plugin_form.js';
 
 
@@ -61,7 +62,7 @@ import { renderPluginSettings } from './plugin_form.js';
           await new Promise(resolve => setTimeout(resolve, 1000));
           await loadStorefrontStatus();
           const result = await api('/api/v2/storefront/status');
-          if ((result.sources || []).every(item => !['pending', 'running'].includes(item.status))) {
+          if ((result.sources || []).every(item => !STOREFRONT_PENDING.has(item.status))) {
             if ($('storefrontScanStatus')) $('storefrontScanStatus').textContent = 'Storefront scan finished.';
             return;
           }

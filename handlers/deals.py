@@ -1,4 +1,4 @@
-"""HTTP handlers for Deal Radar (ADR 0109)."""
+"""HTTP handlers for Deal Radar (ADR 0111)."""
 
 from __future__ import annotations
 

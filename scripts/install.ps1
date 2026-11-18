@@ -79,7 +79,7 @@ function Resolve-Python {
         $found = Get-Command $name -ErrorAction SilentlyContinue
         if ($found) { return $found.Source }
     }
-    Die 'No Python 3 interpreter found. Install Python 3.10+ or set OPENBOX_PYTHON.'
+    Die 'No Python 3 interpreter found. Install Python 3.11+ or set OPENBOX_PYTHON.'
 }
 
 function Resolve-Arch {

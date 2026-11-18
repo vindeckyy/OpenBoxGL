@@ -157,8 +157,10 @@ def safe_media_url(url, *, resolver=socket.getaddrinfo):
         literal = ipaddress.ip_address(host.split("%", 1)[0])
     except ValueError:
         literal = None
+    from backend_io import is_public_ip
+
     if literal is not None:
-        if not literal.is_global:
+        if not is_public_ip(literal):
             raise ValueError("Media hosts must be public addresses.")
         return value
     if resolver is False:
@@ -166,14 +168,18 @@ def safe_media_url(url, *, resolver=socket.getaddrinfo):
     try:
         addresses = {info[4][0] for info in resolver(host, None) if info and info[4]}
     except (OSError, TypeError, ValueError):
-        # Unresolvable now; download_plugin_media resolves again before use.
+        # The download itself resolves again and refuses a private address.
+        # A name that does not resolve yet must not abort a caller that will
+        # retry, and must not be treated as safe to fetch without that check.
+        return value
+    if not addresses:
         return value
     for address in addresses:
         try:
             parsed = ipaddress.ip_address(str(address).split("%", 1)[0])
         except ValueError as error:
             raise ValueError("Media host resolved to an invalid address.") from error
-        if not parsed.is_global:
+        if not is_public_ip(parsed):
             raise ValueError("Media hosts must not resolve to private addresses.")
     return value
 

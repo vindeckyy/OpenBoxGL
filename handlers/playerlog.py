@@ -1,4 +1,4 @@
-"""HTTP handlers for Player's Log — Time Capsules & Milestone Cards (ADR 0110)."""
+"""HTTP handlers for Player's Log — Time Capsules & Milestone Cards (ADR 0112)."""
 
 from __future__ import annotations
 

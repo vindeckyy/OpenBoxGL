@@ -62,7 +62,7 @@ class ParitySetupPreviewTests(unittest.TestCase):
         openbox.APP_DIR = self.data_dir
         openbox.DATA = self.data_dir / "library.json"
         openbox.STATE_STORE = JsonStateStore(openbox.DATA)
-        openbox.DATA.write_text(json.dumps({"schema_version": 6, "games": [], "settings": {}}), encoding="utf-8")
+        openbox.STATE_STORE.save({"schema_version": 6, "games": [], "settings": {}})
 
     def tearDown(self):
         self.tempdir.cleanup()

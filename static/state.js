@@ -3,6 +3,7 @@ import { escapeHtml, apiPath, badge, defaultBadges, sortGames, advancedQueryMatc
 const tr = key => (window.OpenBoxI18n?.t ? window.OpenBoxI18n.t(key) : key);
 const CODE_MESSAGE_KEYS = {
   STATE_FUTURE_VERSION: 'errors.state_future_version',
+  STATE_SCHEMA_TOO_OLD: 'errors.state_schema_too_old',
   STATE_MIGRATION_FAILED: 'errors.state_migration_failed',
   MOVE_PLAN_STALE: 'errors.move_plan_stale',
   BACKUP_FORMAT_UNSUPPORTED: 'errors.backup_format_unsupported',
@@ -652,12 +653,12 @@ try {
       values.forEach(value => {
         (value.match(/[a-z0-9]+/g) || []).forEach(word => {
           const limited = word.slice(0, SEARCH_INDEX_MAX_TERM);
-          // Prefixes: up to 8 substrings anchored at the start (lengths 2–9).
-          for (let end = 2; end <= Math.min(limited.length, 9); end++) terms.add(limited.slice(0, end));
-          // Suffixes: up to 8 substrings anchored at the end (lengths 2–9).
-          for (let len = 2; len <= Math.min(limited.length, 9); len++) terms.add(limited.slice(limited.length - len));
-          // 2-grams: every bigram for short-token matching.
-          for (let i = 0; i <= limited.length - 2; i++) terms.add(limited.slice(i, i + 2));
+          // Every substring of length 2-9, so a token in the middle of a word
+          // ("eld" inside "zelda") is indexed. Prefixes and bigrams alone drop it.
+          const longest = Math.min(limited.length, 9);
+          for (let len = 2; len <= longest; len++) {
+            for (let i = 0; i <= limited.length - len; i++) terms.add(limited.slice(i, i + len));
+          }
         });
         const words = value.match(/[a-z0-9]+/g) || [];
         if (words.length > 1) terms.add(words.map(word => word[0]).join(''));

@@ -113,7 +113,7 @@ function loadCanvasImage(url) {
   });
 }
 
-// Shared 1200x630 canvas card renderer used by Moments and Milestone Cards (ADR 0110).
+// Shared 1200x630 canvas card renderer used by Moments and Milestone Cards (ADR 0112).
 async function renderShareCard({
   kicker = '',
   title = '',

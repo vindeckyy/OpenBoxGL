@@ -41,10 +41,10 @@
     </screenshot>
   </screenshots>
   <releases>
-    <release version="2.2.0" date="2026-11-17">
-      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.2.0</url>
+    <release version="3.0.0" date="2026-11-18">
+      <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v3.0.0</url>
       <description>
-        <p>OpenBox 2.2 ("The Long Game") adds indexed Save Vault save-file snapshots, offline Achievement Trail analytics, opt-in Steam Deal Radar tracking, Player's Log Time Capsules and PNG Milestone Cards, and multi-week Backlog Itinerary planning with zero schema migration (v7 remains compatible with 2.0 and 2.1).</p>
+        <p>OpenBox 3.0 keeps the library in JSON (schema 7 with no migration on open), removes Python 3.10, plugin API v1, and --rollback-library, declares all lifecycles in one table, and adds Save Vault SHA-256 save snapshots, offline Achievement Trail analytics, opt-in Steam Deal Radar tracking, Player's Log Time Capsules and PNG Milestone Cards, and Backlog Itinerary planning. The formal scale stays 20,000 games.</p>
       </description>
     </release>
     <release version="2.1.0" date="2026-12-09">

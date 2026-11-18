@@ -9,6 +9,7 @@ import { subscribe } from './events.js';
  */
 import { $, escapeHtml } from './util.js';
 import { AppState, api, notify, nativePickFolder, showToast } from './state.js';
+import { isJobActive } from './machines.js';
 import { t } from './i18n.js';
 import { render, openRepairWizard } from './library.js';
 import { confirmAction } from './dialogs.js';
@@ -379,7 +380,7 @@ export async function renderLaunchAudit() {
   // The grid's readiness badges read the same report; let them refetch.
   document.dispatchEvent(new Event('app:launch-audit-loaded'));
   const job = result.job || {};
-  const running = job.state === 'queued' || job.state === 'running';
+  const running = isJobActive(job);
   const runLabel = running
     ? t('launch_audit.running', { current: job.current ?? 0, total: job.total ?? '…' })
     : t(result.scanned ? 'launch_audit.rerun' : 'launch_audit.run');

@@ -22,7 +22,7 @@ def _make_plugin(root, *, plugin_id="vendor.meta", permissions=("network",)):
         "id": plugin_id,
         "name": "Vendor Meta",
         "version": "1.0.0",
-        "api_version": 1,
+        "api_version": 2,
         "entry": "plugin.py",
         "hooks": ["metadata", "media"],
         "permissions": list(permissions),

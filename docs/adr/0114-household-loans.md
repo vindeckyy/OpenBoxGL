@@ -1,4 +1,4 @@
-# ADR 0112: Household loans deferred to 2.3
+# ADR 0114: Household loans deferred to 2.3
 
 Status: Deferred to 2.3 (maintainer decision 2026-11-07)
 

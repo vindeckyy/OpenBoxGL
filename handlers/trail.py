@@ -1,4 +1,4 @@
-"""HTTP handlers for Achievement Trail (ADR 0108)."""
+"""HTTP handlers for Achievement Trail (ADR 0110)."""
 
 from __future__ import annotations
 

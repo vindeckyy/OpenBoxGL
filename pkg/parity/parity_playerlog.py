@@ -1,4 +1,4 @@
-"""Player's Log — Time Capsules & Deterministic Milestone Cards (ADR 0110)."""
+"""Player's Log — Time Capsules & Deterministic Milestone Cards (ADR 0112)."""
 
 from __future__ import annotations
 

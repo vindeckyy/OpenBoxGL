@@ -4,6 +4,7 @@ import { promptChoice, promptInput } from './dialogs.js';
 import { openMatchReview } from './metadata.js';
 import { openActivity } from './activity.js';
 import { refresh } from './library.js';
+import { isJobActive } from './machines.js';
 import { t } from './i18n.js';
 
 const SUMMARY_KEYS = [
@@ -171,7 +172,7 @@ async function waitForJob(jobId, {timeoutMs = 120000} = {}) {
       const job = jobs.find(entry => entry.job_id === jobId);
       // Found and finished is the only success. Found and still going, or not
       // found on this page: wait, then walk the whole queue again.
-      if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
+      if (job && !isJobActive(job)) return job;
       if (job) break;
       cursor = result.next_cursor || null;
     } while (cursor);

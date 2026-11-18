@@ -58,16 +58,19 @@ class LibraryCliTests(unittest.TestCase):
         run_cli(self.data_dir, "--migrate-library")
         migrated = self.primary.read_bytes()
         result = run_cli(self.data_dir, "--rollback-library")
-        self.assertEqual(result.returncode, 3)
-        self.assertIn("--yes", result.stderr)
+        self.assertEqual(result.returncode, 4)
+        self.assertIn("removed in 3.0", result.stderr)
+        self.assertIn("2.1.0", result.stderr)
         self.assertEqual(self.primary.read_bytes(), migrated)
 
     def test_rollback_with_yes_restores_the_exact_v6_bytes(self):
         run_cli(self.data_dir, "--migrate-library")
+        migrated = self.primary.read_bytes()
         result = run_cli(self.data_dir, "--rollback-library", "--yes")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "rolled_back")
-        self.assertEqual(self.primary.read_bytes(), self.original)
+        self.assertEqual(result.returncode, 4, result.stderr)
+        self.assertIn("removed in 3.0", result.stderr)
+        self.assertEqual(self.primary.read_bytes(), migrated)
+        self.assertTrue((self.data_dir / "library.v6.backup.json").is_file())
 
     def test_usage_errors_exit_four(self):
         result = run_cli(self.data_dir, "--check-library", "--migrate-library")

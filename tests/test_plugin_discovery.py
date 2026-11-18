@@ -21,7 +21,7 @@ def _make_plugin(root, *, plugin_id="vendor.discover", hooks=("discovery",)):
         "id": plugin_id,
         "name": "Vendor Discovery",
         "version": "1.0.0",
-        "api_version": 1,
+        "api_version": 2,
         "entry": "plugin.py",
         "hooks": list(hooks),
         "capabilities": {"discovery": {"id": "vendor.discovery", "name": "Vendor Discovery"}},
@@ -145,7 +145,7 @@ def test_missing_capability_rejected():
         package.mkdir(parents=True)
         (package / "plugin.py").write_text("pass\n", encoding="utf-8")
         (package / "plugin.json").write_text(json.dumps({
-            "id": "vendor.discover", "name": "Vendor", "version": "1",
+            "id": "vendor.discover", "name": "Vendor", "version": "1", "api_version": 2,
             "hooks": ["discovery"],
         }), encoding="utf-8")
         try:

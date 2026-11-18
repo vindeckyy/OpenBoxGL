@@ -535,7 +535,7 @@ class MediaPathTests(unittest.TestCase):
             mock_db.is_file.return_value = True
             mock_jm.submit.side_effect = lambda name, worker: worker()
             handler_meta.match_metadata({"platform": "all"})
-            self.assertTrue(any("Batch state update error" in err for err in hm.METADATA_JOB.get("errors", [])))
+            self.assertTrue(any("Batch state update error" in err for err in hm.MATCH_JOB.get("errors", [])))
 
         # Test mutate inner KeyError handling
         with mock.patch("handlers.metadata.load_state", return_value=state), \
@@ -546,7 +546,7 @@ class MediaPathTests(unittest.TestCase):
             mock_db.is_file.return_value = True
             mock_jm.submit.side_effect = lambda name, worker: worker()
             handler_meta.match_metadata({"platform": "all"})
-            self.assertTrue(any("Game A" in err for err in hm.METADATA_JOB.get("errors", [])))
+            self.assertTrue(any("Game A" in err for err in hm.MATCH_JOB.get("errors", [])))
 
         # Test bulk_media error in transact_state
         state_media = {"games": [{"game_id": "g1", "name": "Game A", "launchbox_db_id": "100"}], "settings": {}}

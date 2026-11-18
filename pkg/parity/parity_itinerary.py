@@ -1,4 +1,4 @@
-"""Backlog Itinerary — dated multi-week backlog planner (ADR 0111)."""
+"""Backlog Itinerary — dated multi-week backlog planner (ADR 0113)."""
 
 from __future__ import annotations
 

@@ -20,6 +20,7 @@ from pkg.parity.parity_emulator_defs import scan_folder as scan_emulator_folder
 from pkg.parity.parity_perf import apply_perf_profile
 from pkg.parity.parity_premium import category_for_platform
 from pkg.parity.parity_tracking import wait_for_exit
+from pkg.state.machines import FACADE_TO_OPERATION, MACHINES
 from plugins import run_plugins
 
 from pkg.state.cache import (
@@ -185,6 +186,9 @@ def _installs_job_name(key: str) -> str:
     return f"emulator-install:{key}"
 
 
+OPERATION_ACTIVE = MACHINES["operation"].active
+
+
 def _sync_facade_to_operation(job_name: str, data: dict) -> None:
     job_id = JOB_MANAGER.get_operation_id(job_name)
     if not job_id:
@@ -193,6 +197,7 @@ def _sync_facade_to_operation(job_name: str, data: dict) -> None:
 
     service = get_operation_service()
     state = str(data.get("state") or "")
+    target = FACADE_TO_OPERATION.get(state)
     progress = {}
     for key in ("current", "total", "message", "phase"):
         if key in data:
@@ -203,14 +208,21 @@ def _sync_facade_to_operation(job_name: str, data: dict) -> None:
             checkpoint[key] = list(data.get(key) or [])
     if checkpoint:
         progress["checkpoint"] = checkpoint
-    if state in {"installing", "updating", "downloading", "running"}:
+    if target in OPERATION_ACTIVE:
         try:
-            service.mark_running(job_id, message=str(data.get("message") or state))
+            snapshot = service.get(job_id)
+            if (snapshot or {}).get("state") in OPERATION_ACTIVE:
+                # Terminal states belong to JobManager._notify, which finishes
+                # the operation after the worker returns; writing one here would
+                # race it and could flip "partial" back to "done".
+                service.mark_running(job_id, message=str(data.get("message") or state))
         except Exception:
-            LOGGER.exception("Failed to mark facade operation running for %s", job_name)
+            LOGGER.exception("Failed to sync facade state for %s", job_name)
     if progress:
         try:
-            service.update_progress(job_id, **progress)
+            snapshot = service.get(job_id) or {}
+            if snapshot.get("state") in OPERATION_ACTIVE:
+                service.update_progress(job_id, **progress)
         except Exception:
             LOGGER.exception("Failed to sync facade progress for %s", job_name)
 
@@ -235,27 +247,18 @@ class _InstallsFacade(dict):
 
 
 class _SingleJobFacade(dict):
-    def __init__(self, job_name: str, *, alternate_names=()):
+    def __init__(self, job_name: str):
         super().__init__()
         self._job_name = job_name
-        self._alternate_names = tuple(alternate_names)
-
-    def clear(self):
-        super().clear()
-
-    def _resolve_job_name(self) -> str:
-        for name in (self._job_name, *self._alternate_names):
-            if JOB_MANAGER.get_operation_id(name):
-                return name
-        return self._job_name
 
     def update(self, *args, **kwargs):
         super().update(*args, **kwargs)
-        _sync_facade_to_operation(self._resolve_job_name(), dict(self))
+        _sync_facade_to_operation(self._job_name, dict(self))
 
 
 INSTALLS = _InstallsFacade()
-METADATA_JOB = _SingleJobFacade("metadata", alternate_names=("metadata-match",))
+METADATA_JOB = _SingleJobFacade("metadata")
+MATCH_JOB = _SingleJobFacade("metadata-match")
 MEDIA_JOB = _SingleJobFacade("media-bulk")
 JOB_MANAGER = JobManager()
 try:

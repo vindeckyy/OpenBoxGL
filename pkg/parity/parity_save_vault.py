@@ -1,4 +1,4 @@
-"""Save Vault — indexed, retained, SHA-256-verified save-file snapshots (ADR 0107)."""
+"""Save Vault — indexed, retained, SHA-256-verified save-file snapshots (ADR 0109)."""
 
 from __future__ import annotations
 

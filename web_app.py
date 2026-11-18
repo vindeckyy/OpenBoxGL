@@ -32,7 +32,13 @@ from pkg.parity.parity_gamescope import OPENBOX_STEAM_GAME_ID, is_gamescope_gues
 from pkg.platform_compat import IS_LINUX, ensure_macos_tool_path, process_alive, terminate_process_tree
 from routes import dispatch_get, dispatch_post
 from routes.registry import route
-from state_store import StateCorruptError, StateFutureVersionError, StateMigrationError, secure_text_write
+from state_store import (
+    StateCorruptError,
+    StateFutureVersionError,
+    StateMigrationError,
+    StateSchemaTooOldError,
+    secure_text_write,
+)
 from api_errors import problem_payload
 from stock_themes import ensure_stock_themes
 from webapp_state import (
@@ -58,6 +64,7 @@ from webapp_state import (
     unregister_event_subscriber,
 )
 from pkg.state.imports import start_media_queue_worker
+from pkg.state.machines import SESSION_ACTIVE, SESSION_STOPPING
 from handlers.data import DataHandlers
 from handlers.discovery import DiscoveryHandlers
 from handlers.emulators import EmulatorsHandlers
@@ -659,6 +666,9 @@ class Handler(LibraryHandlers, ImportsHandlers, MediaHandlers, MetadataHandlers,
         except StateFutureVersionError as error:
             LOGGER.error("OpenBox library format is newer than this build: %s", error)
             self.send_json(409, {"error": str(error), "code": "STATE_FUTURE_VERSION", "request_id": request_id})
+        except StateSchemaTooOldError as error:
+            LOGGER.error("OpenBox library format is older than this build: %s", error)
+            self.send_json(409, {"error": str(error), "code": "STATE_SCHEMA_TOO_OLD", "request_id": request_id})
         except StateCorruptError as error:
             LOGGER.error("OpenBox state is unavailable: %s", error)
             self.send_json(503, {"error": "OpenBox library data needs recovery before this operation can continue.", "code": "STATE_UNAVAILABLE", "request_id": request_id})
@@ -696,7 +706,7 @@ def _auto_backup_tick():
 
 
 def _save_vault_auto_tick():
-    """Queue scheduled Save Vault snapshots when due (ADR 0107). Best-effort."""
+    """Queue scheduled Save Vault snapshots when due (ADR 0109). Best-effort."""
     try:
         if RUNNING:
             return
@@ -716,7 +726,7 @@ def _save_vault_auto_tick():
 
 
 def _capsule_unlock_tick():
-    """Unlock any due time capsules once and emit server notifications (ADR 0110)."""
+    """Unlock any due time capsules once and emit server notifications (ADR 0112)."""
     try:
         from pkg.parity.parity_playerlog import next_capsule, unlock_due_capsules
 
@@ -736,7 +746,7 @@ def _capsule_unlock_tick():
 
 
 def _deals_auto_tick():
-    """Queue scheduled Deal Radar price poll when opted in and due (ADR 0109)."""
+    """Queue scheduled Deal Radar price poll when opted in and due (ADR 0111)."""
     try:
         if RUNNING:
             return
@@ -818,7 +828,59 @@ def _health_rescan_worker():
         _health_rescan_tick()
 
 
+def reap_sessions_for_shutdown():
+    """Mark persisted sessions stopping, wait 2s, force-kill survivors, remove rows."""
+    try:
+        _state = load_state()
+        _active = [s for s in _state.get("active_sessions", []) if s.get("status") == SESSION_ACTIVE]
+        if not _active:
+            return
+
+        def _mark_stopping(state):
+            for sess in state.get("active_sessions", []):
+                if sess.get("status") == SESSION_ACTIVE:
+                    sess["status"] = SESSION_STOPPING
+
+        try:
+            update_state(_mark_stopping)
+        except Exception:
+            LOGGER.exception("Failed to mark sessions stopping")
+        # Give processes the shutdown window (2s) to exit gracefully, then
+        # force-kill the ones still alive.
+        import time as _time
+
+        deadline = _time.monotonic() + 2.0
+        while _time.monotonic() < deadline:
+            if not any(sess.get("pid") and process_alive(sess["pid"]) for sess in _active):
+                break
+            _time.sleep(0.2)
+        for sess in _active:
+            pid = sess.get("pid")
+            if not pid or not process_alive(pid):
+                continue
+            terminate_process_tree(pid, force=True, pgid=sess.get("pgid"))
+
+        def _remove_stopping(state):
+            state["active_sessions"] = [
+                s for s in state.get("active_sessions", []) if s.get("status") != SESSION_STOPPING
+            ]
+
+        try:
+            update_state(_remove_stopping)
+        except Exception:
+            LOGGER.exception("Failed to remove stopping sessions on shutdown")
+    except Exception:
+        LOGGER.exception("Graceful shutdown session cleanup failed")
+
+
 def main():
+    if sys.version_info < (3, 11):
+        running = ".".join(str(part) for part in sys.version_info[:3])
+        print(
+            f"OpenBox requires Python 3.11 or newer. This interpreter is Python {running}.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     from pkg.state import library_cli
 
     if library_cli.is_library_command(sys.argv[1:]):
@@ -829,11 +891,6 @@ def main():
     if os.environ.get("OPENBOX_ENABLE_V1_API"):
         LOGGER.warning(
             "OPENBOX_ENABLE_V1_API is no longer supported: the /api/v1 surface was removed in 2.1. Use /api/v2."
-        )
-    if sys.version_info < (3, 11):
-        LOGGER.warning(
-            "Python %s is deprecated for OpenBox: 2.1 still supports 3.10, and 3.0 will require 3.11 or newer.",
-            ".".join(str(part) for part in sys.version_info[:2]),
         )
     # An app started from Finder inherits a minimal PATH, so tools the user
     # installed with Homebrew would be invisible to the launcher and to the
@@ -877,7 +934,7 @@ def main():
         profiles.update(merge_profiles_from_definitions(profiles))
     try:
         update_state(bootstrap_state)
-    except (StateFutureVersionError, StateMigrationError) as error:
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError) as error:
         # Never recover automatically from these: the primary is a newer format or a
         # failed upgrade, and the copy in library.json.bak may be older.
         STARTUP_ERRORS.append(str(error))
@@ -933,13 +990,24 @@ def main():
     except Exception:
         LOGGER.exception("On-startup health rescan failed")
     server = OpenBoxServer(("127.0.0.1", 0), Handler)
-    run_configured_commands("startup_commands")
+    try:
+        run_configured_commands("startup_commands")
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError) as error:
+        LOGGER.error("Startup commands skipped because the library cannot be read: %s", error)
+        if not STARTUP_ERRORS:
+            STARTUP_ERRORS.append(str(error))
     # Lifecycle event (F1e): the app finished starting. Best-effort.
     emit_plugin_event(DATA.parent / "plugins", "app_startup", {})
     port = server.server_address[1]
     secure_text_write(DATA.parent / "server.port", str(port))
     secure_text_write(DATA.parent / "server.token", TOKEN)
-    _settings = load_state().get("settings", {})
+    try:
+        _settings = load_state().get("settings", {})
+    except (StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError) as error:
+        LOGGER.error("Settings were not loaded because the library cannot be read: %s", error)
+        _settings = {}
+        if not STARTUP_ERRORS:
+            STARTUP_ERRORS.append(str(error))
     secure_text_write(
         DATA.parent / "native-host-flags",
         f"{int(bool(_settings.get('tray_enabled')))} {int(bool(_settings.get('minimize_to_tray')))}\n",
@@ -947,7 +1015,7 @@ def main():
     try:
         from pkg.parity.parity_tray_recent import write_recent_games
         write_recent_games(DATA.parent, load_state())
-    except (OSError, ValueError):
+    except (OSError, ValueError, StateFutureVersionError, StateSchemaTooOldError, StateMigrationError, StateCorruptError):
         LOGGER.exception("Could not publish recent games for the tray")
     url = f"http://127.0.0.1:{port}/?token={TOKEN}"
     # Log without the token; the token-bearing URL is only printed to the
@@ -1012,51 +1080,8 @@ def main():
                 control_game_session(launch_id, "stop")
             except ValueError:
                 pass
-        # Persist graceful shutdown for any remaining active_sessions (e.g., reattached ones not in RUNNING).
-        try:
-            _state = load_state()
-            _active = [s for s in _state.get("active_sessions", []) if s.get("status") == "active"]
-            if _active:
-                # Mark stopping and persist.
-                def _mark_stopping(state):
-                    for sess in state.get("active_sessions", []):
-                        if sess.get("status") == "active":
-                            sess["status"] = "stopping"
-                try:
-                    update_state(_mark_stopping)
-                except Exception:
-                    LOGGER.exception("Failed to mark sessions stopping")
-                # Give processes the shutdown window (2s) to exit gracefully, then force-kill known pgids.
-                import time as _time
-                _deadline = _time.monotonic() + 2.0
-                while _time.monotonic() < _deadline:
-                    _alive_any = False
-                    for sess in _active:
-                        _pid = sess.get("pid")
-                        if _pid:
-                            if process_alive(_pid):
-                                _alive_any = True
-                                break
-                    if not _alive_any:
-                        break
-                    _time.sleep(0.2)
-                for sess in _active:
-                    _pid = sess.get("pid")
-                    _pgid = sess.get("pgid")
-                    if _pid:
-                        if not process_alive(_pid):
-                            continue
-                        # Still alive after window: force-kill the group/tree.
-                        terminate_process_tree(_pid, force=True, pgid=_pgid)
-                # Persist final state: remove stopping entries before shutdown.
-                def _remove_stopping(state):
-                    state["active_sessions"] = [s for s in state.get("active_sessions", []) if s.get("status") != "stopping"]
-                try:
-                    update_state(_remove_stopping)
-                except Exception:
-                    LOGGER.exception("Failed to remove stopping sessions on shutdown")
-        except Exception:
-            LOGGER.exception("Graceful shutdown session cleanup failed")
+        # Mark live sessions stopping, give them the shutdown window, then remove the rows.
+        reap_sessions_for_shutdown()
         # Lifecycle event (F1e): the app is shutting down. Best-effort and
         # bounded by the per-plugin timeout; never blocks teardown.
         emit_plugin_event(DATA.parent / "plugins", "app_shutdown", {})

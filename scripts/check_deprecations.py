@@ -75,6 +75,21 @@ def main() -> int:
                 from pkg.parity import parity_backup
                 if 1 in parity_backup.WRITABLE_BACKUP_FORMATS:
                     problems.append(f"{surface}: marked Removed but format 1 is still writable")
+            if surface.startswith("Python 3.10"):
+                source = (ROOT / "web_app.py").read_text(encoding="utf-8")
+                if "sys.version_info < (3, 11)" not in source or "SystemExit" not in source:
+                    problems.append(f"{surface}: marked Removed but web_app.py does not refuse Python older than 3.11")
+            if "rollback-library" in surface:
+                from pkg.state.library_cli import LIBRARY_COMMANDS
+                if "--rollback-library" in LIBRARY_COMMANDS:
+                    problems.append(f"{surface}: marked Removed but --rollback-library is still a library command")
+            if surface.startswith("Plugin API v1"):
+                from plugins import PLUGIN_API_VERSIONS
+                if 1 in PLUGIN_API_VERSIONS:
+                    problems.append(f"{surface}: marked Removed but plugin API 1 is still accepted")
+                modules = (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines()
+                if "plugin_runner.py" in modules or (ROOT / "plugin_runner.py").is_file():
+                    problems.append(f"{surface}: marked Removed but plugin_runner.py is still a runtime module")
         elif status.startswith(STATUS_DEPRECATED):
             if _version(removed) <= _version(current):
                 problems.append(f"{surface}: marked Deprecated but removal {removed} is not after {current}")

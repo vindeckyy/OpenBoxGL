@@ -546,7 +546,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!$('screenSaver').hidden) {
         const game = AppState.screenSaverGame;
         stopScreenSaver();
-        if (matchesKey(event, keyAction('play')) && game) activateCurrentGame(game);
+        if (matchesKey(event, keyAction('play')) && game && !event.repeat) activateCurrentGame(game);
         event.preventDefault();
         return;
       }
@@ -579,6 +579,7 @@ window.addEventListener('DOMContentLoaded', () => {
           else startBigBoxBack();
         }],
         ['play', () => {
+          if (event.repeat) return;
           const target = AppState.bigBoxGames[AppState.bigBoxIndex];
           if (target) activateCurrentGame(target);
         }],

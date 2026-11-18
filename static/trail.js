@@ -1,4 +1,4 @@
-/* Achievement Trail — offline RetroAchievements analytics UI (ADR 0108). */
+/* Achievement Trail — offline RetroAchievements analytics UI (ADR 0110). */
 import { escapeHtml } from './util.js';
 import { api, notify, waitForJob } from './state.js';
 import { t } from './i18n.js';

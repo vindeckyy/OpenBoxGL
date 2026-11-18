@@ -1,9 +1,8 @@
 /* Pre-app migration page (plan W1-12, W6-01).
  *
  * When the library was upgraded to the v7 format and the user has not seen the report yet,
- * this gate covers the app: it shows what the migration did, where the copy of the old library
- * is, and offers the rollback. The library is upgraded on purpose, so the page reports the
- * change and hands the choice to the user.
+ * this gate covers the app: it shows what the migration did and where the copy of the old
+ * library is. OpenBox 3.0 does not roll that copy back.
  */
 import { $, escapeHtml } from './util.js';
 import { api } from './state.js';
@@ -64,40 +63,7 @@ async function openLibrary() {
   document.body.classList.remove('migration-pending');
 }
 
-async function rollBack() {
-  const status = $('migrationStatus');
-  try {
-    const preview = await api('/api/v2/setup/migration/rollback', { method: 'POST', body: JSON.stringify({}) });
-    if (preview.status === 'confirmation_required') {
-      const lost = (preview.lost || []).length;
-      status.textContent = t('migration.rollback_pending', { count: lost });
-      $('migrationRollback').disabled = false;
-      $('migrationRollback').dataset.confirmed = '1';
-      return;
-    }
-  } catch (error) {
-    status.textContent = t('migration.error', { message: error.message });
-    return;
-  }
-}
-
-async function rollBackConfirmed() {
-  const status = $('migrationStatus');
-  try {
-    await api('/api/v2/setup/migration/rollback', { method: 'POST', body: JSON.stringify({ confirmed: true }) });
-  } catch (error) {
-    status.textContent = t('migration.error', { message: error.message });
-    return;
-  }
-  status.textContent = t('migration.rolled_back');
-  $('migrationGate').hidden = false;
-}
-
 export function initMigrationGate() {
-  $('migrationRollback').onclick = () => {
-    if ($('migrationRollback').dataset.confirmed === '1') rollBackConfirmed();
-    else rollBack();
-  };
   $('migrationBackupButton').onclick = backUpFirst;
   $('migrationOpen').onclick = openLibrary;
   api('/api/v2/setup/migration/status')

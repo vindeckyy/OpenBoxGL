@@ -1,4 +1,4 @@
-/* Backlog Itinerary — dated multi-week backlog planner UI (ADR 0111). */
+/* Backlog Itinerary — dated multi-week backlog planner UI (ADR 0113). */
 import { escapeHtml } from './util.js';
 import { AppState, api, notify, waitForJob } from './state.js';
 import { t } from './i18n.js';

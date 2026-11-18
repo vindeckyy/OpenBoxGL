@@ -18,6 +18,7 @@ REDACTED_KEYS = frozenset({
     "api_key",
     "access_token",
     "credentials",
+    "museum_kiosk_pin_hash",
 })
 
 EXPORT_EXCLUDED_TOP_LEVEL_KEYS = frozenset({

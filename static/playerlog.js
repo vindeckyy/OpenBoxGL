@@ -1,4 +1,4 @@
-/* Player's Log — Time Capsules & Deterministic Milestone Cards (ADR 0110). */
+/* Player's Log — Time Capsules & Deterministic Milestone Cards (ADR 0112). */
 import { $, escapeHtml } from './util.js';
 import { api, notify } from './state.js';
 import { t } from './i18n.js';

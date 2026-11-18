@@ -60,11 +60,15 @@ class ManifestV2Tests(unittest.TestCase):
         self.assertEqual(manifest["min_openbox"], "1.19.0")
         self.assertEqual(manifest["subscriptions"], ["session.ended"])
 
-    def test_a_v1_manifest_stays_v1(self):
-        manifest = self.read({"id": "v2.plugin", "name": "V1", "version": "1", "entry": "plugin.py", "hooks": ["before_launch"]})
-        self.assertEqual(manifest["api_version"], 1)
-        self.assertEqual(manifest["min_openbox"], "")
-        self.assertEqual(manifest["subscriptions"], [])
+    def test_a_missing_api_version_is_retired(self):
+        with self.assertRaisesRegex(ValueError, "must be 2") as raised:
+            self.read({"id": "v2.plugin", "name": "V1", "version": "1", "entry": "plugin.py", "hooks": ["before_launch"]})
+        self.assertEqual(getattr(raised.exception, "code", ""), "PLUGIN_API_RETIRED")
+
+    def test_an_explicit_v1_manifest_is_retired(self):
+        with self.assertRaisesRegex(ValueError, "removed the v1 runner") as raised:
+            self.read(v2_manifest(api_version=1))
+        self.assertEqual(raised.exception.code, "PLUGIN_API_RETIRED")
 
     def test_an_unknown_api_version_is_refused(self):
         with self.assertRaisesRegex(ValueError, "requires API v3"):
@@ -83,7 +87,7 @@ class ManifestV2Tests(unittest.TestCase):
             self.read(v2_manifest(subscriptions=["library.exploded"]))
 
     def test_v2_only_fields_on_a_v1_manifest_are_refused(self):
-        with self.assertRaisesRegex(ValueError, "min_openbox needs plugin api_version 2"):
+        with self.assertRaisesRegex(ValueError, "must be 2"):
             self.read({"id": "v2.plugin", "name": "V1", "version": "1", "entry": "plugin.py", "hooks": ["before_launch"], "min_openbox": "1.0.0"})
 
 
@@ -150,16 +154,19 @@ class HostV2Tests(unittest.TestCase):
             self.assertEqual(error, "")
             self.assertEqual(result["args"], ["--ran"])
 
-    def test_a_v1_plugin_still_runs_with_the_v1_runner(self):
+    def test_a_v1_plugin_is_retired_and_is_not_spawned(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_package(root, "v1.plugin", {
-                "id": "v1.plugin", "name": "V1", "version": "1", "entry": "plugin.py", "hooks": ["before_launch"],
+                "id": "v1.plugin", "name": "V1", "version": "1", "api_version": 1,
+                "entry": "plugin.py", "hooks": ["before_launch"],
             }, ECHO_HOOK)
             with mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}):
-                result, error = run_plugin_hook(root, "v1.plugin", "before_launch", {"args": []})
-            self.assertEqual(error, "")
-            self.assertEqual(result["args"], ["--ran"])
+                with mock.patch("plugins.subprocess.run") as spawned:
+                    result, error = run_plugin_hook(root, "v1.plugin", "before_launch", {"args": []})
+            self.assertIsNone(result)
+            self.assertIn("must be 2", error)
+            spawned.assert_not_called()
 
     def test_a_v2_plugin_error_reaches_the_caller(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -181,15 +188,16 @@ class SandboxV2Tests(unittest.TestCase):
             entry.write_text(ECHO_HOOK, encoding="utf-8")
             # The command is only built when bubblewrap is present, so stub the lookup.
             with mock.patch.object(plugins.shutil, "which", return_value="/usr/bin/bwrap"):
-                v1 = plugins._sandboxed_command(package, entry, "before_launch")
-                v2 = plugins._sandboxed_command(package, entry, "before_launch", api_version=2)
-        masks = ("--tmpfs", "--proc", "--dev", "--ro-bind")
-        self.assertEqual([part for part in v2 if part in masks], [part for part in v1 if part in masks])
-        self.assertIn("plugin_runner.py", " ".join(v1))
-        self.assertIn("plugin_runner_v2.py", " ".join(v2))
-        self.assertNotIn("plugin_runner.py", " ".join(v2))
-        # The v2 runner learns the hook from the request, so the command carries no hook name.
-        self.assertNotIn("before_launch", v2)
+                with self.assertRaises(plugins.PluginApiRetired):
+                    plugins._sandboxed_command(package, entry, "before_launch", api_version=1)
+                command = plugins._sandboxed_command(package, entry, "before_launch")
+        joined = " ".join(command)
+        self.assertIn("plugin_runner_v2.py", joined)
+        self.assertNotIn("plugin_runner.py", joined)
+        for flag in ("--tmpfs", "--proc", "--dev", "--ro-bind"):
+            self.assertIn(flag, command)
+        # The runner learns the hook from the request, so the command carries no hook name.
+        self.assertNotIn("before_launch", command)
 
 
 if __name__ == "__main__":

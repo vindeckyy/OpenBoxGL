@@ -615,7 +615,9 @@ def _custom_preset_args(preset):
         args += ["-b"]
     extra = preset.get("extra_args")
     if extra:
-        args.extend(str(a) for a in extra if a)
+        # gamescope stops parsing at the first "--". A preset that includes
+        # one would make the emulator argv the nested command's arguments.
+        args.extend(str(a) for a in extra if a and str(a) != "--")
     return args
 
 
@@ -654,8 +656,23 @@ def merge_gamescope_preset(name, extra_args=None, custom_presets=None):
         return []
     args = list(preset.get("args", []))
     if extra_args:
-        args.extend(str(a) for a in extra_args if a)
+        args.extend(str(a) for a in extra_args if a and str(a) != "--")
     return args
+
+
+_SECRET_ENV_MARKERS = (
+    "TOKEN", "PASSWORD", "SECRET", "API_KEY",
+    "OPENBOX_", "RETROACHIEVEMENTS_", "EMUMOVIES_", "GITHUB_", "STRIPE_",
+    "IGDB_", "GAMEYFIN_", "SCREENSCRAPER_", "STEAMGRIDDB_",
+)
+
+
+def _strip_secret_env(env: dict) -> None:
+    """Drop OpenBox credential variables before they are copied into a game."""
+    for key in list(env):
+        upper = key.upper()
+        if any(marker in upper for marker in _SECRET_ENV_MARKERS):
+            env.pop(key, None)
 
 
 def apply_mangohud_env(env=None, enabled=False):
@@ -665,6 +682,7 @@ def apply_mangohud_env(env=None, enabled=False):
     When disabled, removes both keys.
     """
     base = dict(env if env is not None else os.environ)
+    _strip_secret_env(base)
     if enabled:
         base["MANGOHUD"] = "1"
         base["MANGOHUD_CONFIG"] = "font_size=24,no_display"

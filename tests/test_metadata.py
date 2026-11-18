@@ -460,7 +460,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("Metadata.xml", xml)
         build_database(package, self.db_path)
-        self.openbox.DATA.write_text(json.dumps(
+        self.openbox.STATE_STORE.save(
                 {
                     "schema_version": 6,
                     "games": [
@@ -470,7 +470,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            ), encoding="utf-8")
+            )
 
     def tearDown(self):
         close_db_connections()
@@ -624,7 +624,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
         return dup_db
 
     def test_preview_import_batch_and_expiry(self):
-        self.openbox.DATA.write_text(json.dumps(
+        self.openbox.STATE_STORE.save(
                 {
                     "schema_version": 6,
                     "games": [
@@ -632,7 +632,7 @@ class MatchPreviewV2Tests(unittest.TestCase):
                     ],
                     "settings": {},
                 }
-            ), encoding="utf-8")
+            )
         preview = create_match_preview_record(import_batch_id="batch-1", data_dir=self.openbox.DATA)
         self.assertEqual(preview["import_batch_id"], "batch-1")
         with self.assertRaises(PreviewNotFound):
@@ -879,7 +879,7 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
             hm.METADATA_JOB.clear()
             handler.match_metadata({"platform": "all"})
             self.assertEqual(handler.responses[-1][0], 202)
-            hm.METADATA_JOB.update({"state": "running"})
+            hm.MATCH_JOB.update({"state": "running"})
             handler.match_metadata({"platform": "all"})
             self.assertEqual(handler.responses[-1][0], 200)
 
@@ -1017,8 +1017,9 @@ class MetadataHandlerRouteTests(MatchPreviewV2Tests):
              mock.patch("handlers.metadata.JOB_MANAGER") as mock_jm:
             mock_jm.submit.side_effect = lambda name, worker: worker()
             hm.METADATA_JOB.clear()
+            hm.MATCH_JOB.clear()
             handler.match_metadata({"platform": "all"})
-            self.assertEqual(hm.METADATA_JOB.get("state"), "done")
+            self.assertEqual(hm.MATCH_JOB.get("state"), "done")
 
     def test_apply_metadata_validation(self):
         handler = DummyMetadataHandler()

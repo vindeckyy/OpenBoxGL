@@ -575,7 +575,7 @@ def _clean_currency(merged):
 
 
 def _clean_save_vault(merged):
-    """Validate Save Vault preferences (ADR 0107)."""
+    """Validate Save Vault preferences (ADR 0109)."""
     enabled = _clean_bool(merged, "save_vault_enabled", True)
     raw_keep = merged.get("save_vault_keep", 5)
     keep = _clean_bounded_int(
@@ -594,7 +594,7 @@ def _clean_save_vault(merged):
 
 
 def _clean_deals(merged):
-    """Validate Deal Radar preferences (ADR 0109)."""
+    """Validate Deal Radar preferences (ADR 0111)."""
     enabled = _clean_bool(merged, "deals_enabled", False)
     raw_poll = merged.get("deals_poll_hours", 168)
     poll_hours = _clean_bounded_int(

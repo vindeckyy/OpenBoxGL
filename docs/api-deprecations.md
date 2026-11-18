@@ -10,9 +10,9 @@ Every surface OpenBox has deprecated, who owns it, when it was announced, and wh
 | Native host legacy names: `/api/launch`, `/api/shutdown`, `/api/native/capabilities` | Maintainer | 2.0.0 | Hosts call `/api/host/*`; 2.0+ hosts keep working. | 2.1.0 | None | Removed in 2.1.0 |
 | `OPENBOX_ENABLE_V1_API` | Maintainer | 2.0.0 | Ignored; a startup warning points to `/api/v2`. | 2.1.0 | None | Removed in 2.1.0 |
 | 1.19-compatible backup write (format 1) | Maintainer | 2.0.0 | 2.0.x writes it; 2.1 reads format 1 but writes format 2 only. | 2.1.0 | None | Removed in 2.1.0 |
-| Python 3.10 runtime support | Maintainer | 2.1.0 | Supported with a deprecation warning; 3.12 is recommended. | 3.0.0 | None | Deprecated, removal 3.0.0 |
-| `openbox --rollback-library` | Maintainer | 2.1.0 | Still restores the v6 copy; keep `library.v6.backup.json`. | 3.0.0 | None | Deprecated, removal 3.0.0 |
-| Plugin API v1 adapter | Maintainer | 2.0.0 | v1 plugins still run unchanged; v2 is the current API. | 3.0.0 | None | Deprecated, removal 3.0.0 |
+| Python 3.10 runtime support | Maintainer | 2.1.0 | Supported with a deprecation warning in 2.1; 3.12 was recommended. | 3.0.0 | None | Removed in 3.0.0 |
+| `openbox --rollback-library` | Maintainer | 2.1.0 | 2.1 restored the v6 copy from `library.v6.backup.json`. | 3.0.0 | None | Removed in 3.0.0 |
+| Plugin API v1 adapter | Maintainer | 2.0.0 | v1 plugins ran unchanged through 2.1; v2 was the current API. | 3.0.0 | None | Removed in 3.0.0 |
 
 ## Rules
 

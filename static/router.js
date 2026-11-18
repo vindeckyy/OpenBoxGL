@@ -54,9 +54,17 @@ export function applyHash() {
   const segments = hashSegments();
   if (!segments.length) return false;
   let changed = false;
+  // Values are encoded, but encodeURIComponent leaves [A-Za-z0-9] untouched,
+  // so a search for "game" is the same segment as the game key. Only even
+  // positions are keys; currentHash always writes key/value pairs.
+  const values = new Map();
+  for (let index = 0; index + 1 < segments.length; index += 2) {
+    if (ROUTE_KEYS.includes(segments[index]) && !values.has(segments[index])) {
+      values.set(segments[index], decodeSegment(segments[index + 1]));
+    }
+  }
   const pair = (key, apply) => {
-    const index = segments.indexOf(key);
-    if (index >= 0 && index + 1 < segments.length) apply(decodeSegment(segments[index + 1]));
+    if (values.has(key)) apply(values.get(key));
   };
   pair('platform', value => { if (AppState.platform !== value) { changed = true; AppState.platform = value; } });
   pair('category', value => { if ((AppState.platformCategory || 'all') !== value) { changed = true; AppState.platformCategory = value; } });

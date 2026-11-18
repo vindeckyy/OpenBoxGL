@@ -13,6 +13,7 @@ import time
 
 from automation import build_event
 from api_errors import Conflict
+from pkg.state.machines import SESSION_ABANDONED, SESSION_ACTIVE
 from pkg.state.registry import EVENT_SEQUENCE, PENDING_LAUNCHES, PROCESS_LOCK, PROCESSES, RUNNING, SESSION_EVENTS  # noqa: F401
 from pkg.platform_compat import (
     IS_LINUX,
@@ -187,14 +188,15 @@ def _verify_process_identity(session):
         return False
     # Verify start time matches
     current_start = read_start(pid)
-    if current_start != session.get('proc_start_time'):
+    stored_start = session.get("proc_start_time")
+    # A missing marker is not a match. Both sides empty used to accept any
+    # live PID, and a later stop would signal that process.
+    if not current_start or not stored_start or current_start != stored_start:
         return False
-    # Verify command fingerprint matches
     current_cmd = read_cmd(pid)
-    if session.get('command_fingerprint') and current_cmd:
-        # Fuzzy match — first 50 chars should match
-        if current_cmd[:50] != session['command_fingerprint'][:50]:
-            return False
+    stored_cmd = str(session.get("command_fingerprint") or "")
+    if not current_cmd or not stored_cmd or current_cmd != stored_cmd:
+        return False
     return True
 
 
@@ -210,7 +212,7 @@ def reconcile_sessions_on_startup(state):
             reattached.append(session)
         else:
             # Mark abandoned — DON'T kill the PID
-            session['status'] = 'abandoned'
+            session['status'] = SESSION_ABANDONED
             abandoned.append(session)
     # Update state: keep reattached + abandoned (abandoned shown in UI)
     state['active_sessions'] = reattached + abandoned
@@ -718,7 +720,7 @@ def _make_start_mutator(stable_game_id, index, started, process, entry, missing,
             "command_fingerprint": read_cmd(process.pid),
             "start_time": started.isoformat(timespec="seconds"),
             "perf_profile": effective_profile,
-            "status": "active"
+            "status": SESSION_ACTIVE
         }
         state.setdefault("active_sessions", []).append(session_record)
 

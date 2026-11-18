@@ -1,4 +1,4 @@
-# ADR 0111: Backlog Itinerary — dated play planning
+# ADR 0113: Backlog Itinerary — dated play planning
 
 Status: Accepted (2026-11-17)
 

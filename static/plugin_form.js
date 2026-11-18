@@ -5,6 +5,13 @@ function fieldValue(values, name, field) {
   return values[name] !== undefined ? values[name] : field.default;
 }
 
+function numericAttr(name, value) {
+  if (typeof value === 'boolean' || value === null || value === undefined || value === '') return '';
+  const text = String(value);
+  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return '';
+  return ` ${name}="${text}"`;
+}
+
 /**
  * Render schema fields into HTML. Each row carries `data-setting`, so the
  * Settings search sees dynamically rendered plugin settings.
@@ -25,12 +32,12 @@ export function pluginSettingsFields(schema = {}, values = {}, { pluginName = ''
     } else if (field.type === 'boolean') {
       input = `<input type="checkbox" name="${fieldName}" data-plugin-setting-type="boolean"${value ? ' checked' : ''}>`;
     } else if (field.type === 'integer' || field.type === 'number') {
-      input = `<input type="number" name="${fieldName}" data-plugin-setting-type="${type}" value="${escapeHtml(String(value ?? ''))}"${field.minimum !== undefined ? ` min="${field.minimum}"` : ''}${field.maximum !== undefined ? ` max="${field.maximum}"` : ''}${field.type === 'integer' ? ' step="1"' : ' step="any"'}>`;
+      input = `<input type="number" name="${fieldName}" data-plugin-setting-type="${type}" value="${escapeHtml(String(value ?? ''))}"${numericAttr('min', field.minimum)}${numericAttr('max', field.maximum)}${field.type === 'integer' ? ' step="1"' : ' step="any"'}>`;
     } else if (field.format === 'password') {
       const placeholder = 'Stored; leave blank to keep';
       input = `<span class="path-input-row"><input type="password" name="${fieldName}" data-plugin-setting-type="password" value="" placeholder="${escapeHtml(placeholder)}" autocomplete="new-password"><label class="check"><input type="checkbox" data-plugin-clear-secret="${fieldName}"> Clear stored</label></span>`;
     } else {
-      input = `<input type="text" name="${fieldName}" data-plugin-setting-type="string" value="${escapeHtml(String(value ?? ''))}"${field.maxLength ? ` maxlength="${field.maxLength}"` : ''}>`;
+      input = `<input type="text" name="${fieldName}" data-plugin-setting-type="string" value="${escapeHtml(String(value ?? ''))}"${numericAttr('maxlength', field.maxLength)}>`
     }
     return `<label class="field wide settings-field" data-settings-panel="plugins" data-setting="${dataSetting}" data-plugin-setting-row="${fieldName}" data-plugin-settings-prefix="${escapeHtml(idPrefix)}">${label}${input}${desc}</label>`;
   }).join('');

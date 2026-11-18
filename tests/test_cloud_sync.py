@@ -50,13 +50,15 @@ def main():
         assert json.loads(target.read_text(encoding="utf-8"))["format"] == 1
         assert any(item.get("kind") == "cloud_sync" and item.get("level") == "info" for item in state["notifications"])
 
-        # A game deleted locally must not be resurrected from the cloud.
+        # A shared stats file also holds other devices' games. Syncing this
+        # library must not delete those keys, and must not add them locally.
         deleted = {"name": "Deleted", "path": "/games/gone.rom", "play_count": 2}
         target.write_text(json.dumps({"generated_at": "2026-01-01T00:00:00", "games": {game_key(deleted): {"play_count": 2}}}))
         state2 = {"games": [], "settings": {}, "notifications": []}
         sync_statistics(state2, directory, "2026-04-01T00:00:00")
         payload = json.loads(target.read_text(encoding="utf-8"))
-        assert game_key(deleted) not in payload["games"]
+        assert game_key(deleted) in payload["games"]
+        assert state2["games"] == []
 
         # Local-wins timestamps must preserve local progress, favorite, and rating.
         local_wins = {

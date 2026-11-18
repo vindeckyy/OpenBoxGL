@@ -32,6 +32,7 @@ def _package(root, plugin_id, extra=None):
         },
     }
     manifest.update(extra or {})
+    manifest.setdefault("api_version", 2)
     (package / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
     (package / "plugin.py").write_text("def events(p):\n    return p\n", encoding="utf-8")
     return package
@@ -217,7 +218,7 @@ def test():
             recorded.append(kwargs["timeout"])
             return SimpleNamespace(returncode=0)
 
-        manifest = {"id": "store.plugin", "entry": "plugin.py"}
+        manifest = {"id": "store.plugin", "entry": "plugin.py", "api_version": 2}
         with mock.patch.object(plugins, "_plugin_command", return_value=["true"]), \
              mock.patch.object(plugins.subprocess, "run", side_effect=fake_run), \
              mock.patch.dict(os.environ, {"OPENBOX_ALLOW_UNSANDBOXED_PLUGINS": "1"}):

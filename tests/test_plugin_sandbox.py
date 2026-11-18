@@ -18,10 +18,10 @@ credentials -- and the plugin state stay readable through the ``--ro-bind / /``
 while the code and the docs both claim a plugin only ever sees its stdin
 payload.
 
-Masking by resolved path is free: ``plugin_runner.py`` does
-``json.load(sys.stdin)``, and ``plugins.py`` documents per-plugin settings as
-travelling in that payload. No legitimate plugin reads the data directory from
-disk, so this makes the documented guarantee true.
+Masking by resolved path is free: ``plugin_runner_v2.py`` reads JSON Lines
+from stdin, and ``plugins.py`` documents per-plugin settings as travelling in
+that payload. No legitimate plugin reads the data directory from disk, so
+this makes the documented guarantee true.
 """
 
 from __future__ import annotations
@@ -132,10 +132,11 @@ class SandboxMasksDataDirTests(unittest.TestCase):
         """The mask is safe because the payload still arrives on stdin."""
         command = _build("/srv/openbox-data")
         joined = " ".join(command)
-        self.assertIn("plugin_runner.py", joined)
-        runner = Path(__file__).resolve().parent.parent / "plugin_runner.py"
+        self.assertIn("plugin_runner_v2.py", joined)
+        self.assertNotIn("plugin_runner.py", joined)
+        runner = Path(__file__).resolve().parent.parent / "plugin_runner_v2.py"
         source = runner.read_text(encoding="utf-8")
-        self.assertIn("json.load(sys.stdin)", source)
+        self.assertIn("for raw in sys.stdin", source)
 
     def test_share_net_ordering_is_preserved(self):
         """--share-net must still follow --unshare-all (bubblewrap is ordered)."""

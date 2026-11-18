@@ -1,4 +1,4 @@
-"""HTTP handlers for Save Vault (ADR 0107)."""
+"""HTTP handlers for Save Vault (ADR 0109)."""
 
 from __future__ import annotations
 

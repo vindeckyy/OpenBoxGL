@@ -1,4 +1,4 @@
-"""Deal Radar — opt-in Steam price watch & manual entries (ADR 0109)."""
+"""Deal Radar — opt-in Steam price watch & manual entries (ADR 0111)."""
 
 from __future__ import annotations
 

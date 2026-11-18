@@ -28,6 +28,7 @@ from plugins import (
     plugin_credentials_summary,
     plugin_data_values,
     plugin_trust_status,
+    PLUGIN_API_VERSION_SUPPORTED,
     read_manifest,
     remove_plugin,
     run_plugin_hook,
@@ -239,7 +240,7 @@ class ExtensionsHandlers:
     def _api_get_api_plugins(self, parsed):
         self.send_json(200, {
             "plugins": list_plugins(DATA.parent / "plugins"),
-            "api_version": 1,
+            "api_version": PLUGIN_API_VERSION_SUPPORTED,
             "sandbox": sandbox_status(),
         })
         return
@@ -248,7 +249,7 @@ class ExtensionsHandlers:
     def _api_get_api_v2_plugins_commands(self, parsed):
         """Palette commands declared by enabled plugins plus host builtins."""
         self.send_json(200, {
-            "api_version": 1,
+            "api_version": PLUGIN_API_VERSION_SUPPORTED,
             "sandbox": sandbox_status(),
             "commands": plugin_commands(DATA.parent / "plugins"),
             "epoch": PLUGIN_EPOCH["value"],

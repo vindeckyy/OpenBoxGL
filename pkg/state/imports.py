@@ -417,7 +417,16 @@ def media_queue_worker_state():
     thread = _MEDIA_WORKER.get("thread")
     pause = _MEDIA_WORKER.get("pause")
     cancel = _MEDIA_WORKER.get("cancel")
+    if cancel is not None and cancel.is_set():
+        state = "cancelled"
+    elif pause is not None and pause.is_set():
+        state = "paused"
+    elif thread is not None and thread.is_alive():
+        state = "running"
+    else:
+        state = "stopped"
     return {
+        "state": state,
         "running": bool(thread is not None and thread.is_alive()),
         "paused": bool(pause is not None and pause.is_set()),
         "cancelled": bool(cancel is not None and cancel.is_set()),

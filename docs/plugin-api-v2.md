@@ -92,11 +92,11 @@ Windows the sandbox is reported as unavailable, and a plugin runs only when the 
 | Entry module | one hook function per declared hook | unchanged |
 | Hook payload | one JSON object | unchanged |
 | Result | one JSON object | unchanged |
-| Runner | `plugin_runner.py` | `plugin_runner_v2.py` (the host picks it) |
+| Runner | removed in 3.0 | `plugin_runner_v2.py` |
 | Services | `service_requests` | unchanged, now versioned |
 
-A v1 plugin usually needs no change at all: it keeps working. Set `api_version: 2` only when you
-want `min_openbox`, subscriptions, or the versioned service catalog.
+OpenBox 3.0 does not run a v1 plugin. Set `"api_version": 2`. A missing `api_version` and an
+explicit `1` both fail with `PLUGIN_API_RETIRED`. The hook functions themselves stay the same.
 
 ## What is not in v2
 

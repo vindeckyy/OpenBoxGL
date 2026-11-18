@@ -1,4 +1,4 @@
-# ADR 0109: Deal Radar — opt-in Steam price watch
+# ADR 0111: Deal Radar — opt-in Steam price watch
 
 Status: Accepted (2026-11-17)
 

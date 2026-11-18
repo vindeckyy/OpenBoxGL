@@ -1,4 +1,4 @@
-"""Achievement Trail — offline RetroAchievements analytics & derived cache (ADR 0108)."""
+"""Achievement Trail — offline RetroAchievements analytics & derived cache (ADR 0110)."""
 
 from __future__ import annotations
 
@@ -277,7 +277,7 @@ def _iter_ra_cache_files(data_dir: Path) -> list[Path]:
 
 
 def ra_cache_signature(data_dir: Path | str, state_sig: str = "") -> list[Any]:
-    """Composite invalidation signature matching ADR 0101 + ADR 0108."""
+    """Composite invalidation signature matching ADR 0101 + ADR 0110."""
     base = Path(data_dir)
     ra_dir = base / "cache" / "retroachievements"
     try:
