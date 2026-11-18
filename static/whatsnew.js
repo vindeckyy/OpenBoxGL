@@ -7,7 +7,7 @@ import { AppState } from './state.js';
 // The current release's highlights: whats_new.<name>_title / _body. Update this
 // list with the strings each release; the title shows the live version, so
 // stale cards here are a false claim (ADR 0064).
-const HIGHLIGHTS = ['api_v2_only', 'backups_v2_only', 'media_manifest', 'platform_trust'];
+const HIGHLIGHTS = ['save_vault', 'achievement_trail', 'deal_radar', 'players_log', 'backlog_itinerary'];
 
 const TIPS = [
   'whats_new.tip_search',

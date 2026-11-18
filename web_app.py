@@ -715,11 +715,32 @@ def _save_vault_auto_tick():
         LOGGER.exception("Scheduled Save Vault pass failed")
 
 
+def _capsule_unlock_tick():
+    """Unlock any due time capsules once and emit server notifications (ADR 0110)."""
+    try:
+        from pkg.parity.parity_playerlog import next_capsule, unlock_due_capsules
+
+        preview = load_state()
+        if int(next_capsule(preview).get("due_count") or 0) <= 0:
+            return
+        unlocked: list[dict] = []
+
+        def _sweep(current):
+            unlocked.extend(unlock_due_capsules(current))
+
+        update_state(_sweep)
+        if unlocked:
+            LOGGER.info("Unlocked %d time capsule(s)", len(unlocked))
+    except Exception:
+        LOGGER.exception("Time capsule unlock sweep failed")
+
+
 def _auto_backup_worker():
     """Hourly tick; WATCH_STOP wakes it for shutdown."""
     while not WATCH_STOP.wait(3600):
         _auto_backup_tick()
         _save_vault_auto_tick()
+        _capsule_unlock_tick()
 
 
 def bigbox_launch_url(url):
@@ -869,6 +890,7 @@ def main():
     except Exception:
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()
+    _capsule_unlock_tick()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
     start_media_queue_worker()
     threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()

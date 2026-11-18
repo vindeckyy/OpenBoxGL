@@ -73,7 +73,17 @@
     "media_manifest_title": "Integrity you can switch off",
     "media_manifest_body": "Settings > Library > Record media checksums controls whether downloads and captures are tracked and hashed. Turning it off skips the manifest work.",
     "platform_trust_title": "Clearer platform status",
-    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed."
+    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed.",
+    "save_vault_title": "Save Vault snapshots",
+    "save_vault_body": "Indexed, SHA-256-verified snapshots capture your game saves manually, on session close, or on a schedule, with a mandatory safety snapshot before every restore.",
+    "achievement_trail_title": "Achievement Trail",
+    "achievement_trail_body": "See your RetroAchievements timeline, mastery pace, weekly velocity, and rarest unlocks completely offline from your local cache.",
+    "deal_radar_title": "Deal Radar (opt-in)",
+    "deal_radar_body": "Track Steam prices on watched games locally after opting in, with target-price alerts and manual entries that never make background requests.",
+    "players_log_title": "Player's Log & Time Capsules",
+    "players_log_body": "Seal notes to your future self until a chosen calendar date and export 1200×630 PNG milestone cards for playtimes, streaks, and clears.",
+    "backlog_itinerary_title": "Backlog Itinerary",
+    "backlog_itinerary_body": "Turn your backlog into a realistic multi-week schedule sized to your weekly hours using HLTB estimates or your own history."
   },
   "shortcuts": {
     "command_palette": "Command palette",
@@ -1728,7 +1738,9 @@
       "defs_rejected_title": "Emulator definition update rejected",
       "defs_rejected_body": "The downloaded definition pack failed signature verification and was discarded. Nothing was changed. Details: {detail}",
       "webhook_failed_title": "Webhook delivery failed",
-      "webhook_failed_body": "Event {event_id} could not be delivered. Details: {detail}"
+      "webhook_failed_body": "Event {event_id} could not be delivered. Details: {detail}",
+      "capsule_unlocked_title": "A time capsule is ready to open",
+      "capsule_unlocked_body": "“{title}” reached its unlock date and is waiting in Player's Log."
     },
     "sessions": {
       "backup_created": "Created {name}",
@@ -2067,5 +2079,40 @@
     "delete_message": "This permanently removes the selected snapshot from Save Vault.",
     "delete_consequence": "Your current live save files are not affected.",
     "deleted": "Save Vault snapshot deleted."
+  },
+  "playerlog": {
+    "title": "Player's Log",
+    "milestones_title": "Milestone Cards",
+    "milestones_empty": "Play games and log sessions to earn your first milestone cards.",
+    "mark_seen": "Mark all seen",
+    "new_badge": "New",
+    "approx_date": "Approximate date",
+    "share_card": "Share PNG",
+    "milestone_kicker": "OpenBox Milestone",
+    "upcoming_title": "Next milestones",
+    "capsules_title": "Time Capsules",
+    "capsules_empty": "No time capsules sealed yet. Leave a note for your future self.",
+    "seal_memory": "Seal a memory",
+    "seal_dialog_title": "Seal a time capsule",
+    "seal_honesty": "Sealed notes stay hidden inside OpenBox until local midnight on their unlock date. Note: capsule text is stored unencrypted in library.json.",
+    "field_title": "Title",
+    "field_kind": "Type",
+    "kind_note": "Note to future self",
+    "kind_question": "Question to revisit",
+    "field_unlock_at": "Unlock date",
+    "field_body": "Message (up to 4,000 characters)",
+    "seal_submit": "Seal capsule",
+    "capsule_sealed": "Time capsule sealed until {date}.",
+    "banner_due": "{count} time capsule(s) ready to open today.",
+    "banner_upcoming": "Next capsule “{title}” unlocks in {days} day(s) ({date}).",
+    "open_capsule": "Open capsule",
+    "view_capsule": "Read",
+    "delete_capsule": "Delete",
+    "delete_title": "Delete time capsule?",
+    "delete_message": "Permanently removes this capsule before or after opening.",
+    "unlocked_label": "Opened {date}",
+    "sealed_until": "Unlocks {date}",
+    "capsule_opened": "Capsule opened",
+    "capsule_deleted": "Capsule deleted."
   }
 }

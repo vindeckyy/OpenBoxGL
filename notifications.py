@@ -24,6 +24,8 @@ SERVER_NOTICE_KEYS = {
     "notify.server.defs_rejected_body": ("detail",),
     "notify.server.webhook_failed_title": (),
     "notify.server.webhook_failed_body": ("event_id", "detail"),
+    "notify.server.capsule_unlocked_title": (),
+    "notify.server.capsule_unlocked_body": ("title",),
 }
 
 

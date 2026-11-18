@@ -124,6 +124,31 @@
     },
     {
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "path": "/api/v2/capsules"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/capsules/delete"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/capsules/next"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/capsules/open"
+    },
+    {
+      "methods": [
         "GET"
       ],
       "path": "/api/v2/clips"
@@ -691,6 +716,12 @@
         "GET"
       ],
       "path": "/api/v2/insights/mastery"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/insights/milestones"
     },
     {
       "methods": [

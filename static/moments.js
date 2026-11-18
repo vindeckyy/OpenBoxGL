@@ -4,7 +4,7 @@
    dialogs and library rendering as dynamic/event-driven dependencies so the
    existing navigation modules remain the first writers for their hotkeys.
 */
-import { progressScore } from './pure.js';
+import { progressScore, shareCardLayout, wrapWordsToWidth } from './pure.js';
 import { $, escapeHtml, apiPath } from './util.js';
 import { AppState, api, media, notify, token } from './state.js';
 import { t } from './i18n.js';
@@ -100,18 +100,7 @@ function cssToken(name) {
 }
 
 function wrapCanvasText(ctx, text, maxWidth) {
-  const words = String(text || '').split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = '';
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(candidate).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else line = candidate;
-  }
-  if (line) lines.push(line);
-  return lines.slice(0, 5);
+  return wrapWordsToWidth(text, candidate => ctx.measureText(candidate).width, maxWidth).slice(0, 5);
 }
 
 function loadCanvasImage(url) {
@@ -124,7 +113,15 @@ function loadCanvasImage(url) {
   });
 }
 
-async function buildShareCard(moment, game) {
+// Shared 1200x630 canvas card renderer used by Moments and Milestone Cards (ADR 0110).
+async function renderShareCard({
+  kicker = '',
+  title = '',
+  subtitle = '',
+  body = '',
+  footer = '',
+  imageUrl = '',
+} = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = 1200;
   canvas.height = 630;
@@ -136,69 +133,95 @@ async function buildShareCard(moment, game) {
   const accent = cssToken('--moments-share-accent') || cssToken('--brand');
   ctx.fillStyle = surface;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const image = await loadCanvasImage(screenshotUrl(game, moment));
-  const imageWidth = image ? 420 : 0;
+  const image = await loadCanvasImage(imageUrl);
+  const preLayout = shareCardLayout({ hasImage: Boolean(image), width: canvas.width, height: canvas.height });
   if (image) {
-    const scale = Math.max(imageWidth / image.width, canvas.height / image.height);
+    const scale = Math.max(preLayout.imageWidth / image.width, canvas.height / image.height);
     const width = image.width * scale;
     const height = image.height * scale;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 0, imageWidth, canvas.height);
+    ctx.rect(0, 0, preLayout.imageWidth, canvas.height);
     ctx.clip();
-    ctx.drawImage(image, (imageWidth - width) / 2, (canvas.height - height) / 2, width, height);
+    ctx.drawImage(image, (preLayout.imageWidth - width) / 2, (canvas.height - height) / 2, width, height);
     ctx.restore();
   }
-  const left = image ? imageWidth + 64 : 64;
-  const max = canvas.width - left - 64;
   const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
   ctx.fillStyle = accent;
   ctx.font = `600 20px ${family}`;
-  ctx.fillText(triggerLabel(moment?.trigger), left, 82);
+  ctx.fillText(String(kicker || ''), preLayout.left, preLayout.kickerY);
   ctx.fillStyle = text;
   ctx.font = `700 48px ${family}`;
-  const titleLines = wrapCanvasText(ctx, game?.name || t('moments.tab'), max);
-  titleLines.forEach((line, index) => ctx.fillText(line, left, 148 + index * 56));
+  const titleLines = wrapCanvasText(ctx, title, preLayout.maxWidth);
+  const layout = shareCardLayout({
+    hasImage: Boolean(image),
+    width: canvas.width,
+    height: canvas.height,
+    titleLineCount: titleLines.length || 1,
+  });
+  titleLines.forEach((line, index) => ctx.fillText(line, layout.left, layout.titleY + index * layout.titleStep));
   ctx.fillStyle = muted;
   ctx.font = `500 22px ${family}`;
-  ctx.fillText(`${moment?.title || t('moments.tab')} · ${formatDate(moment?.created_at)}`, left, 148 + titleLines.length * 56 + 18);
+  ctx.fillText(String(subtitle || ''), layout.left, layout.subtitleY);
   ctx.fillStyle = text;
   ctx.font = `400 26px ${family}`;
-  const noteLines = wrapCanvasText(ctx, moment?.note || t('moments.empty_hint'), max);
-  const noteTop = 232 + titleLines.length * 56;
-  noteLines.forEach((line, index) => ctx.fillText(line, left, noteTop + index * 38));
+  const noteLines = wrapCanvasText(ctx, body, layout.maxWidth);
+  noteLines.forEach((line, index) => ctx.fillText(line, layout.left, layout.bodyY + index * layout.bodyStep));
   ctx.fillStyle = muted;
   ctx.font = `400 18px ${family}`;
-  ctx.fillText(game?.platform || '', left, canvas.height - 44);
+  ctx.fillText(String(footer || ''), layout.left, layout.footerY);
   return canvas;
+}
+
+async function buildShareCard(moment, game) {
+  return renderShareCard({
+    kicker: triggerLabel(moment?.trigger),
+    title: game?.name || t('moments.tab'),
+    subtitle: `${moment?.title || t('moments.tab')} · ${formatDate(moment?.created_at)}`,
+    body: moment?.note || t('moments.empty_hint'),
+    footer: game?.platform || '',
+    imageUrl: screenshotUrl(game, moment),
+  });
 }
 
 function canvasBlob(canvas) {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }
 
-async function shareMoment(moment, game) {
+async function downloadCanvasCard(canvas, filename, { preferClipboard = true } = {}) {
   try {
-    const canvas = await buildShareCard(moment, game);
     const blob = await canvasBlob(canvas);
-    if (blob && navigator.clipboard?.write && typeof globalThis.ClipboardItem !== 'undefined') {
+    if (preferClipboard && blob && navigator.clipboard?.write && typeof globalThis.ClipboardItem !== 'undefined') {
       await navigator.clipboard.write([new globalThis.ClipboardItem({ 'image/png': blob })]);
       notify(t('moments.share_copied'));
       return true;
     }
-    throw new Error('clipboard unavailable');
-  } catch {
-    try {
-      const link = document.createElement('a');
-      link.download = `openbox-moment-${String(moment?.moment_id || 'card')}.png`;
-      link.href = (await buildShareCard(moment, game)).toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = filename;
+    if (blob && typeof URL?.createObjectURL === 'function') {
+      const url = URL.createObjectURL(blob);
+      link.href = url;
       link.click();
-      notify(t('moments.share_downloaded'));
-      return true;
-    } catch (error) {
-      notify(error.message || t('moments.share_unavailable'));
-      return false;
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else {
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     }
+    notify(t('moments.share_downloaded'));
+    return true;
+  } catch (error) {
+    notify(error.message || t('moments.share_unavailable'));
+    return false;
+  }
+}
+
+async function shareMoment(moment, game) {
+  try {
+    const canvas = await buildShareCard(moment, game);
+    return await downloadCanvasCard(canvas, `openbox-moment-${String(moment?.moment_id || 'card')}.png`);
+  } catch (error) {
+    notify(error.message || t('moments.share_unavailable'));
+    return false;
   }
 }
 
@@ -459,8 +482,10 @@ export {
   autoMomentTrigger,
   captureMoment,
   captureMomentInteractive,
+  downloadCanvasCard,
   mountMomentsPanel,
   mountResumeAffordance,
   openMoment,
+  renderShareCard,
   shareCardPayload,
 };

@@ -73,7 +73,17 @@
     "media_manifest_title": "Integrity you can switch off",
     "media_manifest_body": "Settings > Library > Record media checksums controls whether downloads and captures are tracked and hashed. Turning it off skips the manifest work.",
     "platform_trust_title": "Clearer platform status",
-    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed."
+    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed.",
+    "save_vault_title": "Instantâneos do Cofre de Saves",
+    "save_vault_body": "Instantâneos indexados e verificados por SHA-256 protegem seus saves manualmente, ao sair ou por agenda, sempre com captura de segurança antes de restaurar.",
+    "achievement_trail_title": "Trilha de Conquistas",
+    "achievement_trail_body": "Acompanhe sua linha do tempo do RetroAchievements, ritmo semanal e desbloqueios mais raros totalmente offline a partir do cache local.",
+    "deal_radar_title": "Radar de Ofertas (opcional)",
+    "deal_radar_body": "Acompanhe preços na Steam para jogos vigiados somente após ativação, com alertas de preço-alvo e registros manuais.",
+    "players_log_title": "Diário do Jogador e Cápsulas",
+    "players_log_body": "Sele anotações até uma data escolhida e exporte cartões PNG 1200×630 para marcos de horas, sequências e jogos concluídos.",
+    "backlog_itinerary_title": "Roteiro de Backlog",
+    "backlog_itinerary_body": "Organize sua fila em um plano realista por semanas conforme seu tempo disponível usando histórico próprio ou estimativas IGDB."
   },
   "shortcuts": {
     "command_palette": "Paleta de comandos",
@@ -1728,7 +1738,9 @@
       "defs_rejected_title": "Atualização de definições de emulador rejeitada",
       "defs_rejected_body": "O pacote de definições baixado falhou na verificação de assinatura e foi descartado. Nada foi alterado. Detalhes: {detail}",
       "webhook_failed_title": "Falha na entrega do webhook",
-      "webhook_failed_body": "O evento {event_id} não pôde ser entregue. Detalhes: {detail}"
+      "webhook_failed_body": "O evento {event_id} não pôde ser entregue. Detalhes: {detail}",
+      "capsule_unlocked_title": "Uma cápsula do tempo está pronta para abrir",
+      "capsule_unlocked_body": "“{title}” atingiu a data de desbloqueio e aguarda no Diário do Jogador."
     },
     "sessions": {
       "backup_created": "Criado {name}",
@@ -2067,5 +2079,40 @@
     "delete_message": "Isso remove permanentemente o instantâneo selecionado do Cofre.",
     "delete_consequence": "Seus arquivos de save atuais não são afetados.",
     "deleted": "Instantâneo do Cofre excluído."
+  },
+  "playerlog": {
+    "title": "Diário do Jogador",
+    "milestones_title": "Cartões de Marcos",
+    "milestones_empty": "Jogue e registre sessões para conquistar seus primeiros cartões.",
+    "mark_seen": "Marcar tudo como visto",
+    "new_badge": "Novo",
+    "approx_date": "Data aproximada",
+    "share_card": "Baixar PNG",
+    "milestone_kicker": "Marco OpenBox",
+    "upcoming_title": "Próximos marcos",
+    "capsules_title": "Cápsulas do Tempo",
+    "capsules_empty": "Nenhuma cápsula selada ainda. Deixe um recado para o futuro.",
+    "seal_memory": "Selar uma lembrança",
+    "seal_dialog_title": "Selar uma cápsula do tempo",
+    "seal_honesty": "Notas seladas ficam ocultas no OpenBox até a meia-noite local da data de abertura. Nota: o texto é salvo sem criptografia em library.json.",
+    "field_title": "Título",
+    "field_kind": "Tipo",
+    "kind_note": "Recado para o futuro",
+    "kind_question": "Pergunta para revisitar",
+    "field_unlock_at": "Data de abertura",
+    "field_body": "Mensagem (até 4.000 caracteres)",
+    "seal_submit": "Selar cápsula",
+    "capsule_sealed": "Cápsula do tempo selada até {date}.",
+    "banner_due": "{count} cápsula(s) pronta(s) para abrir hoje.",
+    "banner_upcoming": "Próxima cápsula “{title}” abre em {days} dia(s) ({date}).",
+    "open_capsule": "Abrir cápsula",
+    "view_capsule": "Ler",
+    "delete_capsule": "Excluir",
+    "delete_title": "Excluir cápsula do tempo?",
+    "delete_message": "Remove esta cápsula permanentemente antes ou depois da abertura.",
+    "unlocked_label": "Aberta em {date}",
+    "sealed_until": "Abre em {date}",
+    "capsule_opened": "Cápsula aberta",
+    "capsule_deleted": "Cápsula excluída."
   }
 }

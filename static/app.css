@@ -1199,6 +1199,10 @@
     .whats-new-tip .dialog-head { padding:0; border:0; }
     @media(max-width:620px) { .whats-new-highlights { grid-template-columns:1fr; } }
 
+    /* Player's Log (2.2.0) */
+    .playerlog-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(14rem, 1fr)); gap:var(--space-sm); }
+    .playerlog-banner { border-left:3px solid var(--brand); }
+
     /* Wrapped (1.9.0) */
     .wrapped-head { display:flex; justify-content:space-between; align-items:center; gap:var(--space-md); }
     .wrapped-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(8rem, 1fr)); gap:var(--space-md); margin:var(--space-md) 0; }

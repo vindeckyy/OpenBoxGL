@@ -73,7 +73,17 @@
     "media_manifest_title": "Integrity you can switch off",
     "media_manifest_body": "Settings > Library > Record media checksums controls whether downloads and captures are tracked and hashed. Turning it off skips the manifest work.",
     "platform_trust_title": "Clearer platform status",
-    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed."
+    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed.",
+    "save_vault_title": "Spielstand-Tresor-Schnappschüsse",
+    "save_vault_body": "Indizierte, SHA-256-geprüfte Spielstand-Schnappschüsse manuell, beim Sitzungsende oder nach Zeitplan – inklusive Pflicht-Sicherungskopie vor jeder Wiederherstellung.",
+    "achievement_trail_title": "Erfolgs-Pfad",
+    "achievement_trail_body": "Durchsuche deine RetroAchievements-Chronik, Meisterschaftsquote, Wochen-Tempo und seltenste Freischaltungen komplett offline aus dem lokalen Cache.",
+    "deal_radar_title": "Angebotsradar (Opt-in)",
+    "deal_radar_body": "Verfolge Steam-Preise vorgemerkter Spiele erst nach ausdrücklicher Aktivierung lokal mit Wunschpreis-Alarmen und manuellen Einträgen.",
+    "players_log_title": "Spieler-Logbuch & Zeitkapseln",
+    "players_log_body": "Versiegle Notizen bis zu einem gewählten Datum und exportiere 1200×630-PNG-Meilensteinkarten für Spielzeit, Serien und Abschlüsse.",
+    "backlog_itinerary_title": "Backlog-Reiseplan",
+    "backlog_itinerary_body": "Verwandle deinen Stapel ungespielter Spiele mit realistischem Wochenbudget, eigenen Daten und IGDB-Spielzeiten in einen klaren Wochenplan."
   },
   "shortcuts": {
     "command_palette": "Befehlspalette",
@@ -1728,7 +1738,9 @@
       "defs_rejected_title": "Emulator-Definition-Update abgelehnt",
       "defs_rejected_body": "Das heruntergeladene Definitionspaket hat die Signaturprüfung nicht bestanden und wurde verworfen. Nichts wurde geändert. Details: {detail}",
       "webhook_failed_title": "Webhook-Zustellung fehlgeschlagen",
-      "webhook_failed_body": "Ereignis {event_id} konnte nicht zugestellt werden. Details: {detail}"
+      "webhook_failed_body": "Ereignis {event_id} konnte nicht zugestellt werden. Details: {detail}",
+      "capsule_unlocked_title": "Eine Zeitkapsel kann geöffnet werden",
+      "capsule_unlocked_body": "„{title}“ hat sein Öffnungsdatum erreicht und wartet im Spieler-Logbuch."
     },
     "sessions": {
       "backup_created": "Erstellt: {name}",
@@ -2067,5 +2079,40 @@
     "delete_message": "Dadurch wird der ausgewählte Schnappschuss dauerhaft aus dem Tresor entfernt.",
     "delete_consequence": "Deine aktuellen Spielstanddateien bleiben unberührt.",
     "deleted": "Tresor-Schnappschuss gelöscht."
+  },
+  "playerlog": {
+    "title": "Spieler-Logbuch",
+    "milestones_title": "Meilensteinkarten",
+    "milestones_empty": "Spiele und erfasse Sitzungen, um deine ersten Meilensteinkarten zu erhalten.",
+    "mark_seen": "Alle gesehen",
+    "new_badge": "Neu",
+    "approx_date": "Ungefähres Datum",
+    "share_card": "PNG teilen",
+    "milestone_kicker": "OpenBox-Meilenstein",
+    "upcoming_title": "Nächste Meilensteine",
+    "capsules_title": "Zeitkapseln",
+    "capsules_empty": "Noch keine Zeitkapseln versiegelt. Hinterlasse eine Notiz für später.",
+    "seal_memory": "Erinnerung versiegeln",
+    "seal_dialog_title": "Zeitkapsel versiegeln",
+    "seal_honesty": "Versiegelte Notizen bleiben in OpenBox bis Mitternacht am Öffnungsdatum verborgen. Hinweis: Der Text liegt unverschlüsselt in library.json.",
+    "field_title": "Titel",
+    "field_kind": "Art",
+    "kind_note": "Notiz an mein späteres Ich",
+    "kind_question": "Frage zum Wiedersehen",
+    "field_unlock_at": "Öffnungsdatum",
+    "field_body": "Nachricht (bis 4.000 Zeichen)",
+    "seal_submit": "Kapsel versiegeln",
+    "capsule_sealed": "Zeitkapsel bis {date} versiegelt.",
+    "banner_due": "{count} Zeitkapsel(n) heute zum Öffnen bereit.",
+    "banner_upcoming": "Nächste Kapsel „{title}“ öffnet in {days} Tag(en) ({date}).",
+    "open_capsule": "Kapsel öffnen",
+    "view_capsule": "Lesen",
+    "delete_capsule": "Löschen",
+    "delete_title": "Zeitkapsel löschen?",
+    "delete_message": "Entfernt diese Kapsel dauerhaft vor oder nach dem Öffnen.",
+    "unlocked_label": "Geöffnet {date}",
+    "sealed_until": "Öffnet {date}",
+    "capsule_opened": "Kapsel geöffnet",
+    "capsule_deleted": "Kapsel gelöscht."
   }
 }

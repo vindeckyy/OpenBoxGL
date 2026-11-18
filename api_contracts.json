@@ -28,6 +28,14 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/capsules"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/capsules/next"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/clips"
     },
     {
@@ -149,6 +157,10 @@
     {
       "method": "GET",
       "path": "/api/v2/insights/mastery"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/insights/milestones"
     },
     {
       "method": "GET",
@@ -637,6 +649,18 @@
     {
       "method": "POST",
       "path": "/api/v2/bulk/find-replace"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/capsules"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/capsules/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/capsules/open"
     },
     {
       "method": "POST",

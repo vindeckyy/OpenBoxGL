@@ -160,3 +160,5 @@ pkg/parity/parity_plugin_stats.py
 pkg/parity/parity_plugin_discovery.py
 pkg/parity/parity_save_vault.py
 handlers/savevault.py
+pkg/parity/parity_playerlog.py
+handlers/playerlog.py

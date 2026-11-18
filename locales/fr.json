@@ -73,7 +73,17 @@
     "media_manifest_title": "Integrity you can switch off",
     "media_manifest_body": "Settings > Library > Record media checksums controls whether downloads and captures are tracked and hashed. Turning it off skips the manifest work.",
     "platform_trust_title": "Clearer platform status",
-    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed."
+    "platform_trust_body": "The Windows ARM64 lane, the Flatpak runtime, and the macOS signing status are documented and verified at release time, not guessed.",
+    "save_vault_title": "Instantanés du Coffre de sauvegardes",
+    "save_vault_body": "Des instantanés indexés et vérifiés en SHA-256 capturent vos sauvegardes manuellement, en fin de session ou sur planning, avec instantané de sécurité avant chaque restauration.",
+    "achievement_trail_title": "Parcours de succès",
+    "achievement_trail_body": "Consultez votre chronologie RetroAchievements, votre rythme de maîtrise, votre cadence hebdomadaire et vos succès les plus rares hors ligne depuis le cache local.",
+    "deal_radar_title": "Radar de promos (optionnel)",
+    "deal_radar_body": "Surveillez les prix Steam de vos jeux suivis localement après activation, avec alertes de prix cible et saisies manuelles.",
+    "players_log_title": "Journal du joueur et capsules",
+    "players_log_body": "Scellez des notes pour plus tard jusqu’à une date précise et exportez des cartes PNG 1200×630 de vos temps de jeu, séries et jeux terminés.",
+    "backlog_itinerary_title": "Itinéraire de backlog",
+    "backlog_itinerary_body": "Transformez votre liste d’attente en un programme hebdomadaire réaliste selon vos heures disponibles, votre historique et les durées IGDB."
   },
   "shortcuts": {
     "command_palette": "Palette de commandes",
@@ -1728,7 +1738,9 @@
       "defs_rejected_title": "Mise à jour des définitions d’émulateur refusée",
       "defs_rejected_body": "Le paquet de définitions téléchargé a échoué à la vérification de signature et a été écarté. Rien n’a été modifié. Détails : {detail}",
       "webhook_failed_title": "Échec de la livraison du webhook",
-      "webhook_failed_body": "L’événement {event_id} n’a pas pu être livré. Détails : {detail}"
+      "webhook_failed_body": "L’événement {event_id} n’a pas pu être livré. Détails : {detail}",
+      "capsule_unlocked_title": "Une capsule temporelle peut être ouverte",
+      "capsule_unlocked_body": "« {title} » a atteint sa date d’ouverture et vous attend dans le Journal."
     },
     "sessions": {
       "backup_created": "Créé : {name}",
@@ -2067,5 +2079,40 @@
     "delete_message": "Cette action supprime définitivement l’instantané sélectionné du Coffre.",
     "delete_consequence": "Vos fichiers de sauvegarde actuels ne sont pas affectés.",
     "deleted": "Instantané du Coffre supprimé."
+  },
+  "playerlog": {
+    "title": "Journal du joueur",
+    "milestones_title": "Cartes d’étapes",
+    "milestones_empty": "Jouez et enregistrez des sessions pour débloquer vos premières cartes.",
+    "mark_seen": "Tout marquer vu",
+    "new_badge": "Nouveau",
+    "approx_date": "Date approximative",
+    "share_card": "Exporter PNG",
+    "milestone_kicker": "Étape OpenBox",
+    "upcoming_title": "Prochaines étapes",
+    "capsules_title": "Capsules temporelles",
+    "capsules_empty": "Aucune capsule scellée pour le moment. Laissez un mot pour plus tard.",
+    "seal_memory": "Sceller un souvenir",
+    "seal_dialog_title": "Sceller une capsule temporelle",
+    "seal_honesty": "Les notes scellées restent masquées dans OpenBox jusqu’à minuit à la date choisie. Note : elles sont stockées en clair dans library.json.",
+    "field_title": "Titre",
+    "field_kind": "Type",
+    "kind_note": "Note pour plus tard",
+    "kind_question": "Question à relire",
+    "field_unlock_at": "Date d’ouverture",
+    "field_body": "Message (jusqu’à 4 000 caractères)",
+    "seal_submit": "Sceller la capsule",
+    "capsule_sealed": "Capsule scellée jusqu’au {date}.",
+    "banner_due": "{count} capsule(s) prête(s) à ouvrir aujourd’hui.",
+    "banner_upcoming": "Prochaine capsule « {title} » dans {days} jour(s) ({date}).",
+    "open_capsule": "Ouvrir la capsule",
+    "view_capsule": "Lire",
+    "delete_capsule": "Supprimer",
+    "delete_title": "Supprimer la capsule temporelle ?",
+    "delete_message": "Supprime définitivement cette capsule avant ou après son ouverture.",
+    "unlocked_label": "Ouverte le {date}",
+    "sealed_until": "Ouvre le {date}",
+    "capsule_opened": "Capsule ouverte",
+    "capsule_deleted": "Capsule supprimée."
   }
 }

@@ -191,3 +191,42 @@ export function facetCounts(games, platformCategories = {}) {
   }
   return facetCountsFromPlatforms(platforms, platformCategories);
 }
+
+// Compute 1200x630 share-card text box geometry for Moments and Milestone cards.
+export function shareCardLayout({
+  hasImage = false,
+  width = 1200,
+  height = 630,
+  padding = 64,
+  imageWidth = 420,
+  titleLineCount = 1,
+} = {}) {
+  const safeTitleLines = Math.max(1, Number(titleLineCount) || 1);
+  const left = hasImage ? imageWidth + padding : padding;
+  const maxWidth = Math.max(240, width - left - padding);
+  const titleY = 148;
+  const titleStep = 56;
+  const subtitleY = titleY + safeTitleLines * titleStep + 18;
+  const bodyY = 232 + safeTitleLines * titleStep;
+  const footerY = height - 44;
+  return { width, height, imageWidth: hasImage ? imageWidth : 0, left, maxWidth, kickerY: 82, titleY, titleStep, subtitleY, bodyY, bodyStep: 38, footerY };
+}
+
+// Pure word-wrapping helper parameterized by a glyph width estimator (testable in Node).
+export function wrapWordsToWidth(text, measureWidth, maxWidth) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && measureWidth(candidate) > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
