@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -171,6 +172,61 @@ class WebAppTicksAndHooksTests(unittest.TestCase):
         self.assertTrue(state_store._normalize_22_additive_fields(st3))
         self.assertEqual(st3["deals"]["watchlist"], [])
         self.assertEqual(st3["deals"]["prices"], {})
+        st4 = {"deals": {"watchlist": ["not-dict"], "prices": {}}}
+        self.assertTrue(state_store._normalize_22_additive_fields(st4))
+
+        # V7 fast-path load fills missing 2.2 additive fields without mutating rewritten=True
+        v7_path = self.tmp / "v7_fast.json"
+        v7_path.write_text(json.dumps({
+            "format": state_store.STATE_FORMAT,
+            "schema_version": state_store.STATE_SCHEMA_VERSION,
+            "library_id": "01JABCDEFGHJKMNPQRSTVWXYZ0",
+            "games": [{"game_id": "g-ok", "name": "Ok"}],
+            "profiles": [],
+            "history": [],
+            "settings": {},
+            "playlists": [],
+            "queue": [],
+            "notifications": [],
+            "ui_state": {},
+        }), encoding="utf-8")
+        store = state_store.JsonStateStore(v7_path)
+        loaded, rewritten = store._load_unlocked()
+        self.assertFalse(rewritten)
+        self.assertEqual(loaded["deals"], {"watchlist": [], "prices": {}, "last_poll_at": ""})
+        self.assertEqual(loaded["time_capsules"], [])
+        self.assertIsNone(loaded["itinerary"])
+
+        # _auto_backup_worker invokes all 4 tick helpers once before WATCH_STOP becomes True
+        with mock.patch.object(web_app.WATCH_STOP, "wait", side_effect=[False, True]), mock.patch.object(
+            web_app, "_auto_backup_tick"
+        ) as t1, mock.patch.object(web_app, "_save_vault_auto_tick") as t2, mock.patch.object(
+            web_app, "_capsule_unlock_tick"
+        ) as t3, mock.patch.object(web_app, "_deals_auto_tick") as t4:
+            web_app._auto_backup_worker()
+        t1.assert_called_once()
+        t2.assert_called_once()
+        t3.assert_called_once()
+        t4.assert_called_once()
+
+        # _deals_auto_tick worker closure executes _commit callback
+        jm_d = mock.Mock()
+        deals_state = {
+            "settings": {"deals_enabled": True, "deals_poll_hours": 24},
+            "deals": {"watchlist": [{"id": "d1", "appid": "367520", "manual": False}], "prices": {}, "last_poll_at": ""},
+            "games": [],
+        }
+        with mock.patch.object(web_app, "RUNNING", {}), mock.patch.object(
+            web_app, "DATA", self.data_file
+        ), mock.patch.object(web_app, "load_state", return_value=deals_state), mock.patch.object(
+            web_app, "update_state", side_effect=lambda fn: fn(deals_state)
+        ), mock.patch.object(web_app, "JOB_MANAGER", jm_d), mock.patch(
+            "pkg.parity.parity_deals.fetch_steam_appdetails", return_value={"price_cents": 500, "currency": "USD", "discount_pct": 50}
+        ):
+            web_app._deals_auto_tick()
+            _, worker_d = jm_d.submit.call_args[0]
+            res_d = worker_d(mock.Mock(is_set=lambda: False))
+            self.assertEqual(res_d["polled"], 1)
 
 
 if __name__ == "__main__":

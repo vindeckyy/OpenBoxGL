@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 import unittest
@@ -234,9 +235,67 @@ class SaveVaultUnitTests(unittest.TestCase):
         self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_management_enabled": False}))
         self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_vault_auto_days": "bad"}))
         self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_vault_auto_days": 0}))
+        ev = sv.VaultPathEscape
+        _ = ev
         cancel = mock.Mock(is_set=lambda: True)
         c_res = sv.run_auto_vault_pass(self.data_dir, {"games": [f_game, {"hidden": True}]}, cancel_event=cancel)
         self.assertEqual(c_res["snapshotted"], 0)
+
+        # Extra live file triggers removed diff bucket + include_removals=True cleanup + naive now
+        naive_t = datetime(2026, 10, 12, 8, 0)
+        dir_snap = sv.create_snapshot(self.data_dir, self.game, trigger="manual", now=naive_t)
+        extra_live = self.save_dir / "slot2.srm"
+        extra_live.write_bytes(b"EXTRA")
+        diff_rem = sv.diff_snapshot(self.data_dir, self.game, dir_snap["snapshot_id"])
+        self.assertEqual(diff_rem["counts"]["removed"], 1)
+        restored = sv.restore_snapshot(self.data_dir, self.game, dir_snap["snapshot_id"], skip_safety=True, include_removals=True, now=naive_t)
+        self.assertEqual(restored["counts"]["removed"], 1)
+        self.assertFalse(extra_live.exists())
+
+        # rebuild_index skips bogus files/dirs and keeps valid manifest
+        vdir = sv.vault_dir_for(self.data_dir) / sv.game_vault_key(self.game)
+        (vdir / "empty_folder").mkdir(exist_ok=True)
+        (vdir / "corrupt_snap").mkdir(exist_ok=True)
+        (vdir / "corrupt_snap" / sv.SNAPSHOT_FILE_NAME).write_text("{broken", encoding="utf-8")
+        (vdir / "nodict_snap").mkdir(exist_ok=True)
+        (vdir / "nodict_snap" / sv.SNAPSHOT_FILE_NAME).write_text("{}", encoding="utf-8")
+        rebuilt = sv.rebuild_index(self.data_dir)
+        self.assertGreaterEqual(len(rebuilt["snapshots"]), 1)
+
+        # Bad game object -> VaultNoSaves; bad keep clamp; bad auto timestamp -> due True
+        with self.assertRaises(VaultNoSaves):
+            sv.resolve_game_save_roots("not-a-dict")  # type: ignore[arg-type]
+        self.assertEqual(sv._clamp_keep("bad"), sv.DEFAULT_KEEP)
+        self.assertEqual(sv._clamp_keep(999), sv.MAX_KEEP)
+
+        idx = sv.load_index(self.data_dir)
+        idx["last_auto_at"] = "invalid-ts"
+        sv._write_index_locked(sv.vault_dir_for(self.data_dir), idx)
+        self.assertTrue(sv.auto_vault_due(self.data_dir, {"save_vault_auto_days": 7}, now=naive_t))
+
+        # Symlink inside live dir raises VaultPathEscape in diff_snapshot
+        live_link = self.save_dir / "bad_link.srm"
+        live_link.symlink_to(self.tmp / "outside.txt")
+        with self.assertRaises(VaultPathEscape):
+            sv.diff_snapshot(self.data_dir, self.game, dir_snap["snapshot_id"])
+        live_link.unlink()
+
+        # Symlink inside intermediate restore folder raises VaultPathEscape
+        sub = self.save_dir / "sub2"
+        sub.mkdir()
+        (sub / "inner.srm").write_bytes(b"IN")
+        sub_snap = sv.create_snapshot(self.data_dir, self.game, trigger="manual")
+        shutil.rmtree(sub)
+        sub.symlink_to(self.tmp)
+        with self.assertRaises(VaultPathEscape):
+            sv.restore_snapshot(self.data_dir, self.game, sub_snap["snapshot_id"], skip_safety=True)
+        sub.unlink()
+
+        # Empty existing dir -> VaultNoSaves
+        empty_dir = self.tmp / "empty_saves"
+        empty_dir.mkdir()
+        with self.assertRaises(VaultNoSaves):
+            sv.create_snapshot(self.data_dir, {"game_id": "g-em", "name": "Em", "save_paths": [str(empty_dir)]})
 
 
 if __name__ == "__main__":

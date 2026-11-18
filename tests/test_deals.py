@@ -218,6 +218,100 @@ class DealsUnitTests(unittest.TestCase):
         self.assertTrue(pd.deals_due(self.state, self.state["settings"], now=t0))
         _ = HTTPError
 
+    def test_redirect_handler_malformed_state_and_poll_edge_cases(self):
+        import urllib.request
+        from api_errors import BadRequest, DealsHostBlocked
+
+        # Redirect handler blocks off-host and invokes super() for allowlisted host
+        handler = pd._AllowlistedRedirectHandler()
+        req = urllib.request.Request("https://store.steampowered.com/api/appdetails")
+        with self.assertRaises(DealsHostBlocked):
+            handler.redirect_request(req, None, 302, "Found", {}, "https://evil.example/steal")
+        with mock.patch.object(urllib.request.HTTPRedirectHandler, "redirect_request", return_value=req) as sup:
+            res_req = handler.redirect_request(req, None, 302, "Found", {}, "https://store.steampowered.com/other")
+        self.assertIs(res_req, req)
+        sup.assert_called_once()
+
+        # Malformed deals container repair
+        bad_state = {"deals": "corrupt"}
+        blk = pd._deals_block(bad_state)
+        self.assertEqual(blk["watchlist"], [])
+        bad_state2 = {"deals": {"watchlist": "nope", "prices": "nope", "last_poll_at": 123}}
+        blk2 = pd._deals_block(bad_state2)
+        self.assertEqual(blk2["prices"], {})
+        self.assertEqual(blk2["last_poll_at"], "")
+
+        # search_steam skips malformed items
+        search_res = pd.search_steam(
+            "Hollow",
+            opener=_fake_opener_for({
+                "items": [
+                    "bad-row",
+                    {"name": "Missing id"},
+                    {"id": "not-digits", "name": "Bad id"},
+                    {"id": 367520, "name": "Hollow Knight", "price": {"final": 749, "initial": 1499, "currency": "USD"}},
+                ],
+            }),
+        )
+        self.assertEqual(len(search_res), 1)
+
+        # watch_game dedupe update & validation branches
+        item = pd.watch_game(self.state, {"appid": "367520", "target_price_cents": 1000, "note": "first"})
+        updated = pd.watch_game(self.state, {"appid": "367520", "target_price_cents": 800, "note": "updated"})
+        self.assertEqual(updated["id"], item["id"])
+        self.assertEqual(updated["target_price_cents"], 800)
+        self.assertEqual(updated["note"], "updated")
+        with self.assertRaises(BadRequest):
+            pd._normalize_target_cents("bad-num")
+        with self.assertRaises(BadRequest):
+            pd.record_manual_entry(self.state, "bad")  # type: ignore[arg-type]
+        with self.assertRaises(BadRequest):
+            pd.record_manual_entry(self.state, {"id": item["id"], "price_cents": 500, "discount_pct": "bad"})
+
+        # apply_poll_observation: missing item, auto-fill name/artwork, not_found, no_price
+        self.assertFalse(pd.apply_poll_observation(self.state, "missing-id", {}, {})["updated"])
+        pd.apply_poll_observation(self.state, item["id"], {"name": "Hollow Knight", "artwork_url": "https://cdn/art.jpg", "status": "not_found"}, {})
+        self.assertEqual(item["fetch_error"], "not_found")
+        self.assertEqual(item["name"], "Hollow Knight")
+        pd.apply_poll_observation(self.state, item["id"], {"status": "no_price"}, {})
+        self.assertEqual(item["fetch_error"], "")
+
+        # Empty non-manual watchlist -> deals_due False
+        empty_state = {"deals": {"watchlist": [{"id": "m1", "manual": True}]}}
+        self.assertFalse(pd.deals_due(empty_state, {"deals_enabled": True}))
+
+        # refresh_deals_pass: cancel wait between two entries + error commit_fn failure
+        item2 = pd.watch_game(self.state, {"appid": "220", "name": "HL2"})
+        ev = mock.Mock(is_set=mock.Mock(return_value=False), wait=mock.Mock(return_value=True))
+        prog = []
+        cancel_res = pd.refresh_deals_pass(
+            self.data_dir,
+            self.state,
+            {"deals_enabled": True},
+            commit_fn=lambda fn: fn(self.state),
+            cancel_event=ev,
+            progress_cb=lambda i, t: prog.append((i, t)),
+            spacing_seconds=0.01,
+            opener=_fake_opener_for(json.loads((FIXTURES / "appdetails_sale.json").read_text(encoding="utf-8"))),
+        )
+        self.assertEqual(cancel_res["polled"], 1)
+        self.assertEqual(len(prog), 1)
+        _ = item2
+
+        ev_stop = mock.Mock(is_set=mock.Mock(return_value=True))
+        self.assertEqual(pd.refresh_deals_pass(self.data_dir, self.state, {"deals_enabled": True}, commit_fn=lambda fn: None, cancel_event=ev_stop)["polled"], 0)
+
+        bad_opener = mock.Mock(open=mock.Mock(side_effect=OSError("net down")))
+        commit_mock = mock.Mock(side_effect=[RuntimeError("commit fail"), RuntimeError("commit fail"), None])
+        err_res = pd.refresh_deals_pass(
+            self.data_dir,
+            self.state,
+            {"deals_enabled": True},
+            commit_fn=commit_mock,
+            opener=bad_opener,
+        )
+        self.assertGreaterEqual(len(err_res["errors"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+import json
 import sys
+import tempfile
 import unittest
 
 from pathlib import Path
@@ -162,6 +164,56 @@ class PlayerLogCapsuleTests(unittest.TestCase):
         self.assertIn("m:library_age:1y", ids)
         self.assertNotIn("m:playtime_game:g-tr1:10h", ids)
         self.assertNotIn("m:playtime_game:g-tr2:10h", ids)
+
+        # Edge cases: datetime passed to _today, invalid dates, corrupt capsule containers, next_capsule skips invalid
+        self.assertEqual(pl._today(datetime(2026, 6, 1, 15, 0)), date(2026, 6, 1))
+        self.assertIsNone(pl._parse_date_prefix("2026-13-45"))
+        bad_cap_state = {"time_capsules": "bad"}
+        with self.assertRaises(pl.CapsuleNotFound):
+            pl.delete_capsule(bad_cap_state, "c1")
+        created_bad = pl.create_capsule(bad_cap_state, {"title": "OK", "body": "hello", "unlock_at": "2026-12-01"}, today=date(2026, 6, 1))
+        self.assertTrue(created_bad["locked"])
+        bad_cap_state["time_capsules"].extend(["bad", {"id": "broken-date", "unlock_at": "not-a-date", "body": "x"}])
+        nxt = pl.next_capsule(bad_cap_state, today=date(2026, 6, 1))
+        self.assertEqual(nxt["capsule"]["id"], created_bad["id"])
+        self.assertEqual(pl.unlock_due_capsules(bad_cap_state, today=date(2026, 6, 1)), [])
+
+        # Clear/sessions/ra_complete fallback date & malformed history/manual_sessions + RA cache directory edge cases
+        with tempfile.TemporaryDirectory() as td:
+            data_dir = Path(td)
+            ra_dir = data_dir / "cache" / "retroachievements"
+            ra_dir.mkdir(parents=True)
+            (ra_dir / "bad.json").write_text("{broken", encoding="utf-8")
+            (ra_dir / "arr.json").write_text("[]", encoding="utf-8")
+            (ra_dir / "subdir.json").mkdir()
+            # Mastered RA game with NO achievement dates (triggers file_date approx branch)
+            (ra_dir / "g-cleared-nodate.json").write_text(json.dumps({
+                "earned": 5, "total": 5, "mastered": True,
+                "achievements": [{"earned": True, "points": 20}],
+            }), encoding="utf-8")
+            # Mastered RA game WITH achievement dates
+            (ra_dir / "g-cleared-date.json").write_text(json.dumps({
+                "earned": 2, "total": 2, "mastered": True,
+                "achievements": [{"earned": True, "points": 10, "date_earned": "2026-03-10 08:00:00"}],
+            }), encoding="utf-8")
+            st2 = {
+                "games": [
+                    {"game_id": "g-cleared-date", "name": "With Completed At", "completed_at": "2026-03-15", "manual_sessions": ["bad", {"date": "bad"}, {"date": "2026-03-01", "seconds": "bad"}]},
+                    {"game_id": "g-cleared-event", "name": "From History", "progress": "Completed"},
+                    {"game_id": "g-cleared-nodate", "name": "Fallback Today", "progress": "Beaten"},
+                ],
+                "history": ["bad", {"game_id": "g-cleared-event", "started": "2026-04-02T10:00:00", "seconds": "bad"}, {"started": "not-date", "seconds": 10}],
+                "ui_state": {},
+            }
+            ms2 = pl.compute_milestones(st2, data_dir=data_dir, today=date(2026, 6, 1))
+            ids2 = {m["id"] for m in ms2["unlocked"]}
+            self.assertIn("m:first_clear:g-cleared-date", ids2)
+            self.assertIn("m:first_clear:g-cleared-event", ids2)
+            self.assertIn("m:first_clear:g-cleared-nodate", ids2)
+            self.assertIn("m:ra_complete:g-cleared-nodate", ids2)
+            self.assertIn("m:ra_complete:g-cleared-date", ids2)
+            upcoming_kinds = {u["kind"] for u in ms2["upcoming"]}
+            self.assertIn("sessions", upcoming_kinds)
 
 
 if __name__ == "__main__":

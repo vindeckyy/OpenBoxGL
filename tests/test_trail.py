@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -131,6 +134,90 @@ class TrailUnitTests(unittest.TestCase):
         self.assertEqual([r["name"] for r in pt._sort_items(rows, "active")], ["A", "B", "C"])
         self.assertEqual([r["name"] for r in pt._sort_items(rows, "longest")], ["B", "A", "C"])
         self.assertEqual([r["name"] for r in pt._sort_items(rows, "points")], ["A", "B", "C"])
+
+        # Naive datetime + invalid RA datetime + naive ISO fallback
+        naive_now = pt._utc_now(datetime(2026, 6, 15, 12, 0))
+        self.assertEqual(naive_now.tzinfo, timezone.utc)
+        self.assertIsNone(pt.parse_ra_timestamp("2026-99-99 00:00:00"))
+        naive_iso = pt.parse_ra_timestamp("2026-06-01T12:00:00")
+        self.assertEqual(naive_iso.tzinfo, timezone.utc)
+
+        # Trash variants + corrupt/non-dict caches + mastered + refresh loop
+        with tempfile.TemporaryDirectory() as td:
+            data_dir = Path(td)
+            self.assertEqual(pt.compute_trail_index({"games": []}, data_dir, now=naive_now)["games"], {})
+            ra_dir = data_dir / "cache" / "retroachievements"
+            ra_dir.mkdir(parents=True)
+            (ra_dir / "g-master.json").write_text(json.dumps({
+                "earned": 2, "earned_hardcore": 2, "total": 2, "mastered": True, "achievements": [
+                    {"id": 1, "earned": True, "points": 10},
+                ],
+            }), encoding="utf-8")
+            (ra_dir / "g-badjson.json").write_text("{broken", encoding="utf-8")
+            (ra_dir / "g-list.json").write_text("[1, 2]", encoding="utf-8")
+            (ra_dir / "g-orphan.json").write_text("{}", encoding="utf-8")
+            (ra_dir / "system-7.json").write_text("{}", encoding="utf-8")
+            (ra_dir / "adir.json").mkdir()
+
+            st = {
+                "games": [
+                    "bad-entry",
+                    {"game_id": "g-master", "name": "Mastered", "platform": "SNES", "ra_game_id": "42"},
+                    {"game_id": "g-badjson", "name": "BadJson", "platform": "SNES", "ra_game_id": "99"},
+                    {"game_id": "g-hidden", "name": "Hidden", "hidden": True, "ra_game_id": "43"},
+                    {"game_id": "g-tr1", "name": "Tr1", "ra_game_id": "44"},
+                    {"game_id": "g-tr2", "name": "Tr2", "ra_game_id": "45"},
+                    {"game_id": "g-tr3", "name": "Tr3", "ra_game_id": "46"},
+                    {"game_id": "g-unmatched", "name": "Unmatched"},
+                ],
+                "trash": ["g-tr1", {"game_id": "g-tr2"}, {"game": {"game_id": "g-tr3"}}],
+            }
+            (ra_dir / "g-unmatched.json").write_text(json.dumps({
+                "earned": 1, "total": 4, "achievements": [{"id": 1, "earned": True, "points": 5}],
+            }), encoding="utf-8")
+
+            # Invalid trail cache format triggers unlink & rebuild
+            trail_cache = data_dir / "cache" / "trail.json"
+            trail_cache.write_text(json.dumps({"format": 99, "games": {}}), encoding="utf-8")
+            idx = pt.compute_trail_index(st, data_dir, now=naive_now)
+            self.assertEqual(idx["summary"]["mastered_games"], 1)
+            self.assertTrue(idx["summary"]["stale_dates_notice"])
+            self.assertIsNone(pt._read_trail_cache(trail_cache))
+
+            corrupt_game = pt.get_trail_game(st, data_dir, "g-badjson")
+            self.assertTrue(corrupt_game["available"])
+
+            # refresh_trail_progress: match_game path, spacing_seconds, error isolation, cancel wait/is_set
+            progress_calls = []
+            with mock.patch.object(pt, "match_game", return_value=(77, "dig")), mock.patch.object(
+                pt, "game_progress", side_effect=[
+                    {"earned": 1, "earned_hardcore": 1, "total": 2, "mastered": False, "achievements": []},
+                    RuntimeError("ra timeout"),
+                    {"earned": 0, "earned_hardcore": 0, "total": 1, "mastered": False, "achievements": []},
+                ]
+            ):
+                ref = pt.refresh_trail_progress(
+                    data_dir,
+                    st,
+                    {"user": "u", "api_key": "k"},
+                    spacing_seconds=0.001,
+                    progress_cb=lambda i, t: progress_calls.append((i, t)),
+                )
+            self.assertEqual(ref["refreshed"], 2)
+            self.assertEqual(len(ref["errors"]), 1)
+            self.assertEqual(len(progress_calls), 3)
+
+            # Cancel via wait returning True after first item, and via is_set True before loop
+            ev_wait = mock.Mock(is_set=mock.Mock(return_value=False), wait=mock.Mock(return_value=True))
+            with mock.patch.object(pt, "match_game", return_value=(77, "dig")), mock.patch.object(
+                pt, "game_progress", return_value={"earned": 0, "total": 1, "achievements": []}
+            ):
+                ev_res = pt.refresh_trail_progress(data_dir, st, {}, cancel_event=ev_wait, spacing_seconds=0.01)
+            self.assertEqual(ev_res["refreshed"], 1)
+
+            ev_stop = mock.Mock(is_set=mock.Mock(return_value=True))
+            stop_res = pt.refresh_trail_progress(data_dir, st, {}, cancel_event=ev_stop)
+            self.assertEqual(stop_res["refreshed"], 0)
 
 
 if __name__ == "__main__":
