@@ -186,6 +186,42 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/deals"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/deals/entry"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/deals/refresh"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/deals/search"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/deals/unwatch"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/deals/watch"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/desktop/install"

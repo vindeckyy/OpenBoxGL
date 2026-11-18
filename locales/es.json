@@ -1114,7 +1114,11 @@
     "save_vault_enabled": "Activar instantáneas automáticas del Baúl de partidas",
     "save_vault_keep": "Instantáneas del Baúl de partidas conservadas por juego",
     "save_vault_on_close": "Crear instantánea en el Baúl de partidas al terminar una sesión",
-    "save_vault_auto_days": "Intervalo de instantánea automática en días (0 lo desactiva)"
+    "save_vault_auto_days": "Intervalo de instantánea automática en días (0 lo desactiva)",
+    "deals_enabled": "Activar Radar de ofertas (consulta store.steampowered.com para appids vigilados)",
+    "deals_poll_hours": "Intervalo de sondeo del Radar de ofertas en horas (24–720)",
+    "deals_min_drop_pct": "Descuento mínimo % para avisos del Radar (1–90)",
+    "deals_store_cc": "Código de región de la tienda Steam (p. ej., us, gb, de)"
   },
   "picker": {
     "title": "¿Qué debería jugar?",
@@ -1740,7 +1744,9 @@
       "webhook_failed_title": "Falló la entrega del webhook",
       "webhook_failed_body": "No se pudo entregar el evento {event_id}. Detalles: {detail}",
       "capsule_unlocked_title": "Una cápsula del tiempo ya puede abrirse",
-      "capsule_unlocked_body": "«{title}» alcanzó su fecha de apertura y te espera en el Diario del jugador."
+      "capsule_unlocked_body": "«{title}» alcanzó su fecha de apertura y te espera en el Diario del jugador.",
+      "deal_drop_title": "Alerta de precio del Radar de ofertas",
+      "deal_drop_body": "{name} ahora cuesta {price} (-{discount}%)."
     },
     "sessions": {
       "backup_created": "Creado {name}",
@@ -2143,5 +2149,41 @@
     "game_card_title": "Pronóstico de Senda de logros",
     "next_milestone": "Próximo hito de 100 pts: {target} pts (faltan {remaining})",
     "next_up_title": "Logros pendientes más accesibles"
+  },
+  "deals": {
+    "menu_title": "Radar de ofertas",
+    "menu_hint": "Seguimiento opcional de precios Steam",
+    "watch_for_deals": "Vigilar ofertas",
+    "optin_title": "¿Activar el Radar de ofertas?",
+    "optin_body": "Al activarlo, OpenBox consulta periódicamente los precios de los AppIDs de Steam que sigas y te permite buscar en Steam o anotar precios manuales.",
+    "optin_host_note": "Host: https://store.steampowered.com · Datos: solo Steam AppID y término de búsqueda (sin cookies ni cuenta).",
+    "optin_confirm": "Activar Radar de ofertas",
+    "enabled_notice": "Radar de ofertas activado.",
+    "host_disclosure": "Solo store.steampowered.com recibe los AppIDs vigilados.",
+    "refresh_now": "Actualizar precios",
+    "refresh_started": "Actualizando lista del Radar de ofertas…",
+    "refresh_done": "Precios del Radar de ofertas actualizados.",
+    "search_placeholder": "Buscar en Steam…",
+    "search_btn": "Buscar",
+    "search_empty": "Sin resultados en Steam.",
+    "watch_btn": "Vigilar",
+    "unwatch": "Dejar de vigilar",
+    "unwatched": "Quitado del Radar de ofertas.",
+    "watched_added": "«{name}» añadido al Radar de ofertas.",
+    "empty": "Todavía no sigues ningún juego en el Radar. Busca en Steam o añade uno manual abajo.",
+    "manual_add_title": "Seguimiento manual (ajeno a Steam)",
+    "manual_name": "Título del juego",
+    "target_placeholder": "Precio objetivo (p. ej. 9.99)",
+    "add_manual": "Añadir entrada manual",
+    "manual_badge": "Manual",
+    "lowest_retained": "mín. {price}",
+    "target_label": "objetivo {price}",
+    "age_fresh": "actualizado ahora",
+    "age_hours": "hace {hours} h",
+    "age_days": "hace {days} d",
+    "log_price": "Registrar precio / editar",
+    "field_price": "Precio",
+    "field_currency": "Moneda (3 letras)",
+    "field_note": "Nota"
   }
 }

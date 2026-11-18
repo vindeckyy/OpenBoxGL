@@ -438,6 +438,10 @@ import { initCompatReport } from './compat.js';
         obs_websocket_url:$('obsWebsocketUrl')?.value.trim() || '',
         obs_websocket_password:$('obsWebsocketPassword')?.value || '',
         household_stats_sharing:$('householdStatsSharing')?.checked || false,
+        deals_enabled:$('dealsEnabled')?.checked || false,
+        deals_poll_hours:Math.max(24, Math.min(720, Number($('dealsPollHours')?.value) || 168)),
+        deals_min_drop_pct:Math.max(1, Math.min(90, Number($('dealsMinDropPct')?.value) || 10)),
+        deals_store_cc:($('dealsStoreCc')?.value || 'us').trim().toLowerCase().slice(0, 2) || 'us',
         museum_kiosk_enabled:$('museumKioskEnabled')?.checked || false,
         progress_automation_enabled:$('progressAutomationEnabled').checked,
         progress_automation_play_minutes:Number($('progressAutomationMinutes').value),
@@ -723,6 +727,10 @@ import { initCompatReport } from './compat.js';
         if ($('obsReplayEnabled')) $('obsReplayEnabled').checked = AppState.appSettings.obs_replay_enabled === true;
         if ($('obsWebsocketUrl')) $('obsWebsocketUrl').value = AppState.appSettings.obs_websocket_url || '';
         if ($('householdStatsSharing')) $('householdStatsSharing').checked = AppState.appSettings.household_stats_sharing === true;
+        if ($('dealsEnabled')) $('dealsEnabled').checked = AppState.appSettings.deals_enabled === true;
+        if ($('dealsPollHours')) $('dealsPollHours').value = AppState.appSettings.deals_poll_hours ?? 168;
+        if ($('dealsMinDropPct')) $('dealsMinDropPct').value = AppState.appSettings.deals_min_drop_pct ?? 10;
+        if ($('dealsStoreCc')) $('dealsStoreCc').value = AppState.appSettings.deals_store_cc || 'us';
         if ($('museumKioskEnabled')) $('museumKioskEnabled').checked = AppState.appSettings.museum_kiosk_enabled === true;
         if ($('museumKioskPin')) $('museumKioskPin').value = '';
         $('localeSetting').value = AppState.appSettings.locale || 'en';

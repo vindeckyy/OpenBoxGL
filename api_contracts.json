@@ -48,6 +48,14 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/deals"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/deals/search"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/diagnostic"
     },
     {
@@ -685,6 +693,22 @@
     {
       "method": "POST",
       "path": "/api/v2/collections/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/deals/entry"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/deals/refresh"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/deals/unwatch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/deals/watch"
     },
     {
       "method": "POST",

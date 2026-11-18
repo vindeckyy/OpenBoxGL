@@ -1114,7 +1114,11 @@
     "save_vault_enabled": "Automatische Spielstand-Tresor-Schnappschüsse aktivieren",
     "save_vault_keep": "Im Spielstand-Tresor je Spiel aufbewahrte Schnappschüsse",
     "save_vault_on_close": "Beim Beenden einer Spielsitzung im Spielstand-Tresor sichern",
-    "save_vault_auto_days": "Intervall für automatische Schnappschüsse in Tagen (0 deaktiviert)"
+    "save_vault_auto_days": "Intervall für automatische Schnappschüsse in Tagen (0 deaktiviert)",
+    "deals_enabled": "Angebotsradar aktivieren (fragt store.steampowered.com für vorgemerkte App-IDs ab)",
+    "deals_poll_hours": "Abrufintervall für Angebotsradar in Stunden (24–720)",
+    "deals_min_drop_pct": "Mindestrabatt in % für Alarme (1–90)",
+    "deals_store_cc": "Steam-Shop-Ländercode (z. B. us, gb, de)"
   },
   "picker": {
     "title": "Was soll ich spielen?",
@@ -1740,7 +1744,9 @@
       "webhook_failed_title": "Webhook-Zustellung fehlgeschlagen",
       "webhook_failed_body": "Ereignis {event_id} konnte nicht zugestellt werden. Details: {detail}",
       "capsule_unlocked_title": "Eine Zeitkapsel kann geöffnet werden",
-      "capsule_unlocked_body": "„{title}“ hat sein Öffnungsdatum erreicht und wartet im Spieler-Logbuch."
+      "capsule_unlocked_body": "„{title}“ hat sein Öffnungsdatum erreicht und wartet im Spieler-Logbuch.",
+      "deal_drop_title": "Angebotsradar-Preisalarm",
+      "deal_drop_body": "{name} kostet jetzt {price} (-{discount} %)."
     },
     "sessions": {
       "backup_created": "Erstellt: {name}",
@@ -2143,5 +2149,41 @@
     "game_card_title": "Erfolgs-Pfad-Prognose",
     "next_milestone": "Nächster 100-Pkt-Meilenstein: {target} Pkt (noch {remaining})",
     "next_up_title": "Nächste einfache Erfolge"
+  },
+  "deals": {
+    "menu_title": "Angebotsradar",
+    "menu_hint": "Optionale Steam-Preisbeobachtung",
+    "watch_for_deals": "Preise beobachten",
+    "optin_title": "Angebotsradar aktivieren?",
+    "optin_body": "Bei Aktivierung ruft OpenBox regelmäßig Preise für vorgemerkte Steam-App-IDs ab und erlaubt Steam-Suche sowie manuelle Preisnotizen.",
+    "optin_host_note": "Host: https://store.steampowered.com · Nutzdaten: nur Steam-App-ID und Suchbegriff (keine Cookies, kein Konto).",
+    "optin_confirm": "Angebotsradar aktivieren",
+    "enabled_notice": "Angebotsradar aktiviert.",
+    "host_disclosure": "Nur store.steampowered.com erhält vorgemerkte App-IDs.",
+    "refresh_now": "Preise aktualisieren",
+    "refresh_started": "Angebotsradar-Liste wird aktualisiert…",
+    "refresh_done": "Angebotsradar-Preise aktualisiert.",
+    "search_placeholder": "Steam-Shop durchsuchen…",
+    "search_btn": "Suchen",
+    "search_empty": "Keine Steam-Treffer.",
+    "watch_btn": "Merken",
+    "unwatch": "Entfernen",
+    "unwatched": "Aus Angebotsradar entfernt.",
+    "watched_added": "„{name}“ zum Angebotsradar hinzugefügt.",
+    "empty": "Noch keine Spiele auf der Merkliste. Suche auf Steam oder trage unten ein Spiel manuell ein.",
+    "manual_add_title": "Manuell verfolgen (ohne Steam)",
+    "manual_name": "Spieltitel",
+    "target_placeholder": "Wunschpreis (z. B. 9.99)",
+    "add_manual": "Manuell hinzufügen",
+    "manual_badge": "Manuell",
+    "lowest_retained": "Tiefst {price}",
+    "target_label": "Ziel {price}",
+    "age_fresh": "gerade aktualisiert",
+    "age_hours": "vor {hours} Std.",
+    "age_days": "vor {days} T.",
+    "log_price": "Preis erfassen / bearbeiten",
+    "field_price": "Preis",
+    "field_currency": "Währung (3 Buchstaben)",
+    "field_note": "Notiz"
   }
 }

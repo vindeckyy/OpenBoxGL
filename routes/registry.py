@@ -179,6 +179,7 @@ def _ensure_handlers_loaded() -> None:
         "handlers.savevault",
         "handlers.playerlog",
         "handlers.trail",
+        "handlers.deals",
         "web_app",
     )
     for mod in modules:

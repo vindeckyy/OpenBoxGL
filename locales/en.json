@@ -1114,7 +1114,11 @@
     "save_vault_enabled": "Enable Save Vault automatic snapshots",
     "save_vault_keep": "Save Vault snapshots kept per game",
     "save_vault_on_close": "Snapshot saves in Save Vault when a game session ends",
-    "save_vault_auto_days": "Auto-snapshot interval in days (0 disables)"
+    "save_vault_auto_days": "Auto-snapshot interval in days (0 disables)",
+    "deals_enabled": "Enable Deal Radar (queries store.steampowered.com for watched appids)",
+    "deals_poll_hours": "Deal Radar poll interval in hours (24–720)",
+    "deals_min_drop_pct": "Minimum discount % for Deal Radar alerts (1–90)",
+    "deals_store_cc": "Steam store region code (e.g. us, gb, de)"
   },
   "picker": {
     "title": "What should I play?",
@@ -1740,7 +1744,9 @@
       "webhook_failed_title": "Webhook delivery failed",
       "webhook_failed_body": "Event {event_id} could not be delivered. Details: {detail}",
       "capsule_unlocked_title": "A time capsule is ready to open",
-      "capsule_unlocked_body": "“{title}” reached its unlock date and is waiting in Player's Log."
+      "capsule_unlocked_body": "“{title}” reached its unlock date and is waiting in Player's Log.",
+      "deal_drop_title": "Deal Radar price alert",
+      "deal_drop_body": "{name} is now {price} (-{discount}%)."
     },
     "sessions": {
       "backup_created": "Created {name}",
@@ -2143,5 +2149,41 @@
     "game_card_title": "Achievement Trail forecast",
     "next_milestone": "Next 100-pt milestone: {target} pts ({remaining} left)",
     "next_up_title": "Cheapest unearned achievements"
+  },
+  "deals": {
+    "menu_title": "Deal Radar",
+    "menu_hint": "Opt-in Steam price watch",
+    "watch_for_deals": "Watch for deals",
+    "optin_title": "Enable Deal Radar?",
+    "optin_body": "When enabled, OpenBox periodically queries prices for your watched Steam AppIDs and lets you search Steam or track manual price notes.",
+    "optin_host_note": "Host: https://store.steampowered.com · Payload: Steam AppID and search query only (no cookies, no account).",
+    "optin_confirm": "Enable Deal Radar",
+    "enabled_notice": "Deal Radar enabled.",
+    "host_disclosure": "Only store.steampowered.com receives watched AppIDs.",
+    "refresh_now": "Refresh prices",
+    "refresh_started": "Refreshing Deal Radar watchlist…",
+    "refresh_done": "Deal Radar prices updated.",
+    "search_placeholder": "Search Steam store…",
+    "search_btn": "Search",
+    "search_empty": "No Steam store matches.",
+    "watch_btn": "Watch",
+    "unwatch": "Unwatch",
+    "unwatched": "Removed from Deal Radar.",
+    "watched_added": "Added “{name}” to Deal Radar.",
+    "empty": "No games on your Deal Radar yet. Search Steam or add a manual entry below.",
+    "manual_add_title": "Track manually (non-Steam)",
+    "manual_name": "Game title",
+    "target_placeholder": "Target price (e.g. 9.99)",
+    "add_manual": "Add manual entry",
+    "manual_badge": "Manual",
+    "lowest_retained": "low {price}",
+    "target_label": "target {price}",
+    "age_fresh": "updated just now",
+    "age_hours": "updated {hours}h ago",
+    "age_days": "updated {days}d ago",
+    "log_price": "Log price / edit",
+    "field_price": "Price",
+    "field_currency": "Currency (3 letters)",
+    "field_note": "Note"
   }
 }

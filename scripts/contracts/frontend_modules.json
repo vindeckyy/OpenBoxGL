@@ -10,6 +10,7 @@
     "clips.js",
     "compat.js",
     "constellation.js",
+    "deals.js",
     "defs.js",
     "details.js",
     "dialogs.js",

@@ -26,6 +26,8 @@ SERVER_NOTICE_KEYS = {
     "notify.server.webhook_failed_body": ("event_id", "detail"),
     "notify.server.capsule_unlocked_title": (),
     "notify.server.capsule_unlocked_body": ("title",),
+    "notify.server.deal_drop_title": (),
+    "notify.server.deal_drop_body": ("name", "price", "discount"),
 }
 
 

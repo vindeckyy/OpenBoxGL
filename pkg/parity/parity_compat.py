@@ -152,6 +152,7 @@ def build_report(data_dir: Path, *, root: Path) -> dict[str, Any]:
     raw = _read_json(data_dir / "library.json")
     settings = raw.get("settings") if isinstance(raw.get("settings"), dict) else {}
     contract = contract_tokens(Path(root) / "static" / "app.css")
+    from pkg.parity.parity_deals import deals_compat_section
     from pkg.parity.parity_save_vault import vault_summary_readonly
 
     return {
@@ -165,6 +166,7 @@ def build_report(data_dir: Path, *, root: Path) -> dict[str, Any]:
         "api": api_section(),
         "sync": sync_section(settings),
         "save_vault": vault_summary_readonly(data_dir),
+        "deals": deals_compat_section(raw, settings),
     }
 
 

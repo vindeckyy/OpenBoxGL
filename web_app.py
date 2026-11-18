@@ -735,12 +735,41 @@ def _capsule_unlock_tick():
         LOGGER.exception("Time capsule unlock sweep failed")
 
 
+def _deals_auto_tick():
+    """Queue scheduled Deal Radar price poll when opted in and due (ADR 0109)."""
+    try:
+        if RUNNING:
+            return
+        from pkg.parity.parity_deals import deals_due, refresh_deals_pass
+
+        state = load_state()
+        settings = state.get("settings", {}) if isinstance(state, dict) else {}
+        if not deals_due(state, settings):
+            return
+
+        def _commit(fn):
+            out = []
+            update_state(lambda current: out.append(fn(current)))
+            return out[0] if out else None
+
+        JOB_MANAGER.submit(
+            "deals-refresh",
+            lambda ctx, dp=DATA.parent, st=state, cfg=settings: refresh_deals_pass(
+                dp, st, cfg, commit_fn=_commit, cancel_event=ctx,
+            ),
+        )
+        LOGGER.info("Scheduled Deal Radar poll queued")
+    except Exception:
+        LOGGER.exception("Scheduled Deal Radar pass failed")
+
+
 def _auto_backup_worker():
     """Hourly tick; WATCH_STOP wakes it for shutdown."""
     while not WATCH_STOP.wait(3600):
         _auto_backup_tick()
         _save_vault_auto_tick()
         _capsule_unlock_tick()
+        _deals_auto_tick()
 
 
 def bigbox_launch_url(url):
@@ -891,6 +920,7 @@ def main():
         LOGGER.exception("Session reconciliation failed; continuing with empty active_sessions")
     WATCH_STOP.clear()
     _capsule_unlock_tick()
+    _deals_auto_tick()
     JOB_MANAGER.submit("auto-import", auto_import_worker)
     start_media_queue_worker()
     threading.Thread(target=_auto_backup_worker, name="auto-backup", daemon=True).start()
