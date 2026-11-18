@@ -11,6 +11,7 @@ from typing import Any
 
 from api_errors import RaNotLinked, TrailGameUnknown
 from backend_io import atomic_write_text
+from pkg.platform_compat import parse_timestamp
 import retroachievements
 from retroachievements import cached as ra_cached, game_progress, match_game
 
@@ -35,16 +36,17 @@ def parse_ra_timestamp(raw: Any) -> datetime | None:
     text = str(raw or "").strip()
     if not text:
         return None
-    normalized = text.replace(" ", "T") if len(text) >= 19 and text[10] == " " else text
-    if normalized.endswith("Z"):
-        normalized = normalized[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
+    if len(text) == 19 and text[10] in (" ", "T"):
+        try:
+            return datetime.strptime(text.replace("T", " "), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    parsed = parse_timestamp(text)
+    if parsed is None:
         return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    if text.endswith(("Z", "z")) or ("+" in text[10:] or "-" in text[10:]):
+        return parsed.astimezone(timezone.utc)
+    return parsed.replace(tzinfo=timezone.utc)
 
 
 def _id_sort_key(raw: Any) -> tuple[int, int, str]:

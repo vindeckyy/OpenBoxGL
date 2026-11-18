@@ -31,7 +31,7 @@ async function renderVaultSummaryBadge(slot, id) {
     const count = Number(status.game_snapshots || 0);
     const bytes = Number(status.game_bytes || 0);
     slot.textContent = count
-      ? t('vault.summary_count', { count, size: formatBytes(bytes) })
+      ? t(count === 1 ? 'vault.summary_count_one' : 'vault.summary_count', { count, size: formatBytes(bytes) })
       : t('vault.summary_empty');
   } catch {
     slot.textContent = '';
@@ -77,7 +77,7 @@ async function renderSaveVaultPanel(container, id, { onChanged = null } = {}) {
   container.innerHTML = `
     <div class="extras">
       <button type="button" class="primary" id="vaultSnapshotNow">${escapeHtml(t('vault.snapshot_now'))}</button>
-      <span class="description">${escapeHtml(t('vault.total_usage', { count: status.snapshots || 0, size: formatBytes(status.bytes || 0) }))}</span>
+      <span class="description">${escapeHtml(t((status.snapshots || 0) === 1 ? 'vault.total_usage_one' : 'vault.total_usage', { count: status.snapshots || 0, size: formatBytes(status.bytes || 0) }))}</span>
     </div>
     ${warn}
     <div id="vaultActionStatus" class="description"></div>

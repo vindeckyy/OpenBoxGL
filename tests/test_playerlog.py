@@ -124,6 +124,45 @@ class PlayerLogCapsuleTests(unittest.TestCase):
         self.assertEqual(u3, [])
         self.assertFalse(any(n.get("kind") == "capsule" for n in self.state["notifications"]))
 
+    def test_validation_leap_year_manual_sessions_and_trashed_shapes(self):
+        # Input validation branches
+        with self.assertRaises(BadRequest):
+            pl.create_capsule(self.state, "bad")  # type: ignore[arg-type]
+        with self.assertRaises(BadRequest):
+            pl.create_capsule(self.state, {"title": "Empty", "body": "   ", "unlock_at": "2027-01-01"})
+        with self.assertRaises(BadRequest):
+            pl.create_capsule(self.state, {"title": "Bad kind", "body": "ok", "kind": "poll", "unlock_at": "2027-01-01"})
+
+        # Leap-day Feb 29 anniversary rolls cleanly to Feb 28 in non-leap year
+        self.assertEqual(pl._add_years(date(2024, 2, 29), 1), date(2025, 2, 28))
+        self.assertEqual(pl._add_years(date(2024, 2, 29), 4), date(2028, 2, 29))
+        self.assertIsNone(pl._parse_date_prefix("bad-prefix"))
+        self.assertEqual(pl._binary_search_crossing([(date(2026, 1, 1), 0)], 10, "2026-01-01"), ("2026-01-01", True))
+
+        # Game name fallback + manual_sessions + nested & string trash formats
+        st = {
+            "games": [
+                {
+                    "game_id": "g-manual",
+                    "name": "Hollow Knight",
+                    "added_at": "2024-02-29",
+                    "playtime_seconds": 15 * 3600,
+                    "manual_sessions": [{"date": "2025-05-01", "seconds": 15 * 3600}],
+                },
+                {"game_id": "g-tr1", "name": "Tr1", "playtime_seconds": 50 * 3600},
+                {"game_id": "g-tr2", "name": "Tr2", "playtime_seconds": 50 * 3600},
+            ],
+            "history": [{"game": "Hollow Knight", "started": "2025-06-01T12:00:00", "seconds": 3600}],
+            "trash": ["g-tr1", {"game": {"game_id": "g-tr2"}}],
+            "ui_state": {},
+        }
+        ms = pl.compute_milestones(st, today=date(2026, 6, 1))
+        ids = {m["id"] for m in ms["unlocked"]}
+        self.assertIn("m:playtime_game:g-manual:10h", ids)
+        self.assertIn("m:library_age:1y", ids)
+        self.assertNotIn("m:playtime_game:g-tr1:10h", ids)
+        self.assertNotIn("m:playtime_game:g-tr2:10h", ids)
+
 
 if __name__ == "__main__":
     unittest.main()

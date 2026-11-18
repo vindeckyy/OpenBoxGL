@@ -2084,7 +2084,9 @@
     "delete_title": "Excluir instantâneo do Cofre?",
     "delete_message": "Isso remove permanentemente o instantâneo selecionado do Cofre.",
     "delete_consequence": "Seus arquivos de save atuais não são afetados.",
-    "deleted": "Instantâneo do Cofre excluído."
+    "deleted": "Instantâneo do Cofre excluído.",
+    "summary_count_one": "Cofre de Saves: {count} instantâneo ({size})",
+    "total_usage_one": "{count} instantâneo na biblioteca · {size}"
   },
   "playerlog": {
     "title": "Diário do Jogador",
@@ -2109,7 +2111,7 @@
     "field_body": "Mensagem (até 4.000 caracteres)",
     "seal_submit": "Selar cápsula",
     "capsule_sealed": "Cápsula do tempo selada até {date}.",
-    "banner_due": "{count} cápsula(s) pronta(s) para abrir hoje.",
+    "banner_due": "{count} cápsulas prontas para abrir hoje.",
     "banner_upcoming": "Próxima cápsula “{title}” abre em {days} dia(s) ({date}).",
     "open_capsule": "Abrir cápsula",
     "view_capsule": "Ler",
@@ -2119,7 +2121,8 @@
     "unlocked_label": "Aberta em {date}",
     "sealed_until": "Abre em {date}",
     "capsule_opened": "Cápsula aberta",
-    "capsule_deleted": "Cápsula excluída."
+    "capsule_deleted": "Cápsula excluída.",
+    "banner_due_one": "{count} cápsula pronta para abrir hoje."
   },
   "trail": {
     "title": "Trilha de Conquistas",
@@ -2216,7 +2219,7 @@
     "status_on_track": "No prazo",
     "status_behind": "Atrasado",
     "status_stale": "Removido/oculto",
-    "later_summary": "{count} jogo(s) excedente(s) movidos para Depois (~{hours} h).",
+    "later_summary": "{count} jogos excedentes movidos para Depois (~{hours} h).",
     "empty": "Nenhum jogo agendado neste período.",
     "replan": "Replanejar",
     "new_plan": "Novo plano",
@@ -2225,6 +2228,8 @@
     "abandon_message": "Limpa o plano ativo mantendo seus jogos e histórico intactos.",
     "abandoned_notice": "Roteiro de Backlog limpo.",
     "replanned_ok": "Roteiro atualizado.",
-    "replanned_dropped": "Roteiro atualizado ({count} jogo(s) removido(s))."
+    "replanned_dropped": "Roteiro atualizado ({count} jogos removidos).",
+    "later_summary_one": "{count} jogo excedente movido para Depois (~{hours} h).",
+    "replanned_dropped_one": "Roteiro atualizado ({count} jogo removido)."
   }
 }

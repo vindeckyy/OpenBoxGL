@@ -16,6 +16,7 @@ from backend_io import atomic_write_text
 from catalog import total_playtime_seconds
 from pkg.parity import parity_igdb
 from pkg.parity.parity_radio import _eligible, _is_completed, _norm
+from pkg.platform_compat import parse_timestamp
 
 VALID_STRATEGIES = ("quick-wins", "comeback", "raided")
 DEFAULT_EST_HOURS = 8.0
@@ -478,10 +479,13 @@ def project_live_itinerary(
     created_date = now_dt.date()
     raw_created = str(plan.get("created_at") or "").strip()
     if raw_created:
-        try:
-            created_date = datetime.fromisoformat(raw_created.replace("Z", "+00:00")).date()
-        except ValueError:
-            pass
+        parsed_created = parse_timestamp(raw_created)
+        if parsed_created is not None:
+            created_date = (
+                parsed_created.astimezone(timezone.utc).date()
+                if raw_created.endswith(("Z", "z")) or "+" in raw_created[10:]
+                else parsed_created.date()
+            )
     m_day = clamp_minutes_per_day(plan.get("minutes_per_day"), 60)
     elapsed_days = max(1, (now_dt.date() - created_date).days + 1)
     elapsed_capacity = round(elapsed_days * m_day / 60.0, 2)

@@ -107,6 +107,31 @@ class TrailUnitTests(unittest.TestCase):
         self.assertEqual(done["eta_confidence"], "complete")
         self.assertEqual(done["eta_days"], 0)
 
+    def test_timestamp_parsing_sorts_streaks_and_refresh_edges(self):
+        self.assertIsNone(pt.parse_ra_timestamp(""))
+        self.assertIsNone(pt.parse_ra_timestamp("not-a-timestamp"))
+        self.assertIsNotNone(pt.parse_ra_timestamp("2026-06-01T12:00:00Z"))
+        self.assertIsNotNone(pt.parse_ra_timestamp("2026-06-01T12:00:00+02:00"))
+        self.assertEqual(pt._id_sort_key("abc")[0], 1)
+
+        # Previous week anchor preserves streak; zero activity sets streak 0
+        now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
+        prev_wk = now - timedelta(weeks=1)
+        self.assertEqual(pt._compute_week_streak([], now), 0)
+        self.assertEqual(pt._compute_week_streak([prev_wk], now), 1)
+        self.assertEqual(pt._compute_week_streak([now - timedelta(weeks=5)], now), 0)
+
+        # Sort orders (closest, active, longest, points)
+        rows = [
+            {"name": "B", "remaining": 5, "progress_pct": 50.0, "total_points": 100, "earned_points": 50, "last_unlock_at": "2026-06-01T00:00:00Z"},
+            {"name": "A", "remaining": 2, "progress_pct": 80.0, "total_points": 200, "earned_points": 80, "last_unlock_at": "2026-06-05T00:00:00Z"},
+            {"name": "C", "remaining": 0, "progress_pct": 100.0, "total_points": 50, "earned_points": 50, "last_unlock_at": ""},
+        ]
+        self.assertEqual([r["name"] for r in pt._sort_items(rows, "closest")], ["A", "B", "C"])
+        self.assertEqual([r["name"] for r in pt._sort_items(rows, "active")], ["A", "B", "C"])
+        self.assertEqual([r["name"] for r in pt._sort_items(rows, "longest")], ["B", "A", "C"])
+        self.assertEqual([r["name"] for r in pt._sort_items(rows, "points")], ["A", "B", "C"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -201,6 +201,43 @@ class SaveVaultUnitTests(unittest.TestCase):
         self.assertFalse(sv.auto_vault_due(self.data_dir, state["settings"], now=t0 + timedelta(days=2)))
         self.assertTrue(sv.auto_vault_due(self.data_dir, state["settings"], now=t0 + timedelta(days=8)))
 
+    def test_file_root_readonly_summary_escapes_and_error_branches(self):
+        # game_vault_key fallback without game_id
+        self.assertTrue(sv.game_vault_key({"name": "Untagged", "platform": "GB"}).startswith("g-"))
+        self.assertEqual(sv.vault_summary_readonly(self.data_dir), {"snapshots": 0, "bytes": 0, "games": 0})
+        idx_file = sv.vault_dir_for(self.data_dir) / sv.INDEX_FILE_NAME
+        idx_file.parent.mkdir(parents=True, exist_ok=True)
+        idx_file.write_text("{corrupt", encoding="utf-8")
+        self.assertEqual(sv.vault_summary_readonly(self.data_dir), {"snapshots": 0, "bytes": 0, "games": 0})
+        idx_file.write_text('{"snapshots":"bad"}', encoding="utf-8")
+        self.assertEqual(sv.vault_summary_readonly(self.data_dir), {"snapshots": 0, "bytes": 0, "games": 0})
+
+        # Single-file save root create/diff/restore
+        single = self.tmp / "single" / "slot.srm"
+        single.parent.mkdir(parents=True)
+        single.write_bytes(b"ONE-FILE-V1")
+        f_game = {"game_id": "g-single", "name": "Single", "save_paths": [str(single)]}
+        snap = sv.create_snapshot(self.data_dir, f_game, trigger="invalid-trigger")
+        single.write_bytes(b"ONE-FILE-V2")
+        diff = sv.diff_snapshot(self.data_dir, f_game, snap["snapshot_id"])
+        self.assertEqual(diff["counts"]["changed"], 1)
+        sv.restore_snapshot(self.data_dir, f_game, snap["snapshot_id"], skip_safety=True)
+        self.assertEqual(single.read_bytes(), b"ONE-FILE-V1")
+
+        # Containment escape checks
+        with self.assertRaises(VaultPathEscape):
+            sv._resolve_contained_target(single, "other.srm", is_file_root=True)
+        with self.assertRaises(VaultPathEscape):
+            sv._safe_snapshot_dir(sv.vault_dir_for(self.data_dir), "k", "..")
+
+        # auto_vault_due guards & run_auto_vault_pass cancel
+        self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_management_enabled": False}))
+        self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_vault_auto_days": "bad"}))
+        self.assertFalse(sv.auto_vault_due(self.data_dir, {"save_vault_auto_days": 0}))
+        cancel = mock.Mock(is_set=lambda: True)
+        c_res = sv.run_auto_vault_pass(self.data_dir, {"games": [f_game, {"hidden": True}]}, cancel_event=cancel)
+        self.assertEqual(c_res["snapshotted"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -123,7 +123,7 @@ function renderBanner(nextData) {
   const cap = nextData?.capsule;
   const days = nextData?.days_until;
   if (due > 0) {
-    return `<div class="detail-card playerlog-banner"><strong>${escapeHtml(t('playerlog.banner_due', { count: due }))}</strong></div>`;
+    return `<div class="detail-card playerlog-banner"><strong>${escapeHtml(t(due === 1 ? 'playerlog.banner_due_one' : 'playerlog.banner_due', { count: due }))}</strong></div>`;
   }
   if (cap && typeof days === 'number' && days <= 7) {
     return `<div class="detail-card playerlog-banner"><span>${escapeHtml(t('playerlog.banner_upcoming', { title: cap.title || '', days, date: cap.unlock_at || '' }))}</span></div>`;

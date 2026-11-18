@@ -56,7 +56,7 @@ def _parse_unlock_date(raw: Any) -> date:
     if not _STRICT_DATE_RE.match(text):
         raise CapsuleInvalidDate("unlock_at must be a valid YYYY-MM-DD local date.")
     try:
-        return date.fromisoformat(text)
+        return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError as error:
         raise CapsuleInvalidDate("unlock_at is not a valid calendar date.") from error
 
@@ -67,7 +67,7 @@ def _parse_date_prefix(raw: Any) -> date | None:
     if not match:
         return None
     try:
-        return date.fromisoformat(match.group(1))
+        return datetime.strptime(match.group(1), "%Y-%m-%d").date()
     except ValueError:
         return None
 

@@ -20,6 +20,7 @@ from api_errors import (
 )
 from backend_io import atomic_write_text, read_limited
 from notifications import add_notification
+from pkg.platform_compat import parse_timestamp
 from updates import VERSION
 
 ALLOWED_HOST = "store.steampowered.com"
@@ -534,12 +535,11 @@ def list_deals(state: dict[str, Any], *, now: datetime | None = None) -> dict[st
         age_hours: int | None = None
         seen_raw = str(item.get("last_seen_at") or "").strip()
         if seen_raw:
-            try:
-                seen_dt = datetime.fromisoformat(seen_raw.replace("Z", "+00:00"))
-                if seen_dt.tzinfo is None:
-                    seen_dt = seen_dt.replace(tzinfo=timezone.utc)
+            parsed_seen = parse_timestamp(seen_raw)
+            if parsed_seen is not None:
+                seen_dt = parsed_seen.astimezone(timezone.utc) if seen_raw.endswith(("Z", "z")) or "+" in seen_raw[10:] else parsed_seen.replace(tzinfo=timezone.utc)
                 age_hours = max(0, int((now_dt - seen_dt).total_seconds() // 3600))
-            except ValueError:
+            else:
                 age_hours = None
 
         linked_game = games_by_appid.get(str(item.get("appid") or "")) if item.get("appid") else None
@@ -584,12 +584,10 @@ def deals_due(state: dict[str, Any], settings: dict[str, Any], *, now: datetime 
     raw_last = str(deals.get("last_poll_at") or "").strip()
     if not raw_last:
         return True
-    try:
-        last_dt = datetime.fromisoformat(raw_last.replace("Z", "+00:00"))
-    except ValueError:
+    parsed_last = parse_timestamp(raw_last)
+    if parsed_last is None:
         return True
-    if last_dt.tzinfo is None:
-        last_dt = last_dt.replace(tzinfo=timezone.utc)
+    last_dt = parsed_last.astimezone(timezone.utc) if raw_last.endswith(("Z", "z")) or "+" in raw_last[10:] else parsed_last.replace(tzinfo=timezone.utc)
     return (_utc_now(now) - last_dt).total_seconds() >= poll_seconds
 
 

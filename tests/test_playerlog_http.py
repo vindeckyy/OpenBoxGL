@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from api_errors import (  # noqa: E402
+    BadRequest,
     CapsuleBodyTooLarge,
     CapsuleInvalidDate,
     CapsuleLocked,
@@ -117,8 +118,13 @@ class PlayerLogHttpTests(unittest.TestCase):
             self.assertGreaterEqual(h_m1.responses[0][1]["counts"]["unlocked"], 1)
 
             h_m2 = MockHandler()
-            handler_mod.insights_milestones(h_m2, SimpleNamespace(query=""))
+            handler_mod.insights_milestones(h_m2, SimpleNamespace(query="limit=bad"))
             self.assertEqual(h_m2.responses[0][1]["counts"]["new"], 0)
+
+            with self.assertRaises(BadRequest):
+                handler_mod.capsules_open(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                handler_mod.capsules_delete(MockHandler(), "bad")  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

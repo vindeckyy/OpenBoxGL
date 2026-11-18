@@ -2084,7 +2084,9 @@
     "delete_title": "¿Eliminar instantánea del Baúl?",
     "delete_message": "Esto elimina de forma permanente la instantánea seleccionada del Baúl.",
     "delete_consequence": "Tus archivos de partida actuales no se ven afectados.",
-    "deleted": "Instantánea del Baúl eliminada."
+    "deleted": "Instantánea del Baúl eliminada.",
+    "summary_count_one": "Baúl de partidas: {count} instantánea ({size})",
+    "total_usage_one": "{count} instantánea en la biblioteca · {size}"
   },
   "playerlog": {
     "title": "Diario del jugador",
@@ -2109,7 +2111,7 @@
     "field_body": "Mensaje (hasta 4000 caracteres)",
     "seal_submit": "Sellar cápsula",
     "capsule_sealed": "Cápsula del tiempo sellada hasta el {date}.",
-    "banner_due": "{count} cápsula(s) lista(s) para abrir hoy.",
+    "banner_due": "{count} cápsulas listas para abrir hoy.",
     "banner_upcoming": "La próxima cápsula «{title}» se abre en {days} día(s) ({date}).",
     "open_capsule": "Abrir cápsula",
     "view_capsule": "Leer",
@@ -2119,7 +2121,8 @@
     "unlocked_label": "Abierta el {date}",
     "sealed_until": "Se abre el {date}",
     "capsule_opened": "Cápsula abierta",
-    "capsule_deleted": "Cápsula eliminada."
+    "capsule_deleted": "Cápsula eliminada.",
+    "banner_due_one": "{count} cápsula lista para abrir hoy."
   },
   "trail": {
     "title": "Senda de logros",
@@ -2216,7 +2219,7 @@
     "status_on_track": "En plazo",
     "status_behind": "Atrasado",
     "status_stale": "Eliminado/oculto",
-    "later_summary": "{count} juego(s) excedente(s) pasan a Más adelante (~{hours} h).",
+    "later_summary": "{count} juegos excedentes pasan a Más adelante (~{hours} h).",
     "empty": "No hay juegos programados en este rango.",
     "replan": "Replanificar",
     "new_plan": "Nuevo plan",
@@ -2225,6 +2228,8 @@
     "abandon_message": "Borra el plan activo sin afectar tus juegos ni tu historial.",
     "abandoned_notice": "Itinerario eliminado.",
     "replanned_ok": "Itinerario actualizado.",
-    "replanned_dropped": "Itinerario actualizado ({count} juego(s) retirado(s))."
+    "replanned_dropped": "Itinerario actualizado ({count} juegos retirados).",
+    "later_summary_one": "{count} juego excedente pasa a Más adelante (~{hours} h).",
+    "replanned_dropped_one": "Itinerario actualizado ({count} juego retirado)."
   }
 }

@@ -2084,7 +2084,9 @@
     "delete_title": "Delete Save Vault snapshot?",
     "delete_message": "This permanently removes the selected snapshot from Save Vault.",
     "delete_consequence": "Your current live save files are not affected.",
-    "deleted": "Save Vault snapshot deleted."
+    "deleted": "Save Vault snapshot deleted.",
+    "summary_count_one": "Save Vault: {count} snapshot ({size})",
+    "total_usage_one": "{count} snapshot across library · {size}"
   },
   "playerlog": {
     "title": "Player's Log",
@@ -2109,7 +2111,7 @@
     "field_body": "Message (up to 4,000 characters)",
     "seal_submit": "Seal capsule",
     "capsule_sealed": "Time capsule sealed until {date}.",
-    "banner_due": "{count} time capsule(s) ready to open today.",
+    "banner_due": "{count} time capsules ready to open today.",
     "banner_upcoming": "Next capsule “{title}” unlocks in {days} day(s) ({date}).",
     "open_capsule": "Open capsule",
     "view_capsule": "Read",
@@ -2119,7 +2121,8 @@
     "unlocked_label": "Opened {date}",
     "sealed_until": "Unlocks {date}",
     "capsule_opened": "Capsule opened",
-    "capsule_deleted": "Capsule deleted."
+    "capsule_deleted": "Capsule deleted.",
+    "banner_due_one": "{count} time capsule ready to open today."
   },
   "trail": {
     "title": "Achievement Trail",
@@ -2216,7 +2219,7 @@
     "status_on_track": "On track",
     "status_behind": "Behind",
     "status_stale": "Removed/hidden",
-    "later_summary": "{count} overflow game(s) deferred to Later (~{hours} h total).",
+    "later_summary": "{count} overflow games deferred to Later (~{hours} h total).",
     "empty": "No games scheduled in this window.",
     "replan": "Re-plan",
     "new_plan": "New plan",
@@ -2225,6 +2228,8 @@
     "abandon_message": "Clears your active itinerary plan. Your games and play history stay untouched.",
     "abandoned_notice": "Backlog Itinerary cleared.",
     "replanned_ok": "Itinerary updated.",
-    "replanned_dropped": "Itinerary updated ({count} removed game(s) dropped)."
+    "replanned_dropped": "Itinerary updated ({count} removed games dropped).",
+    "later_summary_one": "{count} overflow game deferred to Later (~{hours} h total).",
+    "replanned_dropped_one": "Itinerary updated ({count} removed game dropped)."
   }
 }

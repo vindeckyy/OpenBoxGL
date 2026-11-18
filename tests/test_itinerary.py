@@ -121,6 +121,29 @@ class ItineraryUnitTests(unittest.TestCase):
         state_store._normalize_22_additive_fields(state)
         self.assertIsNone(state["itinerary"])
 
+    def test_clamps_raided_with_ra_cache_and_custom_progress_filter(self):
+        self.assertEqual(pi.clamp_horizon_days("bad"), 30)
+        self.assertEqual(pi.clamp_minutes_per_day("bad"), 60)
+        self.assertEqual(pi._trashed_ids({"trash": ["g-x", {"game": {"game_id": "g-y"}}]}), {"g-x", "g-y"})
+
+        ra_dir = self.data_dir / "cache" / "retroachievements"
+        ra_dir.mkdir(parents=True)
+        (ra_dir / "g-low.json").write_text(json.dumps({"earned": 1, "total": 10}), encoding="utf-8")
+        (ra_dir / "g-high.json").write_text(json.dumps({"earned": 8, "total": 10}), encoding="utf-8")
+        state = {
+            "games": [
+                {"game_id": "g-low", "name": "LowRA", "platform": "GBA", "progress": "Playing"},
+                {"game_id": "g-high", "name": "HighRA", "platform": "GBA", "progress": "Playing"},
+                {"game_id": "g-custom", "name": "CustomOut", "platform": "GBA", "progress": "Archived"},
+                {"game_id": "g-missing", "name": "Uninstalled", "platform": "GBA", "path_exists": False, "store_installed": False},
+            ],
+            "trash": [],
+            "settings": {"progress_values": ["Unplayed", "Playing"]},
+        }
+        plan = pi.build_itinerary(state, strategy="raided", platforms=["GBA"], data_dir=self.data_dir)
+        self.assertIsNone(plan["strategy_fallback"])
+        self.assertEqual([e["game_id"] for e in plan["entries"]], ["g-high", "g-low"])
+
 
 if __name__ == "__main__":
     unittest.main()

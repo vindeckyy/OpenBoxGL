@@ -51,7 +51,7 @@ function renderPlanTimeline(plan) {
     : '';
   const laterCount = Array.isArray(plan.later) ? plan.later.length : 0;
   const laterHtml = laterCount > 0
-    ? `<p class="description">${escapeHtml(t('itinerary.later_summary', { count: laterCount, hours: plan.later_hours || 0 }))}</p>`
+    ? `<p class="description">${escapeHtml(t(laterCount === 1 ? 'itinerary.later_summary_one' : 'itinerary.later_summary', { count: laterCount, hours: plan.later_hours || 0 }))}</p>`
     : '';
   const bd = plan.estimate_breakdown || {};
   return `
@@ -195,7 +195,8 @@ async function openItineraryDialog() {
         try {
           const out = await api('/api/v2/itinerary/replan', { method: 'POST', body: JSON.stringify({}) });
           if (out.dropped_ids?.length) {
-            notify(t('itinerary.replanned_dropped', { count: out.dropped_ids.length }));
+            const droppedCount = out.dropped_ids.length;
+            notify(t(droppedCount === 1 ? 'itinerary.replanned_dropped_one' : 'itinerary.replanned_dropped', { count: droppedCount }));
           } else {
             notify(t('itinerary.replanned_ok'));
           }

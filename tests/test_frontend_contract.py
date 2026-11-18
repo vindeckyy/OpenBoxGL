@@ -17,7 +17,8 @@ TOOL_GROUPS = {
                 "achievementsButton", "saveFilterButton", "savePresetButton"],
     "sources": ["storefrontButton", "steamButton", "heroicButton", "lutrisButton",
                 "gogButton", "eaButton", "ubisoftButton", "arcadeButton", "pico8Button",
-                "msu1Button", "whdloadButton", "arcadeRoomButton", "householdButton"],
+                "msu1Button", "whdloadButton", "arcadeRoomButton", "householdButton",
+                "dealsButton", "itineraryButton"],
     "more": ["discoveryButton", "netplayButton", "pluginsButton", "whatsNewButton",
              "fullscreenButton", "reportIssueButton", "webhooksButton", "notificationsButton"],
 }

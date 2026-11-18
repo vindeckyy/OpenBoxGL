@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from api_errors import DealsDisabled, DealsInvalidAppId, DealsLimitExceeded, DealsNotFound  # noqa: E402
+from api_errors import BadRequest, DealsDisabled, DealsInvalidAppId, DealsLimitExceeded, DealsNotFound  # noqa: E402
 from handlers import deals as deals_handler  # noqa: E402
 import job_manager  # noqa: E402
 
@@ -124,6 +124,11 @@ class DealsHttpTests(unittest.TestCase):
                 with self.assertRaises(DealsLimitExceeded) as e_lim:
                     deals_handler.deals_watch(MockHandler(), {"appid": "367520", "name": "HK"})
                 self.assertEqual(e_lim.exception.code, "DEALS_LIMIT")
+
+            with self.assertRaises(BadRequest):
+                deals_handler.deals_unwatch(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                deals_handler.deals_unwatch(MockHandler(), {})
 
 
 if __name__ == "__main__":

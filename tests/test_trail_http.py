@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from api_errors import RaDisabled, RaNotLinked, TrailGameUnknown  # noqa: E402
+from api_errors import BadRequest, RaDisabled, RaNotLinked, TrailGameUnknown  # noqa: E402
 from handlers import trail as trail_handler  # noqa: E402
 import job_manager  # noqa: E402
 
@@ -128,6 +128,15 @@ class TrailHttpTests(unittest.TestCase):
             with self.assertRaises(RaNotLinked) as err_link:
                 trail_handler.trail_game(MockHandler(), SimpleNamespace(query="game_id=g-plain"))
             self.assertEqual(err_link.exception.code, "RA_NOT_LINKED")
+
+            with self.assertRaises(BadRequest):
+                trail_handler.trail_list(MockHandler(), SimpleNamespace(query="offset=abc"))
+            with self.assertRaises(BadRequest):
+                trail_handler.trail_game(MockHandler(), SimpleNamespace(query=""))
+            with self.assertRaises(BadRequest):
+                trail_handler.trail_refresh(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                trail_handler.trail_refresh(MockHandler(), {"game_ids": "bad"})
 
 
 if __name__ == "__main__":

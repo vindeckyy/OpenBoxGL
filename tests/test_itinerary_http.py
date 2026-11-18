@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from api_errors import GameNotFound, ItineraryInvalidStrategy, ItineraryNoGames  # noqa: E402
+from api_errors import BadRequest, GameNotFound, ItineraryInvalidStrategy, ItineraryNoGames  # noqa: E402
 from handlers import itinerary as itin_handler  # noqa: E402
 import job_manager  # noqa: E402
 
@@ -114,6 +114,13 @@ class ItineraryHttpTests(unittest.TestCase):
                 self.assertEqual(done["state"], "done")
                 self.assertEqual(self.state["itinerary"]["entries"][0]["est_hours"], 11.5)
                 self.assertEqual(self.state["itinerary"]["entries"][0]["est_source"], "igdb")
+
+            with self.assertRaises(BadRequest):
+                itin_handler.itinerary_plan(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                itin_handler.itinerary_replan(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(ItineraryInvalidStrategy):
+                itin_handler.itinerary_replan(MockHandler(), {"strategy": "invalid"})
 
 
 if __name__ == "__main__":

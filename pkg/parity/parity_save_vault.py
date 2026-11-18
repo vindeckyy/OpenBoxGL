@@ -26,7 +26,7 @@ from api_errors import (
 )
 from backend_io import atomic_write_text, fsync_directory
 from pkg.parity.parity_saves import extra_save_candidates
-from pkg.platform_compat import user_symlink_component
+from pkg.platform_compat import parse_timestamp, user_symlink_component
 from saves import SAVE_SYNC_LOCK, _reject_symlink_components, discover_save_paths, file_sha256, save_source_for
 
 LOGGER = logging.getLogger("openbox.save_vault")
@@ -814,12 +814,10 @@ def auto_vault_due(data_dir: Path | str, settings: dict[str, Any], *, now: datet
     raw = str(index.get("last_auto_at") or "").strip()
     if not raw:
         return True
-    try:
-        last = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except (TypeError, ValueError):
+    parsed = parse_timestamp(raw)
+    if parsed is None:
         return True
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
+    last = parsed.astimezone(timezone.utc) if raw.endswith(("Z", "z")) or "+" in raw[10:] else parsed.replace(tzinfo=timezone.utc)
     return (_utc_now(now) - last).total_seconds() >= auto_days * 86400
 
 

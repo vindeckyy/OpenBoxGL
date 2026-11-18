@@ -2084,7 +2084,9 @@
     "delete_title": "Tresor-Schnappschuss löschen?",
     "delete_message": "Dadurch wird der ausgewählte Schnappschuss dauerhaft aus dem Tresor entfernt.",
     "delete_consequence": "Deine aktuellen Spielstanddateien bleiben unberührt.",
-    "deleted": "Tresor-Schnappschuss gelöscht."
+    "deleted": "Tresor-Schnappschuss gelöscht.",
+    "summary_count_one": "Spielstand-Tresor: {count} Schnappschuss ({size})",
+    "total_usage_one": "{count} Schnappschuss in der Bibliothek · {size}"
   },
   "playerlog": {
     "title": "Spieler-Logbuch",
@@ -2109,7 +2111,7 @@
     "field_body": "Nachricht (bis 4.000 Zeichen)",
     "seal_submit": "Kapsel versiegeln",
     "capsule_sealed": "Zeitkapsel bis {date} versiegelt.",
-    "banner_due": "{count} Zeitkapsel(n) heute zum Öffnen bereit.",
+    "banner_due": "{count} Zeitkapseln heute zum Öffnen bereit.",
     "banner_upcoming": "Nächste Kapsel „{title}“ öffnet in {days} Tag(en) ({date}).",
     "open_capsule": "Kapsel öffnen",
     "view_capsule": "Lesen",
@@ -2119,7 +2121,8 @@
     "unlocked_label": "Geöffnet {date}",
     "sealed_until": "Öffnet {date}",
     "capsule_opened": "Kapsel geöffnet",
-    "capsule_deleted": "Kapsel gelöscht."
+    "capsule_deleted": "Kapsel gelöscht.",
+    "banner_due_one": "{count} Zeitkapsel heute zum Öffnen bereit."
   },
   "trail": {
     "title": "Erfolgs-Pfad",
@@ -2216,7 +2219,7 @@
     "status_on_track": "Im Plan",
     "status_behind": "Im Rückstand",
     "status_stale": "Entfernt/versteckt",
-    "later_summary": "{count} Spiel(e) auf Später verschoben (~{hours} Std.).",
+    "later_summary": "{count} Spiele auf Später verschoben (~{hours} Std.).",
     "empty": "Keine Spiele in diesem Zeitraum eingeplant.",
     "replan": "Neu planen",
     "new_plan": "Neuer Plan",
@@ -2225,6 +2228,8 @@
     "abandon_message": "Entfernt den aktiven Plan; Spiele und Spielverlauf bleiben unverändert.",
     "abandoned_notice": "Backlog-Reiseplan verworfen.",
     "replanned_ok": "Reiseplan aktualisiert.",
-    "replanned_dropped": "Reiseplan aktualisiert ({count} entferntes Spiel übersprungen)."
+    "replanned_dropped": "Reiseplan aktualisiert ({count} entfernte Spiele übersprungen).",
+    "later_summary_one": "{count} Spiel auf Später verschoben (~{hours} Std.).",
+    "replanned_dropped_one": "Reiseplan aktualisiert ({count} entferntes Spiel übersprungen)."
   }
 }

@@ -150,6 +150,22 @@ class SaveVaultHttpTests(unittest.TestCase):
                 savevault.vault_delete(MockHandler(), {"game_id": "g-2", "snapshot_id": snap_id})
             self.assertEqual(err_mismatch.exception.code, "VAULT_GAME_MISMATCH")
 
+            # Input validation branches across handlers
+            with self.assertRaises(BadRequest):
+                savevault.vault_snapshot(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                savevault.vault_snapshot(MockHandler(), {"game_id": "g-1", "trigger": "bogus"})
+            with self.assertRaises(BadRequest):
+                savevault.vault_diff(MockHandler(), SimpleNamespace(query="game_id=g-1"))
+            with self.assertRaises(BadRequest):
+                savevault.vault_restore(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                savevault.vault_restore(MockHandler(), {"game_id": "g-1"})
+            with self.assertRaises(BadRequest):
+                savevault.vault_delete(MockHandler(), "bad")  # type: ignore[arg-type]
+            with self.assertRaises(BadRequest):
+                savevault.vault_delete(MockHandler(), {})
+
 
 if __name__ == "__main__":
     unittest.main()
