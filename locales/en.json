@@ -1100,7 +1100,11 @@
     "about_api_version": "API version",
     "about_plugin_api": "Plugin API",
     "about_backup_format": "Backup format",
-    "compat_button": "Show compatibility report"
+    "compat_button": "Show compatibility report",
+    "save_vault_enabled": "Enable Save Vault automatic snapshots",
+    "save_vault_keep": "Save Vault snapshots kept per game",
+    "save_vault_on_close": "Snapshot saves in Save Vault when a game session ends",
+    "save_vault_auto_days": "Auto-snapshot interval in days (0 disables)"
   },
   "picker": {
     "title": "What should I play?",
@@ -2035,5 +2039,33 @@
     "backup_first": "Back up first",
     "backup_running": "Writing a backup…",
     "backup_done": "Backup written: {name}"
+  },
+  "vault": {
+    "tab_title": "Save Vault",
+    "tab_backups": "Backup Archives",
+    "summary_count": "Save Vault: {count} snapshots ({size})",
+    "summary_empty": "Save Vault: no snapshots yet",
+    "disabled": "Save management is turned off in Settings.",
+    "disk_warning": "Save Vault is using {size} on disk (> 5 GB). Consider lowering retention or deleting old snapshots.",
+    "row_meta": "{files} files · {size}",
+    "diff": "Diff",
+    "restore": "Restore",
+    "delete": "Delete",
+    "empty": "No Save Vault snapshots yet.",
+    "snapshot_now": "Snapshot now",
+    "total_usage": "{count} snapshots across library · {size}",
+    "snapshotting": "Creating Save Vault snapshot…",
+    "snapshot_created": "Save Vault snapshot created.",
+    "diff_title": "Changes compared with live saves",
+    "diff_counts": "{added} to restore · {changed} changed · {removed} extra live · {unchanged} unchanged",
+    "restore_title": "Restore Save Vault snapshot?",
+    "restore_message": "Restores {added} missing files and overwrites {changed} modified files.",
+    "restore_consequence": "A safety snapshot of your current live saves is captured first before anything is overwritten.",
+    "restoring": "Restoring snapshot…",
+    "restored": "Save Vault snapshot restored.",
+    "delete_title": "Delete Save Vault snapshot?",
+    "delete_message": "This permanently removes the selected snapshot from Save Vault.",
+    "delete_consequence": "Your current live save files are not affected.",
+    "deleted": "Save Vault snapshot deleted."
   }
 }

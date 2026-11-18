@@ -1100,7 +1100,11 @@
     "about_api_version": "Version de l'API",
     "about_plugin_api": "API des extensions",
     "about_backup_format": "Format de sauvegarde",
-    "compat_button": "Afficher le rapport de compatibilité"
+    "compat_button": "Afficher le rapport de compatibilité",
+    "save_vault_enabled": "Activer les instantanés automatiques du Coffre de sauvegardes",
+    "save_vault_keep": "Instantanés du Coffre conservés par jeu",
+    "save_vault_on_close": "Créer un instantané dans le Coffre à la fin d’une session",
+    "save_vault_auto_days": "Intervalle d’instantané automatique en jours (0 désactive)"
   },
   "picker": {
     "title": "À quoi devrais-je jouer ?",
@@ -2035,5 +2039,33 @@
     "backup_first": "Sauvegarder d'abord",
     "backup_running": "Écriture de la sauvegarde…",
     "backup_done": "Sauvegarde écrite : {name}"
+  },
+  "vault": {
+    "tab_title": "Coffre de sauvegardes",
+    "tab_backups": "Archives de sauvegarde",
+    "summary_count": "Coffre de sauvegardes : {count} instantanés ({size})",
+    "summary_empty": "Coffre de sauvegardes : aucun instantané",
+    "disabled": "La gestion des sauvegardes est désactivée dans les Paramètres.",
+    "disk_warning": "Le Coffre de sauvegardes occupe {size} sur le disque (> 5 Go). Réduisez la rétention ou supprimez d’anciens instantanés.",
+    "row_meta": "{files} fichiers · {size}",
+    "diff": "Comparer",
+    "restore": "Restaurer",
+    "delete": "Supprimer",
+    "empty": "Aucun instantané dans le Coffre pour le moment.",
+    "snapshot_now": "Créer un instantané",
+    "total_usage": "{count} instantanés dans la bibliothèque · {size}",
+    "snapshotting": "Création de l’instantané du Coffre…",
+    "snapshot_created": "Instantané du Coffre créé.",
+    "diff_title": "Différences avec les sauvegardes actuelles",
+    "diff_counts": "{added} à restaurer · {changed} modifiés · {removed} locaux en plus · {unchanged} inchangés",
+    "restore_title": "Restaurer l’instantané du Coffre ?",
+    "restore_message": "Restaure {added} fichiers manquants et remplace {changed} fichiers modifiés.",
+    "restore_consequence": "Un instantané de sécurité de vos sauvegardes actuelles est créé avant tout remplacement.",
+    "restoring": "Restauration de l’instantané…",
+    "restored": "Instantané du Coffre restauré.",
+    "delete_title": "Supprimer l’instantané du Coffre ?",
+    "delete_message": "Cette action supprime définitivement l’instantané sélectionné du Coffre.",
+    "delete_consequence": "Vos fichiers de sauvegarde actuels ne sont pas affectés.",
+    "deleted": "Instantané du Coffre supprimé."
   }
 }

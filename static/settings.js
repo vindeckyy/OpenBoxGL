@@ -408,6 +408,10 @@ import { initCompatReport } from './compat.js';
         backup_auto_keep:Math.max(1, Number($('backupAutoKeep').value) || 4),
         health_rescan:$('healthRescanCadence')?.value || 'weekly',
         save_management_enabled:$('saveManagementEnabled')?.checked !== false,
+        save_vault_enabled:$('saveVaultEnabled')?.checked !== false,
+        save_vault_keep:Math.max(1, Math.min(50, Number($('saveVaultKeep')?.value) || 5)),
+        save_vault_on_close:$('saveVaultOnClose')?.checked || false,
+        save_vault_auto_days:Math.max(0, Math.min(365, Number($('saveVaultAutoDays')?.value) || 0)),
         save_backup_limit:Number($('saveBackupLimit').value),
         media_manifest_enabled:$('mediaManifestEnabled')?.checked !== false,
         media_download_limit:Number($('mediaDownloadLimit').value),
@@ -637,6 +641,10 @@ import { initCompatReport } from './compat.js';
         if ($('stateRetention')) $('stateRetention').value = AppState.appSettings.state_retention ?? 1;
         $('raHardcore').checked = Boolean(AppState.appSettings.ra_hardcore);
         $('saveManagementEnabled').checked = AppState.appSettings.save_management_enabled !== false;
+        if ($('saveVaultEnabled')) $('saveVaultEnabled').checked = AppState.appSettings.save_vault_enabled !== false;
+        if ($('saveVaultKeep')) $('saveVaultKeep').value = AppState.appSettings.save_vault_keep ?? 5;
+        if ($('saveVaultOnClose')) $('saveVaultOnClose').checked = Boolean(AppState.appSettings.save_vault_on_close);
+        if ($('saveVaultAutoDays')) $('saveVaultAutoDays').value = AppState.appSettings.save_vault_auto_days ?? 0;
         $('backupOnClose').checked = Boolean(AppState.appSettings.backup_on_close);
         $('backupAutoEnabled').checked = Boolean(AppState.appSettings.backup_auto_enabled);
         $('backupAutoKeep').value = AppState.appSettings.backup_auto_keep ?? 4;

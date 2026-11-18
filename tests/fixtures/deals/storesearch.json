@@ -1,0 +1,25 @@
+{
+  "total": 2,
+  "items": [
+    {
+      "id": 1030300,
+      "name": "Hollow Knight: Silksong",
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1030300/capsule_sm_120.jpg",
+      "price": {
+        "currency": "USD",
+        "initial": 1999,
+        "final": 1999
+      }
+    },
+    {
+      "id": 367520,
+      "name": "Hollow Knight",
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/capsule_sm_120.jpg",
+      "price": {
+        "currency": "USD",
+        "initial": 1499,
+        "final": 749
+      }
+    }
+  ]
+}

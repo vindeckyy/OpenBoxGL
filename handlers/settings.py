@@ -574,6 +574,50 @@ def _clean_currency(merged):
     return clean_currency(merged.get("currency", "USD"))
 
 
+def _clean_save_vault(merged):
+    """Validate Save Vault preferences (ADR 0107)."""
+    enabled = _clean_bool(merged, "save_vault_enabled", True)
+    raw_keep = merged.get("save_vault_keep", 5)
+    keep = _clean_bounded_int(
+        {"save_vault_keep": 5 if raw_keep is None else raw_keep},
+        "save_vault_keep", 5, 1, 50,
+        "Save Vault retention must be between 1 and 50 snapshots.",
+    )
+    on_close = _clean_bool(merged, "save_vault_on_close", False)
+    raw_days = merged.get("save_vault_auto_days", 0)
+    auto_days = _clean_bounded_int(
+        {"save_vault_auto_days": 0 if raw_days is None else raw_days},
+        "save_vault_auto_days", 0, 0, 365,
+        "Save Vault auto-snapshot interval must be between 0 and 365 days.",
+    )
+    return enabled, keep, on_close, auto_days
+
+
+def _clean_deals(merged):
+    """Validate Deal Radar preferences (ADR 0109)."""
+    enabled = _clean_bool(merged, "deals_enabled", False)
+    raw_poll = merged.get("deals_poll_hours", 168)
+    poll_hours = _clean_bounded_int(
+        {"deals_poll_hours": 168 if raw_poll is None else raw_poll},
+        "deals_poll_hours", 168, 24, 720,
+        "Deal Radar poll interval must be between 24 and 720 hours.",
+    )
+    raw_drop = merged.get("deals_min_drop_pct", 10)
+    min_drop_pct = _clean_bounded_int(
+        {"deals_min_drop_pct": 10 if raw_drop is None else raw_drop},
+        "deals_min_drop_pct", 10, 1, 90,
+        "Deal Radar minimum drop percentage must be between 1 and 90.",
+    )
+    raw_cc = merged.get("deals_store_cc", "us")
+    if raw_cc is None or raw_cc == "":
+        store_cc = "us"
+    elif not isinstance(raw_cc, str) or not re.fullmatch(r"[a-zA-Z]{2}", raw_cc.strip()):
+        raise ValueError("Deal Radar country code must be a two-letter store code.")
+    else:
+        store_cc = raw_cc.strip().lower()
+    return enabled, poll_hours, min_drop_pct, store_cc
+
+
 def _clean_font_family(merged):
     return _clean_enum(merged, "font_family", {"system", "serif", "mono", "humanist"}, "system")
 
@@ -769,6 +813,8 @@ def clean_settings(merged):
     save_backup_limit, media_download_limit = _clean_limits(merged)
     backup_auto_enabled, backup_auto_keep = _clean_backup_auto(merged)
     save_management_enabled = _clean_bool(merged, "save_management_enabled", True)
+    save_vault_enabled, save_vault_keep, save_vault_on_close, save_vault_auto_days = _clean_save_vault(merged)
+    deals_enabled, deals_poll_hours, deals_min_drop_pct, deals_store_cc = _clean_deals(merged)
     auto_import_media_types = _clean_media_types(merged)
     media_download_limit_per_group, metadata_provider_priority, plugin_metadata_priority = _clean_media_queue_policy(merged)
     memories_import_roots = _clean_memory_roots(merged)
@@ -845,6 +891,14 @@ def clean_settings(merged):
             "backup_auto_keep": backup_auto_keep,
             "save_backup_limit": save_backup_limit,
             "save_management_enabled": save_management_enabled,
+            "save_vault_enabled": save_vault_enabled,
+            "save_vault_keep": save_vault_keep,
+            "save_vault_on_close": save_vault_on_close,
+            "save_vault_auto_days": save_vault_auto_days,
+            "deals_enabled": deals_enabled,
+            "deals_poll_hours": deals_poll_hours,
+            "deals_min_drop_pct": deals_min_drop_pct,
+            "deals_store_cc": deals_store_cc,
             "progress_automation_enabled": progress_automation_enabled,
             "progress_automation_play_minutes": play_minutes,
             "progress_automation_idle_days": idle_days,

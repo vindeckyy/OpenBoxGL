@@ -205,3 +205,123 @@ class MovePlanStale(Conflict):
     """The library changed after a move preview; the preview must be run again (ADR 0090)."""
 
     code = "MOVE_PLAN_STALE"
+
+
+class VaultSnapshotMissing(NotFound):
+    """Requested Save Vault snapshot does not exist (ADR 0107)."""
+
+    code = "VAULT_SNAPSHOT_MISSING"
+
+
+class VaultGameMismatch(Conflict):
+    """Save Vault snapshot does not belong to the requested game (ADR 0107)."""
+
+    code = "VAULT_GAME_MISMATCH"
+
+
+class VaultPathEscape(BadRequest):
+    """Save Vault path escaped declared save roots or contained a symlink (ADR 0107)."""
+
+    code = "VAULT_PATH_ESCAPE"
+
+
+class VaultLimitExceeded(BadRequest):
+    """Save Vault snapshot exceeded file count or byte size limit (ADR 0107)."""
+
+    code = "VAULT_LIMIT_EXCEEDED"
+
+
+class VaultNoSaves(Conflict):
+    """No save files were discovered for Save Vault snapshot (ADR 0107)."""
+
+    code = "NO_SAVES"
+
+
+class VaultSafetySnapshotFailed(Conflict):
+    """Pre-restore safety snapshot failed, so live saves were left untouched (ADR 0107)."""
+
+    code = "VAULT_SAFETY_SNAPSHOT_FAILED"
+
+
+class RaDisabled(Conflict):
+    """RetroAchievements integration is disabled or unconfigured (ADR 0108)."""
+
+    code = "RA_DISABLED"
+
+
+class RaNotLinked(Conflict):
+    """Game has no cached RetroAchievements progress yet (ADR 0108)."""
+
+    code = "RA_NOT_LINKED"
+
+
+class TrailGameUnknown(NotFound):
+    """Requested game_id does not exist in the library (ADR 0108)."""
+
+    code = "TRAIL_GAME_UNKNOWN"
+
+
+class DealsDisabled(Conflict):
+    """Deal Radar is disabled by user preference (ADR 0109)."""
+
+    code = "DEALS_DISABLED"
+
+
+class DealsInvalidAppId(BadRequest):
+    """Steam App ID must be 1 to 10 ASCII digits (ADR 0109)."""
+
+    code = "DEALS_INVALID_APPID"
+
+
+class DealsNotFound(NotFound):
+    """Requested Deal Radar watchlist entry does not exist (ADR 0109)."""
+
+    code = "DEALS_NOT_FOUND"
+
+
+class DealsLimitExceeded(Conflict):
+    """Deal Radar watchlist limit reached (ADR 0109)."""
+
+    code = "DEALS_LIMIT"
+
+
+class DealsHostBlocked(BadRequest):
+    """Outbound Deal Radar URL did not match the strict Steam host allowlist (ADR 0109)."""
+
+    code = "DEALS_HOST_BLOCKED"
+
+
+class CapsuleNotFound(NotFound):
+    """Requested Time Capsule does not exist (ADR 0110)."""
+
+    code = "CAPSULE_NOT_FOUND"
+
+
+class CapsuleLocked(Conflict):
+    """Time Capsule cannot be opened before its unlock_at date (ADR 0110)."""
+
+    code = "CAPSULE_LOCKED"
+
+
+class CapsuleInvalidDate(BadRequest):
+    """Time Capsule unlock_at must be a valid YYYY-MM-DD calendar date (ADR 0110)."""
+
+    code = "CAPSULE_INVALID_DATE"
+
+
+class CapsuleBodyTooLarge(BadRequest):
+    """Time Capsule body or title exceeded maximum length (ADR 0110)."""
+
+    code = "CAPSULE_BODY_TOO_LARGE"
+
+
+class ItineraryNoGames(Conflict):
+    """No eligible unfinished games match the requested itinerary scope (ADR 0111)."""
+
+    code = "ITINERARY_NO_GAMES"
+
+
+class ItineraryInvalidStrategy(BadRequest):
+    """Requested Backlog Itinerary strategy is unsupported (ADR 0111)."""
+
+    code = "ITINERARY_INVALID_STRATEGY"

@@ -1835,6 +1835,42 @@
     },
     {
       "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/vault"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/vault/delete"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/vault/diff"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/vault/restore"
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v2/saves/vault/snapshot"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v2/saves/vault/status"
+    },
+    {
+      "methods": [
         "POST"
       ],
       "path": "/api/v2/screenscraper/apply"

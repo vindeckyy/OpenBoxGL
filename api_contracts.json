@@ -484,6 +484,18 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/saves/vault"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/saves/vault/diff"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/saves/vault/status"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/screenscraper/search"
     },
     {
@@ -1393,6 +1405,18 @@
     {
       "method": "POST",
       "path": "/api/v2/saves/scan/apply"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/saves/vault/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/saves/vault/restore"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/saves/vault/snapshot"
     },
     {
       "method": "POST",

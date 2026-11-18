@@ -1,0 +1,10 @@
+{
+  "440": {
+    "success": true,
+    "data": {
+      "name": "Team Fortress 2",
+      "is_free": true,
+      "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/440/header.jpg"
+    }
+  }
+}

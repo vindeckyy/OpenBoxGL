@@ -1,0 +1,17 @@
+{
+  "367520": {
+    "success": true,
+    "data": {
+      "name": "Hollow Knight",
+      "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/header.jpg",
+      "price_overview": {
+        "currency": "USD",
+        "initial": 1499,
+        "final": 749,
+        "discount_percent": 50,
+        "initial_formatted": "$14.99",
+        "final_formatted": "$7.49"
+      }
+    }
+  }
+}

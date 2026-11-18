@@ -1005,6 +1005,26 @@ def finish_session(launch_id, game_index, started, process, lease):
                     enf_limit(game_snapshot, data_parent / "save-backups", settings.get("save_backup_limit", 10))
                 except (OSError, FileNotFoundError):
                     pass
+            if settings.get("save_management_enabled", True) and settings.get("save_vault_enabled", True) and settings.get("save_vault_on_close"):
+                try:
+                    from pkg.parity.parity_save_vault import create_snapshot as vault_create_snapshot
+                    keep_vault = settings.get("save_vault_keep", 5)
+                    gid_vault = str(game_snapshot.get("game_id") or "")
+                    jm = _ns("JOB_MANAGER", None)
+                    if jm is not None:
+                        vault_game_copy = copy.deepcopy(game_snapshot)
+                        jm.submit(
+                            f"save-vault-snapshot:{gid_vault or 'game'}",
+                            lambda _ctx, g=vault_game_copy, dp=data_parent, kv=keep_vault: vault_create_snapshot(
+                                dp, g, trigger="session_close", include_shared=False, keep=kv,
+                            ),
+                        )
+                    else:
+                        vault_create_snapshot(
+                            data_parent, game_snapshot, trigger="session_close", include_shared=False, keep=keep_vault,
+                        )
+                except Exception:
+                    LOGGER.debug("Save Vault on-close snapshot skipped/failed", exc_info=True)
             try:
                 obs_rec(game_snapshot, started, settings)
             except (OSError, ValueError, FileNotFoundError):

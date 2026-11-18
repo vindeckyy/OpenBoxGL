@@ -143,6 +143,9 @@ def default_state() -> dict[str, Any]:
         "party_decks": [],
         "emulator_settings": {},
         "achievement_overrides": {},
+        "deals": {"watchlist": [], "prices": {}, "last_poll_at": ""},
+        "time_capsules": [],
+        "itinerary": None,
     }
 
 
@@ -451,9 +454,103 @@ def _normalize_feature_fields(state: dict[str, Any]) -> bool:
 
     if normalize_decks(state):
         changed = True
+    if _normalize_22_additive_fields(state):
+        changed = True
     for game in state.get("games", []):
         if isinstance(game, dict) and "tags" in game and not isinstance(game.get("tags"), list):
             game["tags"] = []
+            changed = True
+    return changed
+
+
+def _normalize_22_additive_fields(state: dict[str, Any]) -> bool:
+    """Warn-and-repair normalization for additive 2.2 top-level keys (schema stays 7)."""
+    changed = False
+    deals = state.get("deals")
+    if not isinstance(deals, dict):
+        if deals is not None:
+            LOGGER.warning("Repairing malformed deals block in library.json")
+        state["deals"] = {"watchlist": [], "prices": {}, "last_poll_at": ""}
+        changed = True
+    else:
+        watchlist = deals.get("watchlist")
+        if not isinstance(watchlist, list):
+            deals["watchlist"] = []
+            changed = True
+        else:
+            clean_watch = []
+            seen_ids: set[str] = set()
+            for entry in watchlist:
+                if not isinstance(entry, dict) or not str(entry.get("id") or "").strip():
+                    changed = True
+                    continue
+                eid = str(entry["id"]).strip()
+                if eid in seen_ids:
+                    changed = True
+                    continue
+                seen_ids.add(eid)
+                if isinstance(entry.get("note"), str) and len(entry["note"]) > 280:
+                    entry["note"] = entry["note"][:280]
+                    changed = True
+                clean_watch.append(entry)
+                if len(clean_watch) >= 200:
+                    if len(watchlist) > len(clean_watch):
+                        changed = True
+                    break
+            if len(clean_watch) != len(watchlist):
+                deals["watchlist"] = clean_watch
+                changed = True
+        active_ids = {
+            str(entry["id"]).strip()
+            for entry in deals.get("watchlist", [])
+            if isinstance(entry, dict) and entry.get("id")
+        }
+        prices = deals.get("prices")
+        if not isinstance(prices, dict):
+            deals["prices"] = {}
+            changed = True
+        else:
+            clean_prices: dict[str, list[dict[str, Any]]] = {}
+            for eid, points in prices.items():
+                if eid not in active_ids or not isinstance(points, list):
+                    changed = True
+                    continue
+                valid_pts = [pt for pt in points if isinstance(pt, dict)][-50:]
+                if len(valid_pts) != len(points):
+                    changed = True
+                clean_prices[eid] = valid_pts
+            if len(clean_prices) != len(prices):
+                deals["prices"] = clean_prices
+                changed = True
+        if not isinstance(deals.get("last_poll_at"), str):
+            deals["last_poll_at"] = ""
+            changed = True
+
+    capsules = state.get("time_capsules")
+    if not isinstance(capsules, list):
+        if capsules is not None:
+            LOGGER.warning("Repairing malformed time_capsules block in library.json")
+        state["time_capsules"] = []
+        changed = True
+    else:
+        valid_caps = [
+            cap for cap in capsules
+            if isinstance(cap, dict) and str(cap.get("id") or "").strip() and str(cap.get("unlock_at") or "").strip()
+        ]
+        if len(valid_caps) != len(capsules):
+            LOGGER.warning("Dropped %d malformed time capsule entry(s) during state repair", len(capsules) - len(valid_caps))
+            state["time_capsules"] = valid_caps
+            changed = True
+
+    itinerary = state.get("itinerary")
+    if itinerary is not None and not isinstance(itinerary, dict):
+        LOGGER.warning("Repairing malformed itinerary block in library.json")
+        state["itinerary"] = None
+        changed = True
+    elif isinstance(itinerary, dict):
+        if not isinstance(itinerary.get("entries"), list) or not isinstance(itinerary.get("later", []), list):
+            LOGGER.warning("Repairing invalid itinerary entries in library.json")
+            state["itinerary"] = None
             changed = True
     return changed
 
@@ -760,6 +857,9 @@ class JsonStateStore:
                     "ui_state": dict(state.get("ui_state", {})),
                     "active_sessions": list(state.get("active_sessions", [])),
                     "party_decks": list(state.get("party_decks", [])),
+                    "deals": copy.deepcopy(state.get("deals", {"watchlist": [], "prices": {}, "last_poll_at": ""})),
+                    "time_capsules": list(state.get("time_capsules", [])),
+                    "itinerary": copy.deepcopy(state.get("itinerary")),
                 }
             else:
                 self._cached_state = copy.deepcopy(state)
@@ -858,6 +958,9 @@ class JsonStateStore:
             and isinstance(raw.get("notifications"), list)
             and len(raw["notifications"]) <= NOTIFICATIONS_CAP
             and isinstance(raw.get("ui_state"), dict)
+            and (raw.get("deals") is None or isinstance(raw.get("deals"), dict))
+            and (raw.get("time_capsules") is None or isinstance(raw.get("time_capsules"), list))
+            and (raw.get("itinerary") is None or isinstance(raw.get("itinerary"), dict))
             and all(
                 isinstance(game, dict)
                 and str(game.get("game_id") or "").strip()
@@ -869,6 +972,16 @@ class JsonStateStore:
             if "active_sessions" not in raw:
                 # Runtime sessions are never stored in library.json; they come back from sessions.json.
                 raw["active_sessions"] = read_sessions_file(self.path.parent)
+                if "deals" not in raw or not isinstance(raw.get("deals"), dict):
+                    raw["deals"] = {"watchlist": [], "prices": {}, "last_poll_at": ""}
+                else:
+                    raw["deals"].setdefault("watchlist", [])
+                    raw["deals"].setdefault("prices", {})
+                    raw["deals"].setdefault("last_poll_at", "")
+                if "time_capsules" not in raw:
+                    raw["time_capsules"] = []
+                if "itinerary" not in raw:
+                    raw["itinerary"] = None
                 _resolve_portable_paths(raw)
                 return raw, False
         state, changed = normalize_state(raw)

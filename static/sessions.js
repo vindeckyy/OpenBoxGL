@@ -5,6 +5,7 @@ import { refresh, launchExtra } from './library.js';
 import { t } from './i18n.js';
 import { renderTimelineTab } from './timeline.js';
 import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
+import { renderSaveVaultPanel } from './savevault.js';
 
 
 
@@ -318,10 +319,26 @@ import { showSessionRecap, showSessionRecapForStopped } from './recap.js';
       const { openDialog, closeDialog } = await import('./dialogs.js');
       const dialog = document.createElement('dialog');
       dialog.className = 'dialog';
-      dialog.innerHTML = `<div class="dialog-head"><h2>Save version history</h2><button type="button" class="icon-button" data-close>×</button></div><p class="description">${backups.length} backup${backups.length === 1 ? '' : 's'} for this game, newest first.</p><div class="history-list" id="saveVersionList">${backups.length ? backups.map(backup => `<button type="button" class="icon-button" data-version="${escapeHtml(backup.name)}"><strong>${escapeHtml(backup.label || backup.name)}</strong> · ${escapeHtml(new Date(backup.mtime * 1000).toLocaleString())} · ${Math.max(1, Math.round(Number(backup.size || 0) / 1024))} KB</button>`).join('') : '<p class="description">No backups yet.</p>'}</div><div id="saveVersionPreview" class="description">Select a backup to preview its files.</div><div class="dialog-actions"><button type="button" class="icon-button" data-close>Close</button></div>`;
+      dialog.innerHTML = `<div class="dialog-head"><h2>Save version history</h2><button type="button" class="icon-button" data-close>×</button></div><div class="detail-tabs" role="tablist"><button type="button" class="detail-tab active" data-save-tab="vault" role="tab" aria-selected="true">${escapeHtml(t('vault.tab_title'))}</button><button type="button" class="detail-tab" data-save-tab="backups" role="tab" aria-selected="false">${escapeHtml(t('vault.tab_backups'))}</button></div><section id="saveVaultPane" role="tabpanel"></section><section id="saveBackupsPane" role="tabpanel" hidden><p class="description">${backups.length} backup${backups.length === 1 ? '' : 's'} for this game, newest first.</p><div class="history-list" id="saveVersionList">${backups.length ? backups.map(backup => `<button type="button" class="icon-button" data-version="${escapeHtml(backup.name)}"><strong>${escapeHtml(backup.label || backup.name)}</strong> · ${escapeHtml(new Date(backup.mtime * 1000).toLocaleString())} · ${Math.max(1, Math.round(Number(backup.size || 0) / 1024))} KB</button>`).join('') : '<p class="description">No backups yet.</p>'}</div><div id="saveVersionPreview" class="description">Select a backup to preview its files.</div></section><div class="dialog-actions"><button type="button" class="icon-button" data-close>Close</button></div>`;
       document.body.appendChild(dialog);
       const finish = () => { closeDialog(dialog); dialog.remove(); };
       dialog.querySelectorAll('[data-close]').forEach(button => button.onclick = finish);
+      const vaultPane = dialog.querySelector('#saveVaultPane');
+      const backupsPane = dialog.querySelector('#saveBackupsPane');
+      const selectTab = name => {
+        const isVault = name === 'vault';
+        dialog.querySelectorAll('[data-save-tab]').forEach(btn => {
+          const active = btn.dataset.saveTab === name;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-selected', String(active));
+        });
+        if (vaultPane) vaultPane.hidden = !isVault;
+        if (backupsPane) backupsPane.hidden = isVault;
+      };
+      dialog.querySelectorAll('[data-save-tab]').forEach(btn => {
+        btn.onclick = () => selectTab(btn.dataset.saveTab);
+      });
+      renderSaveVaultPanel(vaultPane, id);
       dialog.querySelectorAll('[data-version]').forEach(button => button.onclick = async () => {
         const backup = button.dataset.version;
         dialog.querySelectorAll('[data-version]').forEach(item => item.classList.toggle('active', item === button));

@@ -176,6 +176,7 @@ def _ensure_handlers_loaded() -> None:
         "handlers.arcade",
         "handlers.collections",
         "handlers.defs",
+        "handlers.savevault",
         "web_app",
     )
     for mod in modules:

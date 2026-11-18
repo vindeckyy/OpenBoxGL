@@ -1100,7 +1100,11 @@
     "about_api_version": "Versão da API",
     "about_plugin_api": "API de plugins",
     "about_backup_format": "Formato de cópia",
-    "compat_button": "Mostrar relatório de compatibilidade"
+    "compat_button": "Mostrar relatório de compatibilidade",
+    "save_vault_enabled": "Ativar instantâneos automáticos do Cofre de Saves",
+    "save_vault_keep": "Instantâneos do Cofre mantidos por jogo",
+    "save_vault_on_close": "Criar instantâneo no Cofre de Saves ao encerrar uma sessão",
+    "save_vault_auto_days": "Intervalo de instantâneo automático em dias (0 desativa)"
   },
   "picker": {
     "title": "O que devo jogar?",
@@ -2035,5 +2039,33 @@
     "backup_first": "Fazer backup primeiro",
     "backup_running": "Escrevendo o backup…",
     "backup_done": "Backup gravado: {name}"
+  },
+  "vault": {
+    "tab_title": "Cofre de Saves",
+    "tab_backups": "Arquivos de backup",
+    "summary_count": "Cofre de Saves: {count} instantâneos ({size})",
+    "summary_empty": "Cofre de Saves: nenhum instantâneo ainda",
+    "disabled": "O gerenciamento de saves está desativado nas Configurações.",
+    "disk_warning": "O Cofre de Saves está usando {size} no disco (> 5 GB). Reduza a retenção ou exclua instantâneos antigos.",
+    "row_meta": "{files} arquivos · {size}",
+    "diff": "Comparar",
+    "restore": "Restaurar",
+    "delete": "Excluir",
+    "empty": "Nenhum instantâneo no Cofre ainda.",
+    "snapshot_now": "Criar instantâneo",
+    "total_usage": "{count} instantâneos na biblioteca · {size}",
+    "snapshotting": "Criando instantâneo no Cofre…",
+    "snapshot_created": "Instantâneo do Cofre criado.",
+    "diff_title": "Diferenças em relação aos saves atuais",
+    "diff_counts": "{added} a restaurar · {changed} alterados · {removed} extras locais · {unchanged} inalterados",
+    "restore_title": "Restaurar instantâneo do Cofre?",
+    "restore_message": "Restaura {added} arquivos ausentes e sobrescreve {changed} arquivos alterados.",
+    "restore_consequence": "Um instantâneo de segurança dos saves atuais é capturado antes de qualquer sobrescrita.",
+    "restoring": "Restaurando instantâneo…",
+    "restored": "Instantâneo do Cofre restaurado.",
+    "delete_title": "Excluir instantâneo do Cofre?",
+    "delete_message": "Isso remove permanentemente o instantâneo selecionado do Cofre.",
+    "delete_consequence": "Seus arquivos de save atuais não são afetados.",
+    "deleted": "Instantâneo do Cofre excluído."
   }
 }

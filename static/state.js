@@ -882,4 +882,17 @@ try {
       }
     }
 
-export { gameIdOf, nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, coverPlaceholder, coverSource, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, gameExcluded, registerLifecycleStream, unregisterLifecycleStream };
+    async function waitForJob(jobId, { onProgress = null, timeoutMs = 120000, intervalMs = 450 } = {}) {
+      if (!jobId) return null;
+      const deadline = Date.now() + timeoutMs;
+      for (;;) {
+        const page = await api('/api/v2/jobs?limit=100');
+        const job = (page.jobs || []).find(entry => entry.job_id === jobId) || null;
+        if (job && onProgress) onProgress(job);
+        if (job && !['queued', 'running', 'cancelling'].includes(job.state)) return job;
+        if (Date.now() >= deadline) throw new Error(`Timed out waiting for job ${jobId}`);
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+    }
+
+export { waitForJob, gameIdOf, nativeCaps, revealToast, hideToast, showToast, dismissToast, raiseToasts, token, AppState, selectedIds, media, coverPlaceholder, coverSource, badgeVisibility, playlistFor, playlistMembers, gameInPlaylist, renderBadges, api, gameForSession, nativeBridge, detectNative, nativeEnabled, nativePrompt, nativeConfirm, nativePickFolder, nativePickFile, nativeReveal, nativeOpenExternal, nativeWindowAction, nativeFullscreenOn, nativeFullscreen, notify, lastBannerDetails, showErrorBanner, copyDiagnostics, setButtonBusy, profilesFetched, ensureProfiles, applyLocaleStrings, applySidebarVisibility, platformCategoryFor, filteredGames, warmSearchIndex, loadExplorerFacets, invalidateFilterCache, markSearchIndexDirty, scheduleSearch, resetQuery, resolveDeeplinkGameId, isPageHidden, gameExcluded, registerLifecycleStream, unregisterLifecycleStream };

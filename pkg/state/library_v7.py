@@ -604,6 +604,12 @@ def check_library(data_dir: Path) -> dict[str, Any]:
             "changed": [],
             "untracked": [],
         }
+    try:
+        from pkg.parity.parity_save_vault import vault_summary_readonly
+
+        report["save_vault"] = vault_summary_readonly(data_dir)
+    except Exception:
+        report["save_vault"] = {"snapshots": 0, "bytes": 0, "games": 0}
     return findings.finish(report)
 
 

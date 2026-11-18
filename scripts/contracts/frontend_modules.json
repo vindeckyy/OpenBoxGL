@@ -44,6 +44,7 @@
     "reader.js",
     "recap.js",
     "router.js",
+    "savevault.js",
     "sessions.js",
     "settings.js",
     "setup.js",

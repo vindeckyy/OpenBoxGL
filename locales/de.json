@@ -1100,7 +1100,11 @@
     "about_api_version": "API-Version",
     "about_plugin_api": "Plugin-API",
     "about_backup_format": "Sicherungsformat",
-    "compat_button": "Kompatibilitätsbericht anzeigen"
+    "compat_button": "Kompatibilitätsbericht anzeigen",
+    "save_vault_enabled": "Automatische Spielstand-Tresor-Schnappschüsse aktivieren",
+    "save_vault_keep": "Im Spielstand-Tresor je Spiel aufbewahrte Schnappschüsse",
+    "save_vault_on_close": "Beim Beenden einer Spielsitzung im Spielstand-Tresor sichern",
+    "save_vault_auto_days": "Intervall für automatische Schnappschüsse in Tagen (0 deaktiviert)"
   },
   "picker": {
     "title": "Was soll ich spielen?",
@@ -2035,5 +2039,33 @@
     "backup_first": "Zuerst sichern",
     "backup_running": "Sicherung wird geschrieben…",
     "backup_done": "Sicherung geschrieben: {name}"
+  },
+  "vault": {
+    "tab_title": "Spielstand-Tresor",
+    "tab_backups": "Sicherungsarchive",
+    "summary_count": "Spielstand-Tresor: {count} Schnappschüsse ({size})",
+    "summary_empty": "Spielstand-Tresor: noch keine Schnappschüsse",
+    "disabled": "Die Spielstandsverwaltung ist in den Einstellungen deaktiviert.",
+    "disk_warning": "Der Spielstand-Tresor belegt {size} auf dem Datenträger (> 5 GB). Verringere die Aufbewahrung oder lösche alte Schnappschüsse.",
+    "row_meta": "{files} Dateien · {size}",
+    "diff": "Vergleich",
+    "restore": "Wiederherstellen",
+    "delete": "Löschen",
+    "empty": "Noch keine Schnappschüsse im Tresor.",
+    "snapshot_now": "Jetzt sichern",
+    "total_usage": "{count} Schnappschüsse in der Bibliothek · {size}",
+    "snapshotting": "Erstelle Tresor-Schnappschuss…",
+    "snapshot_created": "Tresor-Schnappschuss erstellt.",
+    "diff_title": "Unterschiede zu aktuellen Spielständen",
+    "diff_counts": "{added} neu · {changed} geändert · {removed} zusätzlich lokal · {unchanged} unverändert",
+    "restore_title": "Tresor-Schnappschuss wiederherstellen?",
+    "restore_message": "Stellt {added} fehlende Dateien wieder her und überschreibt {changed} geänderte Dateien.",
+    "restore_consequence": "Vor dem Überschreiben wird zunächst ein Sicherheitsschnappschuss der aktuellen Spielstände erstellt.",
+    "restoring": "Stelle Schnappschuss wieder her…",
+    "restored": "Tresor-Schnappschuss wiederhergestellt.",
+    "delete_title": "Tresor-Schnappschuss löschen?",
+    "delete_message": "Dadurch wird der ausgewählte Schnappschuss dauerhaft aus dem Tresor entfernt.",
+    "delete_consequence": "Deine aktuellen Spielstanddateien bleiben unberührt.",
+    "deleted": "Tresor-Schnappschuss gelöscht."
   }
 }

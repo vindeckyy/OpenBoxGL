@@ -11,6 +11,7 @@ import { syncHash } from './router.js';
 import { openMetadata, steamMetadata, loadAchievements, renderAchievementTabs } from './metadata.js';
 import { captureScreenshot, downloadBezel } from './media.js';
 import { launch, backupSaves, discoverSaves, loadBackups, openSaveHistory } from './sessions.js';
+import { renderVaultSummaryBadge } from './savevault.js';
 import { installGameyfin, uninstallGameyfin, ludusaviAction, hoardAction } from './storefront.js';
 import { openReader } from './reader.js';
 import { applyMoodForGame, clearMood } from './mood.js';
@@ -1704,7 +1705,7 @@ function markFilterAria() {
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
           <div class="detail-card"><h3>Achievements</h3><div id="achievementContent"></div><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}${AppState.raConfigured || game.ra_game_id ? '<button class="icon-button" id="loadAchievements">Match ROM / load RetroAchievements</button>' : ''}</div></div>
           ${game.platform === 'Arcade' || game.rom_name ? `<div class="detail-card"><h3>High scores</h3><div class="extras"><button class="icon-button" id="loadHighscores">Show table</button><button class="icon-button" id="exportHighscores">Export high scores</button><button class="icon-button" id="importHighscores">Import high scores</button></div><div class="description" id="highscoreTable">Parse MAME .hi files with hi2txt.</div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
+          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><div class="description" id="saveVaultSummary"></div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
           <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch check</h3><div id="doctorChecks" class="description">Checking whether this game can launch…</div></div>
           </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section><section class="detail-tab-panel" id="detailsStory" role="tabpanel" aria-labelledby="storyTab" hidden><div id="storyPanel"></div></section>
         </div>`;
@@ -1786,6 +1787,9 @@ function markFilterAria() {
         loadBackups(game.id);
       }
       if ($('saveHistory')) $('saveHistory').onclick = () => openSaveHistory(game.id);
+      if ($('saveVaultSummary') && AppState.appSettings.save_management_enabled !== false) {
+        renderVaultSummaryBadge($('saveVaultSummary'), game.id);
+      }
       if ($('ludusaviBackup')) $('ludusaviBackup').onclick = () => ludusaviAction(game.id, 'backup');
       if ($('ludusaviRestore')) $('ludusaviRestore').onclick = () => ludusaviAction(game.id, 'restore');
       if ($('hoardBackup')) $('hoardBackup').onclick = () => hoardAction(game.id, 'backup');

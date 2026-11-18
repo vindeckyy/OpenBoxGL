@@ -695,10 +695,31 @@ def _auto_backup_tick():
         LOGGER.exception("Automatic backup failed")
 
 
+def _save_vault_auto_tick():
+    """Queue scheduled Save Vault snapshots when due (ADR 0107). Best-effort."""
+    try:
+        if RUNNING:
+            return
+        from pkg.parity.parity_save_vault import auto_vault_due, run_auto_vault_pass
+
+        state = load_state()
+        settings = state.get("settings", {}) if isinstance(state, dict) else {}
+        if not auto_vault_due(DATA.parent, settings):
+            return
+        JOB_MANAGER.submit(
+            "save-vault-auto",
+            lambda ctx, dp=DATA.parent, st=state: run_auto_vault_pass(dp, st, cancel_event=ctx),
+        )
+        LOGGER.info("Scheduled Save Vault snapshot pass queued")
+    except Exception:
+        LOGGER.exception("Scheduled Save Vault pass failed")
+
+
 def _auto_backup_worker():
     """Hourly tick; WATCH_STOP wakes it for shutdown."""
     while not WATCH_STOP.wait(3600):
         _auto_backup_tick()
+        _save_vault_auto_tick()
 
 
 def bigbox_launch_url(url):

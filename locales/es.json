@@ -1100,7 +1100,11 @@
     "about_api_version": "Versión de la API",
     "about_plugin_api": "API de complementos",
     "about_backup_format": "Formato de copia",
-    "compat_button": "Mostrar informe de compatibilidad"
+    "compat_button": "Mostrar informe de compatibilidad",
+    "save_vault_enabled": "Activar instantáneas automáticas del Baúl de partidas",
+    "save_vault_keep": "Instantáneas del Baúl de partidas conservadas por juego",
+    "save_vault_on_close": "Crear instantánea en el Baúl de partidas al terminar una sesión",
+    "save_vault_auto_days": "Intervalo de instantánea automática en días (0 lo desactiva)"
   },
   "picker": {
     "title": "¿Qué debería jugar?",
@@ -2035,5 +2039,33 @@
     "backup_first": "Hacer una copia primero",
     "backup_running": "Escribiendo la copia…",
     "backup_done": "Copia escrita: {name}"
+  },
+  "vault": {
+    "tab_title": "Baúl de partidas",
+    "tab_backups": "Archivos de respaldo",
+    "summary_count": "Baúl de partidas: {count} instantáneas ({size})",
+    "summary_empty": "Baúl de partidas: sin instantáneas",
+    "disabled": "La gestión de partidas está desactivada en Ajustes.",
+    "disk_warning": "El Baúl de partidas usa {size} en disco (> 5 GB). Reduce la retención o borra instantáneas antiguas.",
+    "row_meta": "{files} archivos · {size}",
+    "diff": "Comparar",
+    "restore": "Restaurar",
+    "delete": "Eliminar",
+    "empty": "Todavía no hay instantáneas en el Baúl.",
+    "snapshot_now": "Crear instantánea",
+    "total_usage": "{count} instantáneas en la biblioteca · {size}",
+    "snapshotting": "Creando instantánea del Baúl…",
+    "snapshot_created": "Instantánea del Baúl creada.",
+    "diff_title": "Cambios respecto a las partidas actuales",
+    "diff_counts": "{added} por restaurar · {changed} modificados · {removed} adicionales actuales · {unchanged} sin cambios",
+    "restore_title": "¿Restaurar instantánea del Baúl?",
+    "restore_message": "Restaurará {added} archivos faltantes y sobrescribirá {changed} modificados.",
+    "restore_consequence": "Primero se guarda una instantánea de seguridad de tus partidas actuales antes de sobrescribir.",
+    "restoring": "Restaurando instantánea…",
+    "restored": "Instantánea del Baúl restaurada.",
+    "delete_title": "¿Eliminar instantánea del Baúl?",
+    "delete_message": "Esto elimina de forma permanente la instantánea seleccionada del Baúl.",
+    "delete_consequence": "Tus archivos de partida actuales no se ven afectados.",
+    "deleted": "Instantánea del Baúl eliminada."
   }
 }

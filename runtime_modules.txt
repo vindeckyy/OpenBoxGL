@@ -158,3 +158,5 @@ pkg/parity/parity_plugin_storefront.py
 pkg/parity/parity_plugin_providers.py
 pkg/parity/parity_plugin_stats.py
 pkg/parity/parity_plugin_discovery.py
+pkg/parity/parity_save_vault.py
+handlers/savevault.py

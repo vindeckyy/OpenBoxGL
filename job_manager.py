@@ -43,6 +43,11 @@ OPERATION_TYPE_BY_NAME = {
     "saves-scan": "saves.scan",
     "saves-backup": "saves.backup",
     "saves-restore": "saves.restore",
+    "save-vault-auto": "saves.backup",
+    "trail-refresh": "metadata.apply",
+    "trail-rebuild": "library.dna_rebuild",
+    "deals-refresh": "storefront.scan",
+    "itinerary-plan": "setup.scan",
     "dna-index-rebuild": "library.dna_rebuild",
 }
 
@@ -56,9 +61,9 @@ def operation_type_for_name(name: str) -> str:
         return "emulator.update"
     if name.startswith("gameyfin:"):
         return "gameyfin.install"
-    if name.startswith("saves-backup:"):
+    if name.startswith("saves-backup:") or name.startswith("save-vault-snapshot:"):
         return "saves.backup"
-    if name.startswith("saves-restore:"):
+    if name.startswith("saves-restore:") or name.startswith("save-vault-restore:"):
         return "saves.restore"
     if name.startswith("setup-scan:"):
         return "setup.scan"
@@ -116,6 +121,20 @@ def operation_title_for_name(name: str) -> str:
         return "Save backup"
     if name.startswith("saves-restore:"):
         return "Save restore"
+    if name.startswith("save-vault-snapshot:"):
+        return "Save Vault snapshot"
+    if name == "save-vault-auto":
+        return "Scheduled Save Vault snapshot"
+    if name.startswith("save-vault-restore:"):
+        return "Save Vault restore"
+    if name == "trail-refresh":
+        return "Refresh RetroAchievements Trail"
+    if name == "trail-rebuild":
+        return "Rebuild Achievement Trail cache"
+    if name == "deals-refresh":
+        return "Refresh Deal Radar prices"
+    if name == "itinerary-plan":
+        return "Build Backlog Itinerary"
     return name.split(":", 1)[0].replace("-", " ").strip().title() or "Background job"
 
 
