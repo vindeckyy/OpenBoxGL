@@ -11,9 +11,10 @@ workspace = true
 
 [dependencies]
 base64.workspace = true
-jiff.workspace = true
 crc32fast.workspace = true
+futures-util.workspace = true
 hex.workspace = true
+jiff.workspace = true
 md-5.workspace = true
 openbox-core.workspace = true
 openbox-io.workspace = true

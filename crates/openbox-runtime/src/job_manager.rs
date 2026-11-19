@@ -218,6 +218,10 @@ impl JobContext {
         self.cancelled.load(Ordering::Acquire)
     }
 
+    pub fn cancel_flag(&self) -> &AtomicBool {
+        &self.cancelled
+    }
+
     pub fn progress(&self, patch: Value) -> Value {
         self.manager.update_progress(&self.job_name, patch)
     }

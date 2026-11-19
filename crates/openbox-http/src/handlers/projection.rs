@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 
 pub const REGION_PRIORITY_DEFAULT: &[&str] = &["World", "USA", "Europe", "Japan", "Other"];
 
-fn strings_for(locale: &str) -> Value {
+pub fn strings_for(locale: &str) -> Value {
     let key = locale
         .to_lowercase()
         .split('-')
@@ -81,7 +81,7 @@ fn strings_for(locale: &str) -> Value {
     }
 }
 
-fn list_media_packs(settings: &Value) -> Value {
+pub fn list_media_packs(settings: &Value) -> Value {
     let active: HashSet<&str> = settings
         .get("active_media_packs")
         .and_then(Value::as_array)
@@ -387,11 +387,159 @@ pub fn public_settings(app: &AppState, state: &Value) -> Value {
     result
 }
 
+fn ra_cache_record(game_id: &str, data_dir: &std::path::Path) -> Map<String, Value> {
+    let gid = game_id.trim();
+    if gid.is_empty() {
+        return Map::new();
+    }
+    let path = data_dir
+        .join("cache")
+        .join("retroachievements")
+        .join(format!("{gid}.json"));
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn achievement_source_entry(
+    name: &str,
+    earned: i64,
+    total: i64,
+    items: Option<&Value>,
+    mastered: bool,
+) -> Option<Map<String, Value>> {
+    if total <= 0 {
+        return None;
+    }
+    let earned = earned.clamp(0, total);
+    let pct = ((earned as f64) * 100.0 / (total as f64) * 10.0).round() / 10.0;
+    let items_val = items
+        .and_then(Value::as_array)
+        .cloned()
+        .map(Value::Array)
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String(name.to_owned()));
+    m.insert("earned".into(), json!(earned));
+    m.insert("total".into(), json!(total));
+    m.insert("progress_pct".into(), json!(pct));
+    m.insert("mastered".into(), json!(mastered || earned >= total));
+    m.insert("items".into(), items_val);
+    Some(m)
+}
+
+fn achievement_sources_for_game(
+    g: &Map<String, Value>,
+    data_dir: &std::path::Path,
+    overrides: Option<&Map<String, Value>>,
+) -> Map<String, Value> {
+    let mut sources: Map<String, Value> = Map::new();
+    let game_id = g.get("game_id").and_then(Value::as_str).unwrap_or("");
+    let ra_game_id = g.get("ra_game_id").and_then(Value::as_str).unwrap_or("");
+    if !ra_game_id.is_empty() {
+        let ra_cache = ra_cache_record(game_id, data_dir);
+        let earned = ra_cache
+            .get("earned")
+            .or_else(|| g.get("ra_achievements_earned"))
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let total = ra_cache
+            .get("total")
+            .or_else(|| g.get("ra_achievements_total"))
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        let items = ra_cache
+            .get("achievements")
+            .or_else(|| ra_cache.get("items"));
+        let mastered = ra_cache
+            .get("mastered")
+            .or_else(|| g.get("ra_mastered"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if let Some(mut entry) =
+            achievement_source_entry("RetroAchievements", earned, total, items, mastered)
+        {
+            entry.insert("id".into(), Value::String("retroachievements".to_owned()));
+            sources.insert("retroachievements".into(), Value::Object(entry));
+        }
+    }
+    let steam_app_id = g
+        .get("steam_app_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if !steam_app_id.is_empty()
+        && let Some(cached) =
+            openbox_metadata::steam_achievements::load_cache_any_age(data_dir, steam_app_id)
+        && let Some(ach) = cached.get("achievement").and_then(Value::as_object)
+    {
+        let name = ach.get("name").and_then(Value::as_str).unwrap_or("Steam");
+        let earned = ach.get("earned").and_then(Value::as_i64).unwrap_or(0);
+        let total = ach.get("total").and_then(Value::as_i64).unwrap_or(0);
+        if let Some(mut entry) =
+            achievement_source_entry(name, earned, total, ach.get("items"), false)
+        {
+            entry.insert("id".into(), Value::String("steam".to_owned()));
+            sources.insert("steam".into(), Value::Object(entry));
+        }
+    }
+    if let Some(raw_ov) = overrides
+        .and_then(|m| m.get(game_id))
+        .and_then(Value::as_object)
+    {
+        for (key, val) in raw_ov {
+            let Some(ov) = val.as_object() else {
+                continue;
+            };
+            let existing = sources.get(key).and_then(Value::as_object);
+            let name = existing
+                .and_then(|e| e.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or(key);
+            let earned = ov
+                .get("earned")
+                .and_then(Value::as_i64)
+                .or_else(|| {
+                    existing
+                        .and_then(|e| e.get("earned"))
+                        .and_then(Value::as_i64)
+                })
+                .unwrap_or(0);
+            let total = ov
+                .get("total")
+                .and_then(Value::as_i64)
+                .or_else(|| {
+                    existing
+                        .and_then(|e| e.get("total"))
+                        .and_then(Value::as_i64)
+                })
+                .unwrap_or(0);
+            if total <= 0 {
+                sources.remove(key);
+                continue;
+            }
+            let items = existing.and_then(|e| e.get("items")).cloned();
+            let mastered = ov.get("mastered").and_then(Value::as_bool).unwrap_or(false);
+            if let Some(mut corrected) =
+                achievement_source_entry(name, earned, total, items.as_ref(), mastered)
+            {
+                corrected.insert("id".into(), Value::String(key.clone()));
+                corrected.insert("manual".into(), Value::Bool(true));
+                sources.insert(key.clone(), Value::Object(corrected));
+            }
+        }
+    }
+    sources
+}
+
 fn project_game(
     app: &AppState,
     game: &Value,
     index: usize,
     plat_cats: &std::collections::BTreeMap<String, String>,
+    overrides: Option<&Map<String, Value>>,
 ) -> Value {
     let empty = Map::new();
     let g = game.as_object().unwrap_or(&empty);
@@ -591,6 +739,8 @@ fn project_game(
         })
         .unwrap_or_default();
 
+    let ach_sources = achievement_sources_for_game(g, &app.data_dir, overrides);
+
     json!({
         "name": str_k("name"),
         "platform": platform,
@@ -724,8 +874,8 @@ fn project_game(
         "has_saves": g.get("save_paths").and_then(Value::as_array).is_some_and(|a| !a.is_empty()),
         "has_documents": !docs.is_empty(),
         "has_versions": g.get("versions").and_then(Value::as_array).is_some_and(|a| !a.is_empty()),
-        "has_achievements": false,
-        "achievement_sources": {},
+        "has_achievements": !ach_sources.is_empty(),
+        "achievement_sources": Value::Object(ach_sources),
         "has_highscores": !str_k("rom_name").is_empty()
             && matches!(platform.to_lowercase().as_str(), "arcade" | "mame" | "finalburn neo"),
         "has_missing_media": !has_cov,
@@ -767,10 +917,13 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or(&[]);
+    let overrides = state
+        .get("achievement_overrides")
+        .and_then(Value::as_object);
     let games: Vec<Value> = raw_games
         .iter()
         .enumerate()
-        .map(|(i, g)| project_game(app, g, i, &plat_cats))
+        .map(|(i, g)| project_game(app, g, i, &plat_cats, overrides))
         .collect();
     let mut source_labels = Map::new();
     source_labels.insert("Local".into(), Value::String("Local".to_owned()));
@@ -795,7 +948,8 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
         .map(Value::String)
         .collect();
     let pub_set = public_settings(app, &state);
-    let ra_configured = app.data_dir.join("retroachievements.json").is_file();
+    let ra_configured =
+        openbox_metadata::retroachievements::load_credentials(&app.data_dir).is_some();
     let ra_hardcore = settings
         .get("ra_hardcore")
         .and_then(Value::as_bool)
@@ -874,6 +1028,18 @@ pub fn clean_extras(items: Option<&Value>, command: bool) -> Result<Vec<Value>, 
         clean.push(Value::Object(rec));
     }
     Ok(clean)
+}
+
+pub fn find_game_index_in_state(
+    state: &Value,
+    payload: &Map<String, Value>,
+) -> Result<usize, ApiError> {
+    let games = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    find_game_index(games, payload)
 }
 
 pub fn find_game_index(games: &[Value], payload: &Map<String, Value>) -> Result<usize, ApiError> {

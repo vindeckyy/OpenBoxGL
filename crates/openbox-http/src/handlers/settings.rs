@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -16,13 +16,24 @@ use openbox_imports::{
     custom_field_defs, discover_profiles, masked_tokens, platform_categories, validate_provider,
     validate_token,
 };
+use openbox_metadata::retroachievements::{
+    api_get as ra_api_get, enhanced_ra_profile, game_progress as ra_game_progress,
+    inject_retroachievements, load_credentials as load_ra_credentials, match_game as match_ra_game,
+    save_credentials as save_ra_credentials, write_ra_game_cache,
+};
+use openbox_metadata::steam_achievements::{
+    credential_status as steam_credential_status, fetch_owned_games, load_steam_credentials,
+    merge_steam_stats, save_steam_credentials,
+};
 use openbox_platform::{IS_WINDOWS, expand_user};
 use openbox_runtime::{MEDIA_TYPES_ALL, commands::clean_commands};
 use openbox_store::portable_paths::normalize_root;
 use regex::Regex;
 use serde_json::{Map, Value, json};
 
-use crate::handlers::projection::{REGION_PRIORITY_DEFAULT, public_settings};
+use crate::handlers::projection::{
+    REGION_PRIORITY_DEFAULT, find_game_index_in_state as find_game_index, public_settings,
+};
 use crate::handlers::shared::{RequestCtx, str_field};
 use crate::middleware::{api_error_response, json_response};
 
@@ -1537,6 +1548,44 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                 ctx.instance,
             )),
         },
+        "/api/v2/ra/settings" => {
+            let Some(creds) = load_ra_credentials(&ctx.app.data_dir) else {
+                return Some(json_response(
+                    StatusCode::OK,
+                    &json!({"configured": false}),
+                    ctx.instance,
+                ));
+            };
+            match ra_api_get(
+                "API_GetUserProfile.php",
+                &[("u", creds.username.clone())],
+                &creds,
+            ) {
+                Ok(profile) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({
+                        "configured": true,
+                        "username": profile.get("User").and_then(Value::as_str).unwrap_or(&creds.username),
+                        "points": profile.get("TotalPoints").and_then(Value::as_i64).unwrap_or(0),
+                        "motto": profile.get("Motto").and_then(Value::as_str).unwrap_or(""),
+                    }),
+                    ctx.instance,
+                )),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/integrations/steam" => {
+            let creds = load_steam_credentials(&ctx.app.data_dir);
+            Some(json_response(
+                StatusCode::OK,
+                &steam_credential_status(&creds),
+                ctx.instance,
+            ))
+        }
         _ => None,
     }
 }
@@ -1803,6 +1852,205 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                     ctx.instance,
                 )),
             }
+        }
+        "/api/v2/integrations/steam" => {
+            let api_key = payload.get("api_key").map(|v| v.as_str().unwrap_or(""));
+            let steam_id = payload.get("steam_id").map(|v| v.as_str().unwrap_or(""));
+            match save_steam_credentials(&ctx.app.data_dir, api_key, steam_id) {
+                Ok(st) => Some(json_response(StatusCode::OK, &st, ctx.instance)),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/integrations/steam/test" => {
+            let creds = load_steam_credentials(&ctx.app.data_dir);
+            if creds.api_key.is_empty() || creds.steam_id.is_empty() {
+                return Some(api_error_response(
+                    &ApiError::bad_request("Save a Steam API key and Steam ID first."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            match fetch_owned_games(&creds.steam_id, &creds.api_key) {
+                Ok(owned) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({"ok": true, "games": owned.len()}),
+                    ctx.instance,
+                )),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/integrations/steam/refresh" => {
+            let creds = load_steam_credentials(&ctx.app.data_dir);
+            if creds.api_key.is_empty() || creds.steam_id.is_empty() {
+                return Some(api_error_response(
+                    &ApiError::bad_request("Save a Steam API key and Steam ID first."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            let app = Arc::clone(&ctx.app);
+            let job = match ctx
+                .app
+                .jobs
+                .submit("steam.stats", false, None, None, move |_ctx| {
+                    let owned = fetch_owned_games(&creds.steam_id, &creds.api_key)?;
+                    let owned_count = owned.len();
+                    let (_, updated_games) = app
+                        .transact_state(|st| {
+                            let cnt = if let Some(gs) =
+                                st.get_mut("games").and_then(Value::as_array_mut)
+                            {
+                                merge_steam_stats(gs, &owned)
+                            } else {
+                                0
+                            };
+                            Ok(cnt)
+                        })
+                        .map_err(|e| e.to_string())?;
+                    Ok(json!({"games": updated_games, "owned": owned_count}))
+                }) {
+                Ok(j) => j,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::job_state_conflict(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            Some(json_response(
+                StatusCode::ACCEPTED,
+                &json!({"state": "queued", "job_id": job.get("job_id").cloned().unwrap_or(Value::Null)}),
+                ctx.instance,
+            ))
+        }
+        "/api/v2/ra/settings" => {
+            let existing = load_ra_credentials(&ctx.app.data_dir);
+            let username = payload
+                .get("username")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let api_key_in = payload.get("api_key").and_then(Value::as_str).unwrap_or("");
+            let api_key = if !api_key_in.is_empty() {
+                api_key_in
+            } else {
+                existing.as_ref().map(|c| c.api_key.as_str()).unwrap_or("")
+            };
+            match save_ra_credentials(&ctx.app.data_dir, username, api_key) {
+                Ok(profile) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({
+                        "configured": true,
+                        "username": profile.get("User").and_then(Value::as_str).unwrap_or(""),
+                        "points": profile.get("TotalPoints").and_then(Value::as_i64).unwrap_or(0),
+                        "motto": profile.get("Motto").and_then(Value::as_str).unwrap_or(""),
+                    }),
+                    ctx.instance,
+                )),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/ra/inject" => {
+            let Some(creds) = load_ra_credentials(&ctx.app.data_dir) else {
+                return Some(api_error_response(
+                    &ApiError::bad_request("Configure RetroAchievements first."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            let hardcore = ctx
+                .app
+                .load_state_view()
+                .ok()
+                .and_then(|s| s.get("settings")?.get("ra_hardcore")?.as_bool())
+                .unwrap_or(false);
+            match inject_retroachievements(&creds, hardcore) {
+                Ok(res) => Some(json_response(StatusCode::OK, &res, ctx.instance)),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/ra/game" => {
+            let Some(creds) = load_ra_credentials(&ctx.app.data_dir) else {
+                return Some(api_error_response(
+                    &ApiError::bad_request("Configure RetroAchievements first."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::state_unavailable(e.to_string()),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let idx = match find_game_index(&state, payload) {
+                Ok(i) => i,
+                Err(e) => return Some(api_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let game = state["games"][idx].clone();
+            let stable_gid = game
+                .get("game_id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_owned();
+            let ra_cache_dir = ctx.app.data_dir.join("cache").join("retroachievements");
+            let (ra_id, digest) = match match_ra_game(&game, &creds, &ra_cache_dir) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let _ = ctx.app.transact_state(|st| {
+                if let Some(gs) = st.get_mut("games").and_then(Value::as_array_mut)
+                    && let Some(t) = gs
+                        .iter_mut()
+                        .find(|x| x.get("game_id").and_then(Value::as_str) == Some(&stable_gid))
+                    && let Some(m) = t.as_object_mut()
+                {
+                    m.insert("ra_game_id".into(), Value::String(ra_id.to_string()));
+                    m.insert("ra_hash".into(), Value::String(digest.clone()));
+                }
+                Ok(())
+            });
+            let mut progress = match ra_game_progress(ra_id, &creds) {
+                Ok(p) => p,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            progress["game_id"] = json!(ra_id);
+            let enhanced = enhanced_ra_profile(&progress, &creds);
+            write_ra_game_cache(&ctx.app.data_dir, &stable_gid, &enhanced);
+            ctx.app.invalidate_caches();
+            Some(json_response(StatusCode::OK, &enhanced, ctx.instance))
         }
         _ => None,
     }

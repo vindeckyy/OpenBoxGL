@@ -1612,9 +1612,9 @@ pub fn compat_build_report(data_dir: &Path, root_dir: &Path) -> Value {
         .get("deals_enabled")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let deals_wishlist = raw
+    let deals_watchlist = raw
         .get("deals")
-        .and_then(|d| d.get("wishlist"))
+        .and_then(|d| d.get("watchlist"))
         .and_then(Value::as_array)
         .map(Vec::len)
         .unwrap_or(0);
@@ -1651,8 +1651,9 @@ pub fn compat_build_report(data_dir: &Path, root_dir: &Path) -> Value {
         },
         "deals": {
             "enabled": deals_enabled,
-            "wishlist": deals_wishlist,
-            "store_cc": settings.get("deals_store_cc").and_then(Value::as_str).unwrap_or("us"),
+            "host_allowlist": ["store.steampowered.com"],
+            "payload": "appid_and_search_query_only",
+            "watchlist_count": deals_watchlist,
         },
     })
 }
