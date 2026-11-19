@@ -954,15 +954,16 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
         .get("ra_hardcore")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let discovery = openbox_discovery::discovery::discovery_lists(raw_games, 12);
     let payload = json!({
         "games": games,
         "playlists": state.get("playlists").cloned().unwrap_or_else(|| json!([])),
-        "filter_presets": list_presets(&state),
-        "smart_collections": state.get("smart_collections").cloned().unwrap_or_else(|| json!([])),
+        "filter_presets": openbox_discovery::filter_presets::list_presets(&state),
+        "smart_collections": openbox_discovery::collections::list_collections(&state),
         "ra_configured": ra_configured,
         "ra_hardcore": ra_hardcore,
         "settings": pub_set,
-        "discovery": {},
+        "discovery": discovery,
         "media_epoch": app.cache.media_epoch(),
         "startup_errors": startup_errors,
         "source_labels": Value::Object(source_labels),

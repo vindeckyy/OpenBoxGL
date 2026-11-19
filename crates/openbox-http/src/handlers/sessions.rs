@@ -87,6 +87,34 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                 ctx.instance,
             ))
         }
+        "/api/v2/history/timeline" => {
+            let days: usize = match ctx.query_first("days").filter(|s| !s.trim().is_empty()) {
+                None => 90,
+                Some(raw) => match raw.trim().parse::<i64>() {
+                    Ok(v) if (1..=366).contains(&v) => v as usize,
+                    Ok(_) => {
+                        return Some(api_error_response(
+                            &ApiError::bad_request("days must be between 1 and 366"),
+                            ctx.request_id,
+                            ctx.instance,
+                        ));
+                    }
+                    Err(_) => {
+                        return Some(api_error_response(
+                            &ApiError::bad_request("days must be an integer"),
+                            ctx.request_id,
+                            ctx.instance,
+                        ));
+                    }
+                },
+            };
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let groups = openbox_discovery::insights::timeline_groups(&state, days);
+            Some(json_response(StatusCode::OK, &groups, ctx.instance))
+        }
         "/api/v2/sessions/recap" => {
             let state = match ctx.app.load_state_view() {
                 Ok(s) => s,

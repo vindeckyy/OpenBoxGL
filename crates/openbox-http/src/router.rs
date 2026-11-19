@@ -16,8 +16,9 @@ use serde_json::json;
 
 use crate::contracts::is_registered_api_route;
 use crate::handlers::{
-    arcade, data, deals, defs, emulators, export, faugus, health, household, imports, jobs, launch,
-    library, library_health, library_storage, media, metadata, native, savevault, screenscraper,
+    arcade, collections, constellation, data, deals, defs, discovery, emulators, export, faugus,
+    health, household, imports, insights, itinerary, jobs, launch, library, library_health,
+    library_storage, media, metadata, native, party, picker, playerlog, savevault, screenscraper,
     sessions, settings, setup, shared, steamgrid, timemachine, trail, wine,
 };
 use crate::middleware::{
@@ -227,6 +228,27 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         if let Some(resp) = export::handle_get(&ctx) {
             return resp;
         }
+        if let Some(resp) = discovery::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = constellation::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = insights::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = party::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = collections::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = playerlog::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = itinerary::handle_get(&ctx) {
+            return resp;
+        }
         // Optional Strangler Proxy for unmigrated registered routes during Phases 3–9
         if is_registered_api_route("GET", &path)
             && let Some(proxy) = &state.strangler
@@ -331,6 +353,27 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         return resp;
     }
     if let Some(resp) = export::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = discovery::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = picker::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = insights::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = party::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = collections::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = playerlog::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = itinerary::handle_post(&ctx, &payload) {
         return resp;
     }
 

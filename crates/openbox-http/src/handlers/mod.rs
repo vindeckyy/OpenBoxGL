@@ -1,15 +1,20 @@
 //! HTTP route handlers organized by domain.
 
 pub mod arcade;
+pub mod collections;
+pub mod constellation;
 pub mod data;
 pub mod deals;
 pub mod defs;
+pub mod discovery;
 pub mod emulators;
 pub mod export;
 pub mod faugus;
 pub mod health;
 pub mod household;
 pub mod imports;
+pub mod insights;
+pub mod itinerary;
 pub mod jobs;
 pub mod launch;
 pub mod library;
@@ -18,6 +23,9 @@ pub mod library_storage;
 pub mod media;
 pub mod metadata;
 pub mod native;
+pub mod party;
+pub mod picker;
+pub mod playerlog;
 pub mod projection;
 pub mod savevault;
 pub mod screenscraper;

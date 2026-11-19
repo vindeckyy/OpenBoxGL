@@ -11,13 +11,18 @@ use axum::http::StatusCode;
 use axum::http::header::{CONTENT_ENCODING, ETAG, HeaderValue, VARY};
 use axum::response::Response;
 use openbox_core::{ApiError, stable_game_id};
+use openbox_discovery::discovery::{discovery_lists, related_with_reasons};
+use openbox_discovery::filter_presets::{
+    bigbox_quick_presets, delete_preset, list_presets, save_preset,
+};
+use openbox_discovery::query::{filter_games_by_query, parse_query};
 use openbox_imports::{
     PROGRESS, bulk_update, bulk_update_with_media, bulk_wizard_changes, canon_progress,
     clean_currency, clean_price_cents, clean_user_rating, consolidate_existing_games,
     custom_field_defs, delete_platform, explorer_facets, find_replace, game_media_paths,
     is_valid_progress, launcher_menu_items, normalize_custom_fields, normalize_filter_rules,
-    normalize_manual_sessions, normalize_notes, rename_platform, tag_counts, trash_entry_for,
-    value_to_str,
+    normalize_manual_sessions, normalize_notes, related_game_ids, rename_platform, tag_counts,
+    trash_entry_for, value_to_str,
 };
 use openbox_platform::{expand_user, open_path, user_symlink_component};
 use openbox_runtime::notifications::{clear as clear_notifications, mark_read, unread_count};
@@ -746,6 +751,122 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     ctx.instance,
                 ))
             }
+            Err(err) => Some(api_error_response(
+                &ApiError::state_unavailable(err.to_string()),
+                ctx.request_id,
+                ctx.instance,
+            )),
+        },
+        "/api/v2/related" => {
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(err) => {
+                    return Some(api_error_response(
+                        &ApiError::state_unavailable(err.to_string()),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let mut qmap = Map::new();
+            for k in ["game_id", "id", "index", "name"] {
+                if let Some(v) = ctx.query_first(k) {
+                    if (k == "id" || k == "index")
+                        && let Ok(n) = v.trim().parse::<i64>()
+                    {
+                        qmap.insert(k.to_owned(), json!(n));
+                        continue;
+                    }
+                    qmap.insert(k.to_owned(), Value::String(v));
+                }
+            }
+            let games = state
+                .get("games")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            match find_game_index(games, &qmap) {
+                Ok(index) => {
+                    let ids = related_game_ids(games, index, 8);
+                    Some(json_response(
+                        StatusCode::OK,
+                        &json!({"ids": ids}),
+                        ctx.instance,
+                    ))
+                }
+                Err(_) => Some(api_error_response(
+                    &ApiError::game_not_found("Game not found"),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/discovery" => match public_state_cached(&ctx.app) {
+            Ok(cached) => {
+                let games = cached
+                    .payload
+                    .get("games")
+                    .and_then(Value::as_array)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                let payload = discovery_lists(games, 12);
+                Some(json_response(StatusCode::OK, &payload, ctx.instance))
+            }
+            Err(err) => Some(api_error_response(&err, ctx.request_id, ctx.instance)),
+        },
+        "/api/v2/related/rich" => {
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(err) => {
+                    return Some(api_error_response(
+                        &ApiError::state_unavailable(err.to_string()),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let mut qmap = Map::new();
+            for k in ["game_id", "id", "index", "name"] {
+                if let Some(v) = ctx.query_first(k) {
+                    if (k == "id" || k == "index")
+                        && let Ok(n) = v.trim().parse::<i64>()
+                    {
+                        qmap.insert(k.to_owned(), json!(n));
+                        continue;
+                    }
+                    qmap.insert(k.to_owned(), Value::String(v));
+                }
+            }
+            let games = state
+                .get("games")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            match find_game_index(games, &qmap) {
+                Ok(index) => {
+                    let items = related_with_reasons(games, index, 8);
+                    Some(json_response(
+                        StatusCode::OK,
+                        &json!({"items": items}),
+                        ctx.instance,
+                    ))
+                }
+                Err(_) => Some(api_error_response(
+                    &ApiError::game_not_found("Game not found"),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/filter-presets" => match ctx.app.load_state_view() {
+            Ok(state) => Some(json_response(
+                StatusCode::OK,
+                &json!({
+                    "presets": list_presets(&state),
+                    "bigbox_quick": bigbox_quick_presets(&state, 8),
+                }),
+                ctx.instance,
+            )),
             Err(err) => Some(api_error_response(
                 &ApiError::state_unavailable(err.to_string()),
                 ctx.request_id,
@@ -3044,6 +3165,133 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 &json!({"ok": true, "event_id": event_id}),
                 ctx.instance,
             ))
+        }
+        "/api/v2/filter-presets" => {
+            let name = str_field(payload, "name").trim().to_owned();
+            let rules = payload.get("rules").cloned().unwrap_or_else(|| json!({}));
+            let bigbox_quick = bool_field(payload, "bigbox_quick");
+            let name_mut = name.clone();
+            match ctx
+                .app
+                .transact_state(|cur| Ok(save_preset(cur, &name_mut, &rules, bigbox_quick)))
+            {
+                Ok((_, Ok(saved))) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({"saved": saved}),
+                    ctx.instance,
+                )),
+                Ok((_, Err(msg))) => Some(api_error_response(
+                    &ApiError::bad_request(msg),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+                Err(err) => Some(api_error_response(
+                    &ApiError::bad_request(err.to_string()),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/filter-presets/delete" => {
+            let name = str_field(payload, "name").trim().to_owned();
+            let name_mut = name.clone();
+            match ctx
+                .app
+                .transact_state(|cur| Ok(delete_preset(cur, &name_mut)))
+            {
+                Ok((_, true)) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({"deleted": name}),
+                    ctx.instance,
+                )),
+                Ok((_, false)) => Some(api_error_response(
+                    &ApiError::bad_request("Preset not found."),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+                Err(err) => Some(api_error_response(
+                    &ApiError::bad_request(err.to_string()),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/library/query/parse" => {
+            let Some(query) = payload.get("query").and_then(Value::as_str) else {
+                return Some(api_error_response(
+                    &ApiError::bad_request("query must be a string."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            if query.chars().count() > 2000 {
+                return Some(api_error_response(
+                    &ApiError::bad_request("query is too long."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            let mut parsed = parse_query(query, None);
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(err) => {
+                    return Some(api_error_response(
+                        &ApiError::state_unavailable(err.to_string()),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let games = state
+                .get("games")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let matches = filter_games_by_query(games, &parsed, None);
+            let matched_game_ids: Vec<String> = matches
+                .iter()
+                .take(20_000)
+                .filter_map(|g| {
+                    if !g.is_object() {
+                        return None;
+                    }
+                    let gid = g
+                        .get("game_id")
+                        .and_then(Value::as_str)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_owned)
+                        .or_else(|| {
+                            g.get("id").and_then(|v| {
+                                if v.is_null() {
+                                    None
+                                } else {
+                                    Some(
+                                        v.as_str()
+                                            .map(str::to_owned)
+                                            .unwrap_or_else(|| v.to_string()),
+                                    )
+                                }
+                            })
+                        })?;
+                    Some(gid)
+                })
+                .collect();
+            if let Some(m) = parsed.as_object_mut() {
+                m.insert("match_count".into(), json!(matches.len()));
+                m.insert("matched_game_ids".into(), json!(matched_game_ids));
+            }
+            Some(json_response(StatusCode::OK, &parsed, ctx.instance))
+        }
+        "/api/v2/health" => {
+            let get_ctx = RequestCtx {
+                app: Arc::clone(&ctx.app),
+                path: "/api/v2/health",
+                query: ctx.query,
+                instance: ctx.instance,
+                request_id: ctx.request_id,
+                headers: ctx.headers,
+            };
+            crate::handlers::library_health::handle_get(&get_ctx)
         }
         "/api/v2/health/dedupe" => {
             let data_dir = ctx.app.data_dir.clone();

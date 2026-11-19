@@ -204,7 +204,7 @@ pub fn search_games(name: &str, platform: &str, limit: usize) -> Result<Vec<Valu
     Ok(results)
 }
 
-fn fetch_time_to_beat(game_id: i64) -> Option<f64> {
+pub fn fetch_time_to_beat(game_id: i64) -> Option<f64> {
     let query = format!("fields normally; where game_id = {game_id}; limit 1;");
     let records = igdb_request("game_time_to_beats", &query).ok()?;
     let first = records.as_array()?.first()?.as_object()?;
