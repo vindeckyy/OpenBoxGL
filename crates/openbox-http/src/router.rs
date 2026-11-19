@@ -16,10 +16,11 @@ use serde_json::json;
 
 use crate::contracts::is_registered_api_route;
 use crate::handlers::{
-    arcade, collections, constellation, data, deals, defs, discovery, emulators, export, faugus,
-    health, household, imports, insights, itinerary, jobs, launch, library, library_health,
-    library_storage, media, metadata, native, party, picker, playerlog, savevault, screenscraper,
-    sessions, settings, setup, shared, steamgrid, timemachine, trail, wine,
+    arcade, clips, collections, constellation, data, deals, defs, discovery, emulators, export,
+    extensions, faugus, health, household, imports, insights, itinerary, jobs, launch, library,
+    library_health, library_storage, media, metadata, moments, native, party, picker, playerlog,
+    resume, savevault, screenscraper, sessions, settings, setup, shared, steambridge, steamgrid,
+    timemachine, trail, wine,
 };
 use crate::middleware::{
     AuthRateLimiter, MAX_BODY, api_error_response, check_host_api_version, check_retired_route,
@@ -249,6 +250,21 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         if let Some(resp) = itinerary::handle_get(&ctx) {
             return resp;
         }
+        if let Some(resp) = extensions::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = steambridge::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = clips::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = resume::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = moments::handle_get(&ctx) {
+            return resp;
+        }
         // Optional Strangler Proxy for unmigrated registered routes during Phases 3–9
         if is_registered_api_route("GET", &path)
             && let Some(proxy) = &state.strangler
@@ -374,6 +390,21 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         return resp;
     }
     if let Some(resp) = itinerary::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = extensions::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = steambridge::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = clips::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = resume::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = moments::handle_post(&ctx, &payload) {
         return resp;
     }
 

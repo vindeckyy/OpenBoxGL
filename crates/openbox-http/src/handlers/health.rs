@@ -9,6 +9,7 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::response::Response;
 use openbox_core::{ApiError, redact_state_for_export};
+use openbox_integrations::updates::{check_update, install_desktop_entry, install_update};
 use openbox_io::{build_preview, read_diagnostic_log};
 use openbox_platform::user_symlink_component;
 use openbox_sync::backup::{
@@ -232,6 +233,33 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     ctx.instance,
                 )),
             }
+        }
+        "/api/v2/update" => {
+            let mut payload = match check_update() {
+                Ok(v) => v,
+                Err(err) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(err),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let last_checked = ctx
+                .app
+                .load_state_view()
+                .ok()
+                .and_then(|s| {
+                    s.get("settings")?
+                        .get("last_update_check")?
+                        .as_str()
+                        .map(str::to_owned)
+                })
+                .unwrap_or_default();
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("last_checked".into(), Value::String(last_checked));
+            }
+            Some(json_response(StatusCode::OK, &payload, ctx.instance))
         }
         _ => None,
     }
@@ -676,6 +704,42 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 Err(e) => Some(state_error_response(&e, ctx.request_id, ctx.instance)),
             }
         }
+        "/api/v2/update/install" => {
+            let root_dir = ctx.app.root_dir.clone();
+            match ctx.app.jobs.submit(
+                "updater-install",
+                false,
+                Some("updater_install"),
+                None,
+                move |_jctx| {
+                    let update = check_update()?;
+                    install_update(&update, Some(&root_dir))
+                },
+            ) {
+                Ok(job) => Some(json_response(
+                    StatusCode::ACCEPTED,
+                    &json!({"state": "queued", "job_id": job["job_id"]}),
+                    ctx.instance,
+                )),
+                Err(e) => Some(api_error_response(
+                    &ApiError::job_state_conflict(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/desktop/install" => match install_desktop_entry(&ctx.app.root_dir) {
+            Ok(desktop) => Some(json_response(
+                StatusCode::OK,
+                &json!({"desktop": desktop}),
+                ctx.instance,
+            )),
+            Err(err) => Some(api_error_response(
+                &ApiError::bad_request(err),
+                ctx.request_id,
+                ctx.instance,
+            )),
+        },
         _ => None,
     }
 }

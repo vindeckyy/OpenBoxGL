@@ -809,7 +809,16 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     .and_then(Value::as_array)
                     .map(Vec::as_slice)
                     .unwrap_or(&[]);
-                let payload = discovery_lists(games, 12);
+                let mut payload = discovery_lists(games, 12);
+                openbox_plugins::discovery::merge_plugin_discovery(
+                    &mut payload,
+                    games,
+                    &ctx.app.data_dir.join("plugins"),
+                    12,
+                    Some(&cached.payload),
+                    None,
+                    Some(&ctx.app.root_dir),
+                );
                 Some(json_response(StatusCode::OK, &payload, ctx.instance))
             }
             Err(err) => Some(api_error_response(&err, ctx.request_id, ctx.instance)),

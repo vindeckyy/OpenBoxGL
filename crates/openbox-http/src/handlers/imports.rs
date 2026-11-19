@@ -59,7 +59,7 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
             if features.native_storefronts {
                 sources.extend(["gog", "ea", "ubisoft"]);
             }
-            let builtins: Vec<Value> = sources
+            let mut storefronts: Vec<Value> = sources
                 .into_iter()
                 .map(|src| {
                     let mut chars = src.chars();
@@ -75,9 +75,17 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     })
                 })
                 .collect();
+            for mut item in openbox_plugins::storefront::list_storefront_plugins(
+                &ctx.app.data_dir.join("plugins"),
+            ) {
+                if let Some(obj) = item.as_object_mut() {
+                    obj.insert("kind".into(), json!("plugin"));
+                }
+                storefronts.push(item);
+            }
             Some(json_response(
                 StatusCode::OK,
-                &json!({"storefronts": builtins}),
+                &json!({"storefronts": storefronts}),
                 ctx.instance,
             ))
         }

@@ -69,6 +69,15 @@ pub fn start_game(
     index: usize,
     stable_game_id: &str,
 ) -> Result<Value, ApiError> {
+    start_game_with_extra_args(app, index, stable_game_id, &[])
+}
+
+pub fn start_game_with_extra_args(
+    app: &Arc<AppState>,
+    index: usize,
+    stable_game_id: &str,
+    extra_args: &[String],
+) -> Result<Value, ApiError> {
     let state = app
         .load_state()
         .map_err(|e| ApiError::internal(e.to_string()))?;
@@ -124,8 +133,11 @@ pub fn start_game(
         .unwrap_or_default();
     let settings = state.get("settings").cloned().unwrap_or_else(|| json!({}));
     let adapters = load_adapters(&app.root_dir, Some(&app.data_dir));
-    let plan = resolve_launch(&game, &profiles, &adapters, &app.data_dir, Some(&state))
+    let mut plan = resolve_launch(&game, &profiles, &adapters, &app.data_dir, Some(&state))
         .map_err(ApiError::bad_request)?;
+    if !extra_args.is_empty() {
+        plan.args.extend(extra_args.iter().cloned());
+    }
     let final_args = wrap_launch_command(&plan.args, &game, &settings);
     if final_args.is_empty() {
         return Err(ApiError::bad_request("Empty launch command."));

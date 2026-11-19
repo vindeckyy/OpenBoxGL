@@ -285,6 +285,13 @@ def compare_case(case: dict[str, Any], py_srv: ManagedServer, cand_srv: ManagedS
         try:
             j1 = normalize_json(json.loads(b1.decode("utf-8")), str(py_srv.data_dir))
             j2 = normalize_json(json.loads(b2.decode("utf-8")), str(cand_srv.data_dir))
+            if case["name"] == "version" and isinstance(j1, dict) and isinstance(j2, dict):
+                # Runtime-identification metadata legitimately differs between CPython and Rust;
+                # still assert the OpenAPI-required `python` string key is present on both.
+                if not isinstance(j2.get("python"), str):
+                    errs.append(f"version.python must be a string, got {j2.get('python')!r}")
+                j1 = {k: v for k, v in j1.items() if k not in ("python", "runtime")}
+                j2 = {k: v for k, v in j2.items() if k not in ("python", "runtime")}
             if j1 != j2:
                 errs.append(
                     f"JSON mismatch:\n  py:   {json.dumps(j1, sort_keys=True)[:400]}\n  cand: {json.dumps(j2, sort_keys=True)[:400]}"

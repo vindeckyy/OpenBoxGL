@@ -13,12 +13,12 @@ use openbox_imports::{
     LIST_COLUMNS_DEFAULT, custom_field_defs, list_exclusions, normalize_manual_sessions,
     normalize_notes, platform_categories, public_tokens,
 };
-use openbox_platform::which;
 use openbox_runtime::cache::{CachedPayload, available_locales};
 use openbox_runtime::{AppState, MEDIA_TYPES_ALL};
+use openbox_sync::save_tools::save_tool_status;
 use serde_json::{Map, Value, json};
 
-pub const REGION_PRIORITY_DEFAULT: &[&str] = &["World", "USA", "Europe", "Japan", "Other"];
+pub const REGION_PRIORITY_DEFAULT: &[&str] = &["North America", "World", "Europe", "Japan", ""];
 
 pub fn strings_for(locale: &str) -> Value {
     let key = locale
@@ -228,7 +228,6 @@ pub fn public_settings(app: &AppState, state: &Value) -> Value {
             .unwrap_or_default()
             .trim()
             .is_empty();
-    let ludusavi_available = which("ludusavi").is_some();
 
     let result = json!({
         "watch_folders": get_or(settings, "watch_folders", json!([])),
@@ -338,7 +337,7 @@ pub fn public_settings(app: &AppState, state: &Value) -> Value {
         "gameyfin_install_dir": get_or(settings, "gameyfin_install_dir", json!("")),
         "gameyfin_provider": get_or(settings, "gameyfin_provider", json!("")),
         "ludusavi_backup_path": get_or(settings, "ludusavi_backup_path", json!("")),
-        "save_tools": {"ludusavi": {"available": ludusavi_available}},
+        "save_tools": save_tool_status(),
         "platform_documents": Value::Object(plat_docs),
         "custom_field_defs": custom_field_defs(&settings_val),
         "platform_categories": platform_categories(&settings_val),
@@ -809,7 +808,7 @@ fn project_game(
         "notes": note_entries,
         "user_rating": user_rating,
         "price_paid_cents": g.get("price_paid_cents").cloned().unwrap_or(Value::Null),
-        "price_currency": g.get("price_currency").cloned().unwrap_or(Value::Null),
+        "price_currency": str_k("price_currency"),
         "manual_playtime_seconds": manual_seconds,
         "manual_sessions": manual_sessions,
         "total_playtime_seconds": observed_seconds + manual_seconds,
@@ -954,7 +953,16 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
         .get("ra_hardcore")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let discovery = openbox_discovery::discovery::discovery_lists(raw_games, 12);
+    let mut discovery = openbox_discovery::discovery::discovery_lists(raw_games, 12);
+    openbox_plugins::discovery::merge_plugin_discovery(
+        &mut discovery,
+        raw_games,
+        &app.data_dir.join("plugins"),
+        12,
+        Some(&state),
+        None,
+        Some(&app.root_dir),
+    );
     let payload = json!({
         "games": games,
         "playlists": state.get("playlists").cloned().unwrap_or_else(|| json!([])),

@@ -1123,7 +1123,9 @@ dependencies = [
  "hex",
  "jiff",
  "openbox-core",
+ "openbox-imports",
  "openbox-io",
+ "openbox-metadata",
  "openbox-platform",
  "openbox-runtime",
  "openbox-store",
@@ -1137,6 +1139,7 @@ dependencies = [
  "tracing",
  "unicode-normalization",
  "uuid",
+ "zip",
 ]
 
 [[package]]
@@ -1257,7 +1260,9 @@ dependencies = [
  "hmac",
  "jiff",
  "openbox-core",
+ "openbox-emulators",
  "openbox-io",
+ "openbox-metadata",
  "openbox-platform",
  "openbox-runtime",
  "openbox-store",
@@ -1267,7 +1272,9 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
+ "subtle",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1344,6 +1351,9 @@ dependencies = [
 name = "openbox-parity-tests"
 version = "3.0.0"
 dependencies = [
+ "axum",
+ "http",
+ "http-body-util",
  "openbox-core",
  "openbox-discovery",
  "openbox-emulators",
@@ -1361,6 +1371,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tower",
 ]
 
 [[package]]
@@ -1388,19 +1399,24 @@ dependencies = [
  "jiff",
  "openbox-core",
  "openbox-io",
+ "openbox-metadata",
  "openbox-platform",
  "openbox-runtime",
  "openbox-store",
+ "openbox-sync",
  "parking_lot",
  "regex",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "url",
+ "uuid",
+ "zip",
 ]
 
 [[package]]

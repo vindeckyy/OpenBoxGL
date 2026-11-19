@@ -10,6 +10,9 @@ publish = false
 workspace = true
 
 [dependencies]
+axum.workspace = true
+http.workspace = true
+http-body-util.workspace = true
 openbox-core.workspace = true
 openbox-discovery.workspace = true
 openbox-emulators.workspace = true
@@ -27,3 +30,4 @@ serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+tower.workspace = true

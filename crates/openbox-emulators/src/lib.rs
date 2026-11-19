@@ -34,6 +34,7 @@ pub use defs::{
 pub use launch_engine::{
     cmd_fingerprint, control_game_session, reap_sessions_for_shutdown,
     reconcile_sessions_on_startup, resolve_game_from_payload, start_game,
+    start_game_with_extra_args,
 };
 
 #[cfg(test)]

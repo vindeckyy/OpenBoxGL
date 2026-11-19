@@ -1,9 +1,9 @@
 //! Saves, save tools, documents (frameable), platform videos, netplay lobby, highscores table,
 //! and Steam store URI action handlers (`handlers/data.py`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use axum::http::StatusCode;
 use axum::http::header::{CONTENT_DISPOSITION, HeaderValue};
@@ -11,6 +11,11 @@ use axum::response::Response;
 use openbox_core::ApiError;
 use openbox_emulators::highscores::table_for_game;
 use openbox_emulators::netplay::lobby as netplay_lobby;
+use openbox_integrations::gameyfin::{
+    catalog_gameyfin, default_install_root, gameyfin_settings, install_gameyfin_game,
+    test_gameyfin_connection, uninstall_gameyfin_game, validate_gameyfin_id,
+};
+use openbox_integrations::misc::{export_highscores, import_highscores};
 use openbox_platform::{open_path, user_symlink_component};
 use openbox_sync::save_tools::{run_hoard, run_ludusavi, save_tool_status};
 use openbox_sync::saves::{
@@ -18,6 +23,8 @@ use openbox_sync::saves::{
     extra_save_candidates, inspect_save_backup, list_backup_metadata, preview_restore,
     restore_saves, scan_all_saves,
 };
+use parking_lot::Mutex;
+use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::handlers::projection::find_game_index_in_state;
@@ -26,6 +33,9 @@ use crate::middleware::{api_error_response, json_response, state_error_response}
 use crate::static_files::send_file;
 
 const VIDEO_EXTS: &[&str] = &[".mp4", ".webm", ".ogv", ".ogg", ".mkv"];
+static GAMEYFIN_INSTALLS: LazyLock<Mutex<HashMap<String, Value>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static HS_SLUG_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^a-z0-9]+").unwrap());
 
 fn save_management_enabled(state: &Value) -> bool {
     state
@@ -538,6 +548,59 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                 &table_for_game(&game, None),
                 ctx.instance,
             ))
+        }
+        "/api/v2/gameyfin/install/status" => {
+            let raw_id = ctx
+                .query_first("gameyfin_id")
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            if raw_id.is_empty() {
+                return Some(api_error_response(
+                    &ApiError::bad_request("gameyfin_id is required."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            let gid = match validate_gameyfin_id(&raw_id) {
+                Ok(g) => g,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let job = GAMEYFIN_INSTALLS
+                .lock()
+                .get(&format!("gameyfin:{gid}"))
+                .cloned()
+                .unwrap_or_else(|| json!({"state": "idle"}));
+            Some(json_response(StatusCode::OK, &job, ctx.instance))
+        }
+        "/api/v2/gameyfin/providers" => {
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let settings = state
+                .get("settings")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            match catalog_gameyfin(&settings) {
+                Ok((_, providers)) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({"providers": providers}),
+                    ctx.instance,
+                )),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
         }
         _ => None,
     }
@@ -1193,6 +1256,285 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 &json!({"app_id": app_id, "action": action}),
                 ctx.instance,
             ))
+        }
+        "/api/v2/gameyfin/test" => {
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let mut settings = state
+                .get("settings")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            for (k, v) in payload {
+                if k == "gameyfin_password" && v.as_str().is_none_or(|s| s.trim().is_empty()) {
+                    continue;
+                }
+                settings.insert(k.clone(), v.clone());
+            }
+            match test_gameyfin_connection(&settings) {
+                Ok(res) => Some(json_response(StatusCode::OK, &res, ctx.instance)),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/gameyfin/install" => {
+            let raw_id = {
+                let a = str_field(payload, "gameyfin_id").trim();
+                if !a.is_empty() {
+                    a.to_owned()
+                } else {
+                    match payload.get("id") {
+                        Some(Value::String(s)) => s.trim().to_owned(),
+                        Some(Value::Number(n)) => n.to_string(),
+                        _ => String::new(),
+                    }
+                }
+            };
+            if raw_id.is_empty() {
+                return Some(api_error_response(
+                    &ApiError::bad_request("gameyfin_id is required."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            let gid = match validate_gameyfin_id(&raw_id) {
+                Ok(g) => g,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let library_id = payload.get("library_id").cloned();
+            let job_key = format!("gameyfin:{gid}");
+            {
+                let mut map = GAMEYFIN_INSTALLS.lock();
+                if map
+                    .get(&job_key)
+                    .and_then(|j| j.get("state"))
+                    .and_then(Value::as_str)
+                    == Some("installing")
+                {
+                    return Some(json_response(
+                        StatusCode::OK,
+                        &json!({"state": "installing", "gameyfin_id": gid}),
+                        ctx.instance,
+                    ));
+                }
+                map.insert(
+                    job_key.clone(),
+                    json!({"state": "installing", "gameyfin_id": gid}),
+                );
+            }
+            let app = Arc::clone(&ctx.app);
+            let gid_c = gid.clone();
+            let jkey_c = job_key.clone();
+            let job = match ctx.app.jobs.submit(
+                &job_key,
+                true,
+                Some("gameyfin_install"),
+                None,
+                move |_jctx| {
+                    let settings = app
+                        .load_state()
+                        .ok()
+                        .and_then(|s| s.get("settings").and_then(Value::as_object).cloned())
+                        .unwrap_or_default();
+                    let res = match install_gameyfin_game(&settings, &gid_c) {
+                        Ok(installed) => {
+                            let inst_c = installed.clone();
+                            let gid_m = gid_c.clone();
+                            let lib_m = library_id.clone();
+                            let _ = app.transact_state(move |st| {
+                                if let Some(games) =
+                                    st.get_mut("games").and_then(Value::as_array_mut)
+                                {
+                                    let mut found_idx = games.iter().position(|g| {
+                                        g.get("gameyfin_id").and_then(Value::as_str)
+                                            == Some(gid_m.as_str())
+                                    });
+                                    if found_idx.is_none()
+                                        && let Some(ref lid) = lib_m
+                                    {
+                                        if let Some(n) = lid.as_u64().map(|u| u as usize)
+                                            && n < games.len()
+                                        {
+                                            found_idx = Some(n);
+                                        } else if let Some(s) = lid.as_str() {
+                                            found_idx = games.iter().position(|g| {
+                                                g.get("game_id").and_then(Value::as_str) == Some(s)
+                                            });
+                                        }
+                                    }
+                                    if let Some(idx) = found_idx
+                                        && let Some(target) = games[idx].as_object_mut()
+                                    {
+                                        for (k, v) in inst_c {
+                                            target.insert(k, v);
+                                        }
+                                    } else {
+                                        games.push(Value::Object(inst_c));
+                                    }
+                                }
+                                Ok(())
+                            });
+                            json!({"state": "done", "gameyfin_id": gid_c, "game": Value::Object(installed)})
+                        }
+                        Err(err) => {
+                            json!({"state": "error", "gameyfin_id": gid_c, "error": err})
+                        }
+                    };
+                    GAMEYFIN_INSTALLS.lock().insert(jkey_c.clone(), res.clone());
+                    Ok(res)
+                },
+            ) {
+                Ok(j) => j,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::job_state_conflict(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            Some(json_response(
+                StatusCode::ACCEPTED,
+                &json!({"state": "installing", "gameyfin_id": gid, "job_id": job["job_id"]}),
+                ctx.instance,
+            ))
+        }
+        "/api/v2/gameyfin/uninstall" => {
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let Some((_, original)) = game_from_payload(&state, payload) else {
+                return Some(api_error_response(
+                    &ApiError::game_not_found("Game not found."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            let mut target = original.as_object().cloned().unwrap_or_default();
+            if target
+                .get("gameyfin_id")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                return Some(api_error_response(
+                    &ApiError::bad_request("This game is not a Gameyfin entry."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            }
+            let settings = state
+                .get("settings")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let conf = gameyfin_settings(&settings);
+            let install_root = default_install_root(&conf);
+            let result = match uninstall_gameyfin_game(&mut target, &install_root) {
+                Ok(r) => r,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::bad_request(e),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let gid = target
+                .get("game_id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_owned();
+            let target_c = target.clone();
+            if let Err(e) = ctx.app.transact_state(move |st| {
+                let mut lookup = Map::new();
+                lookup.insert("game_id".into(), Value::String(gid));
+                if let Ok(idx) = find_game_index_in_state(st, &lookup)
+                    && let Some(g) = st
+                        .get_mut("games")
+                        .and_then(Value::as_array_mut)
+                        .and_then(|a| a.get_mut(idx))
+                        .and_then(Value::as_object_mut)
+                {
+                    for (k, v) in target_c {
+                        g.insert(k, v);
+                    }
+                }
+                Ok(())
+            }) {
+                return Some(state_error_response(&e, ctx.request_id, ctx.instance));
+            }
+            Some(json_response(StatusCode::OK, &result, ctx.instance))
+        }
+        "/api/v2/highscores/export" => {
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let Some((_, game)) = game_from_payload(&state, payload) else {
+                return Some(api_error_response(
+                    &ApiError::game_not_found("Game not found."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            let name = game
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("game")
+                .to_lowercase();
+            let slug = HS_SLUG_RE.replace_all(&name, "-");
+            let slug = slug.trim_matches('-');
+            let folder_name = if slug.is_empty() { "game" } else { slug };
+            let export_dir = ctx.app.data_dir.join("highscores").join(folder_name);
+            match export_highscores(&game, &export_dir, None) {
+                Ok(res) => Some(json_response(StatusCode::OK, &res, ctx.instance)),
+                Err(e) => Some(api_error_response(
+                    &ApiError::bad_request(e),
+                    ctx.request_id,
+                    ctx.instance,
+                )),
+            }
+        }
+        "/api/v2/highscores/import" => {
+            let import_dir = str_field(payload, "path").trim();
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => return Some(state_error_response(&e, ctx.request_id, ctx.instance)),
+            };
+            let Some((_, game)) = game_from_payload(&state, payload) else {
+                return Some(api_error_response(
+                    &ApiError::game_not_found("Game not found."),
+                    ctx.request_id,
+                    ctx.instance,
+                ));
+            };
+            match import_highscores(&game, Path::new(import_dir), None) {
+                Ok(restored) => Some(json_response(
+                    StatusCode::OK,
+                    &json!({"restored": restored}),
+                    ctx.instance,
+                )),
+                Err(e) => {
+                    let err = if e.contains("No high score files") {
+                        ApiError::not_found(e)
+                    } else {
+                        ApiError::bad_request(e)
+                    };
+                    Some(api_error_response(&err, ctx.request_id, ctx.instance))
+                }
+            }
         }
         _ => None,
     }

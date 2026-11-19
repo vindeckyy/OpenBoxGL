@@ -41,27 +41,223 @@ pub fn is_gamescope_available() -> bool {
     IS_LINUX && which("gamescope").is_some()
 }
 
-pub fn builtin_presets() -> Vec<Value> {
-    vec![
-        json!({"id": "720p_60", "label": "720p @ 60 Hz", "args": ["-W", "1280", "-H", "720", "-r", "60", "-f"]}),
-        json!({"id": "1080p_60", "label": "1080p @ 60 Hz", "args": ["-W", "1920", "-H", "1080", "-r", "60", "-f"]}),
-        json!({"id": "1440p_60", "label": "1440p @ 60 Hz", "args": ["-W", "2560", "-H", "1440", "-r", "60", "-f"]}),
-        json!({"id": "4k_60", "label": "4K @ 60 Hz", "args": ["-W", "3840", "-H", "2160", "-r", "60", "-f"]}),
-        json!({"id": "steamdeck", "label": "Steam Deck (800p)", "args": ["-W", "1280", "-H", "800", "-r", "60", "-f"]}),
-        json!({"id": "crt_4_3", "label": "CRT 4:3 (1080p integer)", "args": ["-w", "640", "-h", "480", "-W", "1920", "-H", "1080", "-S", "integer", "-f"]}),
-    ]
-}
+pub const GAMESCOPE_PRESETS: &[(&str, &str, &[&str])] = &[
+    (
+        "deck",
+        "Steam Deck",
+        &[
+            "-W",
+            "1280",
+            "-H",
+            "800",
+            "-w",
+            "1280",
+            "-h",
+            "800",
+            "-F",
+            "fsr",
+            "--fsr-sharpness",
+            "2",
+        ],
+    ),
+    (
+        "deck_hd",
+        "Steam Deck (HD)",
+        &[
+            "-W",
+            "1280",
+            "-H",
+            "800",
+            "-w",
+            "1920",
+            "-h",
+            "1080",
+            "-F",
+            "fsr",
+            "--fsr-sharpness",
+            "2",
+        ],
+    ),
+    (
+        "1080p",
+        "1080p Full HD",
+        &[
+            "-W",
+            "1920",
+            "-H",
+            "1080",
+            "-w",
+            "1920",
+            "-h",
+            "1080",
+            "-F",
+            "fsr",
+            "--fsr-sharpness",
+            "2",
+        ],
+    ),
+    (
+        "1440p",
+        "1440p QHD",
+        &[
+            "-W",
+            "2560",
+            "-H",
+            "1440",
+            "-w",
+            "2560",
+            "-h",
+            "1440",
+            "-F",
+            "fsr",
+            "--fsr-sharpness",
+            "2",
+        ],
+    ),
+    (
+        "4k",
+        "4K UHD",
+        &[
+            "-W",
+            "3840",
+            "-H",
+            "2160",
+            "-w",
+            "3840",
+            "-h",
+            "2160",
+            "-F",
+            "fsr",
+            "--fsr-sharpness",
+            "2",
+        ],
+    ),
+    ("integer", "Integer Scale", &["-F", "integer"]),
+    ("stretch", "Stretch to Fit", &["-F", "stretch"]),
+    ("borderless", "Borderless Window", &["-b"]),
+];
 
-pub fn list_gamescope_presets(custom: Option<&Value>) -> Vec<Value> {
-    let mut presets = builtin_presets();
-    if let Some(arr) = custom.and_then(Value::as_array) {
-        for item in arr {
-            if item.is_object() {
-                presets.push(item.clone());
+fn custom_preset_args(preset: &Value) -> Vec<String> {
+    let mut args = Vec::new();
+    let int_field = |k: &str| -> i64 {
+        match preset.get(k) {
+            Some(Value::Number(n)) => n.as_i64().unwrap_or(0),
+            Some(Value::String(s)) => s.trim().parse().unwrap_or(0),
+            _ => 0,
+        }
+    };
+    let width = int_field("width");
+    let height = int_field("height");
+    if width > 0 && height > 0 {
+        args.push("-W".into());
+        args.push(width.to_string());
+        args.push("-H".into());
+        args.push(height.to_string());
+        let iw = int_field("inner_width");
+        let ih = int_field("inner_height");
+        if iw > 0 && ih > 0 {
+            args.push("-w".into());
+            args.push(iw.to_string());
+            args.push("-h".into());
+            args.push(ih.to_string());
+        }
+    }
+    let refresh = int_field("refresh");
+    if refresh > 0 {
+        args.push("-r".into());
+        args.push(refresh.to_string());
+    }
+    if preset
+        .get("integer")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        args.push("-F".into());
+        args.push("integer".into());
+    } else if preset
+        .get("stretch")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        args.push("-F".into());
+        args.push("stretch".into());
+    } else if preset.get("fsr").and_then(Value::as_bool).unwrap_or(false) {
+        args.push("-F".into());
+        args.push("fsr".into());
+        let sharp = int_field("fsr_sharpness");
+        let sharp = if sharp == 0 && preset.get("fsr_sharpness").is_none() {
+            2
+        } else {
+            sharp.clamp(0, 5)
+        };
+        args.push("--fsr-sharpness".into());
+        args.push(sharp.to_string());
+    }
+    if preset
+        .get("borderless")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        args.push("-b".into());
+    }
+    if let Some(extra) = preset.get("extra_args").and_then(Value::as_array) {
+        for a in extra {
+            let s = a.as_str().unwrap_or("").trim();
+            if !s.is_empty() && s != "--" {
+                args.push(s.to_owned());
             }
         }
     }
-    presets
+    args
+}
+
+pub fn get_gamescope_preset(name: &str, custom: Option<&Value>) -> Option<Value> {
+    let key = name.trim().to_lowercase();
+    if key.is_empty() {
+        return None;
+    }
+    if let Some(arr) = custom.and_then(Value::as_array) {
+        for preset in arr {
+            if let Some(pname) = preset.get("name").and_then(Value::as_str)
+                && pname.trim().to_lowercase() == key
+            {
+                let label = pname.trim();
+                return Some(json!({
+                    "label": if label.is_empty() { key.as_str() } else { label },
+                    "args": custom_preset_args(preset),
+                    "custom": true,
+                }));
+            }
+        }
+    }
+    for (id, label, args) in GAMESCOPE_PRESETS {
+        if *id == key {
+            return Some(json!({
+                "label": label,
+                "args": args,
+                "custom": false,
+            }));
+        }
+    }
+    None
+}
+
+pub fn list_gamescope_presets(custom: Option<&Value>) -> Vec<Value> {
+    let mut items: Vec<Value> = GAMESCOPE_PRESETS
+        .iter()
+        .map(|(name, label, _)| json!([name, label]))
+        .collect();
+    if let Some(arr) = custom.and_then(Value::as_array) {
+        for item in arr {
+            if let Some(name) = item.get("name").and_then(Value::as_str) {
+                let trimmed = name.trim();
+                if !trimmed.is_empty() {
+                    items.push(json!([trimmed, format!("{trimmed} (custom)")]));
+                }
+            }
+        }
+    }
+    items
 }
 
 pub fn steam_game_id_for(game: &Value) -> u64 {
@@ -108,24 +304,20 @@ pub fn wrap_launch_command(args: &[String], game: &Value, settings: &Value) -> V
     if !preset_id.is_empty()
         && should_nest_gamescope(false)
         && let Some(gs_bin) = which("gamescope")
+        && let Some(preset) =
+            get_gamescope_preset(preset_id, settings.get("gamescope_custom_presets"))
     {
-        let presets = list_gamescope_presets(settings.get("gamescope_custom_presets"));
-        if let Some(preset) = presets
-            .iter()
-            .find(|p| p.get("id").and_then(Value::as_str) == Some(preset_id))
-        {
-            let mut prefix = vec![gs_bin.to_string_lossy().into_owned()];
-            if let Some(gs_args) = preset.get("args").and_then(Value::as_array) {
-                for a in gs_args {
-                    if let Some(s) = a.as_str() {
-                        prefix.push(s.to_owned());
-                    }
+        let mut prefix = vec![gs_bin.to_string_lossy().into_owned()];
+        if let Some(gs_args) = preset.get("args").and_then(Value::as_array) {
+            for a in gs_args {
+                if let Some(s) = a.as_str() {
+                    prefix.push(s.to_owned());
                 }
             }
-            prefix.push("--".to_owned());
-            prefix.extend(wrapped);
-            wrapped = prefix;
         }
+        prefix.push("--".to_owned());
+        prefix.extend(wrapped);
+        wrapped = prefix;
     }
     wrapped
 }
