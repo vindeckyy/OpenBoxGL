@@ -14,6 +14,7 @@ jiff.workspace = true
 csv.workspace = true
 hex.workspace = true
 openbox-core.workspace = true
+openbox-imports.workspace = true
 openbox-io.workspace = true
 openbox-platform.workspace = true
 openbox-runtime.workspace = true

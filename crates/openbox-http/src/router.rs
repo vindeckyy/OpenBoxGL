@@ -16,9 +16,9 @@ use serde_json::json;
 
 use crate::contracts::is_registered_api_route;
 use crate::handlers::{
-    arcade, deals, defs, emulators, faugus, health, imports, jobs, launch, library,
-    library_storage, media, metadata, native, screenscraper, sessions, settings, setup, shared,
-    steamgrid, trail, wine,
+    arcade, data, deals, defs, emulators, export, faugus, health, household, imports, jobs, launch,
+    library, library_health, library_storage, media, metadata, native, savevault, screenscraper,
+    sessions, settings, setup, shared, steamgrid, timemachine, trail, wine,
 };
 use crate::middleware::{
     AuthRateLimiter, MAX_BODY, api_error_response, check_host_api_version, check_retired_route,
@@ -209,6 +209,24 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         if let Some(resp) = deals::handle_get(&ctx) {
             return resp;
         }
+        if let Some(resp) = data::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = savevault::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = timemachine::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = library_health::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = household::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = export::handle_get(&ctx) {
+            return resp;
+        }
         // Optional Strangler Proxy for unmigrated registered routes during Phases 3–9
         if is_registered_api_route("GET", &path)
             && let Some(proxy) = &state.strangler
@@ -295,6 +313,24 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         return resp;
     }
     if let Some(resp) = deals::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = data::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = savevault::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = timemachine::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = library_health::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = household::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = export::handle_post(&ctx, &payload) {
         return resp;
     }
 

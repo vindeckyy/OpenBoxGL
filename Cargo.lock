@@ -1464,6 +1464,7 @@ dependencies = [
  "hex",
  "jiff",
  "openbox-core",
+ "openbox-imports",
  "openbox-io",
  "openbox-platform",
  "openbox-runtime",

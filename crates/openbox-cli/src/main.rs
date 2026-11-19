@@ -96,6 +96,9 @@ fn main() {
 
     rt.block_on(async move {
         let app = AppState::new(Some(data_dir.clone()), root_dir, None);
+        app.set_sync_hook(Arc::new(
+            openbox_sync::time_machine::record_transaction_hook,
+        ));
 
         // Ensure valid state or capture startup errors (matching web_app.py)
         if let Err(err) = app.store.load() {

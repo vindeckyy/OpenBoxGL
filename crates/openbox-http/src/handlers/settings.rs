@@ -1672,6 +1672,9 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                         }
                     }
                 }
+                if openbox_sync::library_sync::sync_enabled(state) {
+                    let _ = openbox_sync::library_sync::bootstrap_local_catalog(state, None, None);
+                }
                 Ok(())
             }) {
                 Ok((committed, _)) => {

@@ -39,7 +39,13 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
             Some(json_response(StatusCode::OK, &status, ctx.instance))
         }
         "/api/v2/compat/report" => {
-            let report = compat_build_report(&ctx.app.data_dir, &ctx.app.root_dir);
+            let mut report = compat_build_report(&ctx.app.data_dir, &ctx.app.root_dir);
+            if let Some(m) = report.as_object_mut() {
+                m.insert(
+                    "save_vault".into(),
+                    openbox_sync::save_vault::vault_summary_readonly(&ctx.app.data_dir),
+                );
+            }
             Some(json_response(StatusCode::OK, &report, ctx.instance))
         }
         "/api/v2/setup/summary" => match ctx.app.load_state_view() {
@@ -105,6 +111,41 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
 
 pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option<Response> {
     match ctx.path {
+        "/api/v2/setup/migration/backup" => {
+            let state = match ctx.app.load_state() {
+                Ok(s) => s,
+                Err(e) => {
+                    return Some(api_error_response(
+                        &ApiError::state_unavailable(e.to_string()),
+                        ctx.request_id,
+                        ctx.instance,
+                    ));
+                }
+            };
+            let items = vec!["library".to_owned(), "settings".to_owned()];
+            match openbox_sync::backup::create_backup(
+                &ctx.app.data_dir,
+                &state,
+                Some(&items),
+                0,
+                false,
+                2,
+            ) {
+                Ok(archive) => {
+                    let name = archive
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_owned();
+                    Some(json_response(
+                        StatusCode::OK,
+                        &json!({"archive": archive.to_string_lossy(), "name": name}),
+                        ctx.instance,
+                    ))
+                }
+                Err(err) => Some(api_error_response(&err, ctx.request_id, ctx.instance)),
+            }
+        }
         "/api/v2/setup/migration/acknowledge" => {
             let res = acknowledge_migration(&ctx.app.data_dir);
             Some(json_response(StatusCode::OK, &res, ctx.instance))
