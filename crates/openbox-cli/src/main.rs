@@ -117,6 +117,25 @@ fn main() {
             }
         }
 
+        // Reconcile persisted active_sessions from previous run
+        if let Ok(state) = app.load_state() {
+            let (reattached, abandoned) = openbox_emulators::reconcile_sessions_on_startup(&state);
+            if !reattached.is_empty() || !abandoned.is_empty() {
+                let mut combined = reattached.clone();
+                combined.extend(abandoned);
+                let _ = app.transact_state(move |st| {
+                    st["active_sessions"] = serde_json::Value::Array(combined);
+                    Ok(())
+                });
+                let mut reg = app.registry.lock();
+                for sess in reattached {
+                    if let Some(lid) = sess.get("launch_id").and_then(serde_json::Value::as_str) {
+                        reg.running.insert(lid.to_owned(), sess);
+                    }
+                }
+            }
+        }
+
         let running = match bind_loopback(Arc::clone(&app), requested_port, strangler).await {
             Ok(srv) => srv,
             Err(err) => {
@@ -135,11 +154,13 @@ fn main() {
         // Install SIGINT / SIGTERM graceful shutdown listener
         let shutdown_app = Arc::clone(&app);
         tokio::spawn(async move {
-            let _ = wait_for_signal().await;
+            wait_for_signal().await;
             shutdown_app.request_shutdown();
         });
 
-        if let Err(err) = serve(running).await {
+        let serve_res = serve(running).await;
+        openbox_emulators::reap_sessions_for_shutdown(&app);
+        if let Err(err) = serve_res {
             tracing::error!("{err}");
             std::process::exit(1);
         }

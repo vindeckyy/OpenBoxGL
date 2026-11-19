@@ -10,22 +10,31 @@ publish = false
 workspace = true
 
 [dependencies]
+base64.workspace = true
 jiff.workspace = true
 ed25519-dalek.workspace = true
 flate2.workspace = true
 hex.workspace = true
+hmac.workspace = true
 openbox-core.workspace = true
 openbox-io.workspace = true
 openbox-platform.workspace = true
 openbox-runtime.workspace = true
 openbox-store.workspace = true
 parking_lot.workspace = true
+rand.workspace = true
 regex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+subtle.workspace = true
 tar.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+uuid.workspace = true
 zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

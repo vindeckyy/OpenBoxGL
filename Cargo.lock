@@ -1143,9 +1143,11 @@ dependencies = [
 name = "openbox-emulators"
 version = "3.0.0"
 dependencies = [
+ "base64 0.23.1",
  "ed25519-dalek",
  "flate2",
  "hex",
+ "hmac",
  "jiff",
  "openbox-core",
  "openbox-io",
@@ -1153,14 +1155,19 @@ dependencies = [
  "openbox-runtime",
  "openbox-store",
  "parking_lot",
+ "rand 0.8.8",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
+ "subtle",
  "tar",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
+ "uuid",
  "zip",
 ]
 
@@ -1197,12 +1204,14 @@ dependencies = [
  "serde",
  "serde_json",
  "subtle",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tower",
  "tower-http",
  "tracing",
  "url",
+ "zip",
 ]
 
 [[package]]
@@ -1407,6 +1416,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",

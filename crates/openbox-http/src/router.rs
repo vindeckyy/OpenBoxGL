@@ -15,7 +15,9 @@ use openbox_runtime::AppState;
 use serde_json::json;
 
 use crate::contracts::is_registered_api_route;
-use crate::handlers::{health, jobs, native, shared};
+use crate::handlers::{
+    arcade, defs, emulators, faugus, health, jobs, launch, native, sessions, shared, wine,
+};
 use crate::middleware::{
     AuthRateLimiter, MAX_BODY, api_error_response, check_host_api_version, check_retired_route,
     extract_token, is_loopback_host, is_public_get_path, is_static_asset_path, json_response,
@@ -151,6 +153,27 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         if let Some(resp) = health::handle_get(&ctx) {
             return resp;
         }
+        if let Some(resp) = launch::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = sessions::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = emulators::handle_get(&ctx).await {
+            return resp;
+        }
+        if let Some(resp) = defs::handle_get(&ctx).await {
+            return resp;
+        }
+        if let Some(resp) = wine::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = faugus::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = arcade::handle_get(&ctx) {
+            return resp;
+        }
         // Optional Strangler Proxy for unmigrated registered routes during Phases 3–9
         if is_registered_api_route("GET", &path)
             && let Some(proxy) = &state.strangler
@@ -186,6 +209,24 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         return resp;
     }
     if let Some(resp) = health::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = launch::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = sessions::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = emulators::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = defs::handle_post(&ctx, &payload).await {
+        return resp;
+    }
+    if let Some(resp) = faugus::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = arcade::handle_post(&ctx, &payload) {
         return resp;
     }
 
