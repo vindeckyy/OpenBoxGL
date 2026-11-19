@@ -1105,7 +1105,53 @@ pub fn maybe_compact_journal(state: &mut Value) -> Option<Value> {
     }
 }
 
-/// Post-commit hook wired into `AppState::set_sync_hook` so every local state mutation
+fn project_sync_game(game: &Value) -> Value {
+    let Some(obj) = game.as_object() else {
+        return Value::Object(Map::new());
+    };
+    let mut slim = Map::new();
+    for &k in crate::library_sync::CATALOG_FIELDS
+        .iter()
+        .chain(crate::library_sync::EXPLICIT_IDENTITY_FIELDS.iter())
+    {
+        if let Some(v) = obj.get(k) {
+            slim.insert(k.to_owned(), v.clone());
+        }
+    }
+    Value::Object(slim)
+}
+
+fn sync_game_matches(before_slim: &Value, after_full: &Value) -> bool {
+    let (Some(b), Some(a)) = (before_slim.as_object(), after_full.as_object()) else {
+        return before_slim == after_full;
+    };
+    for &k in crate::library_sync::CATALOG_FIELDS
+        .iter()
+        .chain(crate::library_sync::EXPLICIT_IDENTITY_FIELDS.iter())
+    {
+        if b.get(k) != a.get(k) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Lightweight pre-commit snapshot capturing only shared catalog & identity fields of `games`.
+/// Mirrors `openbox.py` + `parity_library_sync.py::capture_sync_snapshot`.
+pub fn capture_transaction_snapshot(state: &Value) -> Option<Value> {
+    if !sync_enabled(state) && !journal_enabled(state) {
+        return None;
+    }
+    let games = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let projected: Vec<Value> = games.iter().map(project_sync_game).collect();
+    Some(Value::Array(projected))
+}
+
+/// Post-commit hook wired into `AppState::set_sync_hooks` so every local state mutation
 /// automatically records causal catalog events when sync or journal is enabled.
 pub fn record_transaction_hook(before: &Value, after: &mut Value) {
     if let Some(m) = after
@@ -1118,21 +1164,64 @@ pub fn record_transaction_hook(before: &Value, after: &mut Value) {
     if !sync_enabled(after) && !journal_enabled(after) {
         return;
     }
-    let before_games = before
-        .get("games")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[]);
-    let after_games = after
-        .get("games")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    if before_games == after_games.as_slice() {
-        return;
-    }
+    let before_games: &[Value] = if let Some(arr) = before.as_array() {
+        arr.as_slice()
+    } else {
+        before
+            .get("games")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    };
+
+    // Fast path: check in place without cloning `after["games"]` when lengths match.
+    let (diff_before, diff_after): (Vec<Value>, Vec<Value>) = {
+        let after_slice = after
+            .get("games")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        if before_games.len() == after_slice.len() {
+            let mut changed_indices = Vec::new();
+            let mut same_order_ids = true;
+            for (idx, (b, a)) in before_games.iter().zip(after_slice.iter()).enumerate() {
+                if b.get("game_id") != a.get("game_id") {
+                    same_order_ids = false;
+                    break;
+                }
+                if !sync_game_matches(b, a) {
+                    changed_indices.push(idx);
+                }
+            }
+            if same_order_ids {
+                if changed_indices.is_empty() {
+                    return;
+                }
+                let db: Vec<Value> = changed_indices
+                    .iter()
+                    .map(|&i| before_games[i].clone())
+                    .collect();
+                let da: Vec<Value> = changed_indices
+                    .iter()
+                    .map(|&i| project_sync_game(&after_slice[i]))
+                    .collect();
+                (db, da)
+            } else {
+                (
+                    before_games.to_vec(),
+                    after_slice.iter().map(project_sync_game).collect(),
+                )
+            }
+        } else {
+            (
+                before_games.to_vec(),
+                after_slice.iter().map(project_sync_game).collect(),
+            )
+        }
+    };
+
     if let Err(err) =
-        crate::library_sync::record_local_changes(after, before_games, &after_games, None, None)
+        crate::library_sync::record_local_changes(after, &diff_before, &diff_after, None, None)
     {
         crate::library_sync::set_sync_error(after, &err.to_string(), "SYNC_IDENTITY_AMBIGUOUS");
     } else {

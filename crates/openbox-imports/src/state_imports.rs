@@ -385,6 +385,12 @@ pub fn import_folder_path(
         (cands, recs)
     };
     let found = candidates.len();
+    if candidates.is_empty() {
+        if !recommend {
+            recommendations.clear();
+        }
+        return Ok((0, 0, recommendations));
+    }
     let mut added_count = 0usize;
     let _ = app
         .transact_state(|state| {

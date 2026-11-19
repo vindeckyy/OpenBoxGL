@@ -71,6 +71,7 @@ static char *token = NULL;
 static char *origin = NULL;
 static guint16 server_port = 0;
 static const char *data_dir = NULL;
+static const char *server_bin_path = NULL;
 static const char *web_app_path = NULL;
 static const char *python_path = "python3";
 static int server_sock_fd = -1;
@@ -848,9 +849,33 @@ boot_server(void)
     if (server_pid == 0) {
         /* Child: run the web server without a browser. */
         setpgid(0, 0);
+        const char *backend = g_getenv("OPENBOX_BACKEND");
+        gboolean force_python = backend && g_strcmp0(backend, "python") == 0;
+        if (!force_python) {
+            if (server_bin_path && access(server_bin_path, X_OK) == 0) {
+                execl(server_bin_path, server_bin_path, "--no-browser", (char *)NULL);
+                g_printerr("native_host: failed to exec %s: %s\n", server_bin_path, strerror(errno));
+                _exit(127);
+            }
+            char self_exe[PATH_MAX];
+            ssize_t n = readlink("/proc/self/exe", self_exe, sizeof(self_exe) - 1);
+            if (n > 0) {
+                self_exe[n] = '\0';
+                char *dir = g_path_get_dirname(self_exe);
+                char *sibling = g_build_filename(dir, "openbox-server", NULL);
+                g_free(dir);
+                if (access(sibling, X_OK) == 0) {
+                    execl(sibling, sibling, "--no-browser", (char *)NULL);
+                    g_printerr("native_host: failed to exec %s: %s\n", sibling, strerror(errno));
+                    g_free(sibling);
+                    _exit(127);
+                }
+                g_free(sibling);
+            }
+        }
         const char *web_app = web_app_path;
         if (!web_app || !path_exists(web_app)) {
-            g_printerr("native_host: OPENBOX_WEB_APP must point at web_app.py\n");
+            g_printerr("native_host: OPENBOX_SERVER_BIN or OPENBOX_WEB_APP must be set\n");
             _exit(127);
         }
         execlp(python_path, python_path, "-B", web_app, "--no-browser", (char *)NULL);
@@ -1766,8 +1791,9 @@ resolve_application_icon_path(void)
      * layout, so its directory is the most reliable source-run/install path.
      * Keeping the lookup relative to the application files also avoids a
      * dependency on the desktop environment's icon theme cache. */
-    if (web_app_path) {
-        char *share_dir = g_path_get_dirname(web_app_path);
+    const char *base_path = web_app_path ? web_app_path : server_bin_path;
+    if (base_path) {
+        char *share_dir = g_path_get_dirname(base_path);
         char *candidate = icon_path_in_directory(share_dir, "openbox.svg");
         g_free(share_dir);
         if (candidate) {
@@ -1932,6 +1958,7 @@ main(int argc, char **argv)
     }
 
     /* Resolve configurable paths from argv or environment. */
+    server_bin_path = g_getenv("OPENBOX_SERVER_BIN");
     web_app_path = g_getenv("OPENBOX_WEB_APP");
     python_path = g_getenv("OPENBOX_PYTHON") ?: "python3";
     const char *home = g_get_home_dir();

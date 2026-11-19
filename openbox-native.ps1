@@ -22,11 +22,28 @@ function Resolve-ShareDirectory {
     $candidates += (Join-Path $PSScriptRoot '..\share\openbox')
     if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'OpenBox\share\openbox') }
     foreach ($candidate in $candidates) {
-        if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'web_app.py'))) {
+        if ($candidate -and ((Test-Path -LiteralPath (Join-Path $candidate 'index.html')) -or (Test-Path -LiteralPath (Join-Path $candidate 'web_app.py')))) {
             return (Resolve-Path -LiteralPath $candidate).Path
         }
     }
-    throw 'Could not locate web_app.py. Set OPENBOX_SHARE to the OpenBox install folder.'
+    throw 'Could not locate OpenBox share files. Set OPENBOX_SHARE to the OpenBox install folder.'
+}
+
+function Resolve-ServerBin {
+    if ($env:OPENBOX_BACKEND -eq 'python') { return $null }
+    $candidates = @()
+    if ($env:OPENBOX_SERVER_BIN) { $candidates += $env:OPENBOX_SERVER_BIN }
+    $candidates += (Join-Path $script:ShareDir 'openbox-server.exe')
+    $candidates += (Join-Path $PSScriptRoot 'openbox-server.exe')
+    $candidates += (Join-Path $PSScriptRoot 'target\release\openbox-server.exe')
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    $onPath = Get-Command 'openbox-server.exe' -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    return $null
 }
 
 function Resolve-Python {
@@ -35,11 +52,17 @@ function Resolve-Python {
         $found = Get-Command $name -ErrorAction SilentlyContinue
         if ($found) { return $found.Source }
     }
-    throw 'No Python 3 interpreter found. Install Python 3.11+ or set OPENBOX_PYTHON.'
+    throw 'Neither openbox-server.exe nor Python 3 was found. Install Python 3.11+ or set OPENBOX_SERVER_BIN.'
 }
 
 function Invoke-WebApp {
-    & $script:Python -B (Join-Path $script:ShareDir 'web_app.py') @Arguments
+    $env:OPENBOX_ROOT = $script:ShareDir
+    if ($script:ServerBin) {
+        & $script:ServerBin @Arguments
+        exit $LASTEXITCODE
+    }
+    $python = Resolve-Python
+    & $python -B (Join-Path $script:ShareDir 'web_app.py') @Arguments
     exit $LASTEXITCODE
 }
 
@@ -64,7 +87,7 @@ function ConvertTo-ArgumentList {
 }
 
 $script:ShareDir = Resolve-ShareDirectory
-$script:Python = Resolve-Python
+$script:ServerBin = Resolve-ServerBin
 $script:HostBinary = Join-Path $script:ShareDir 'native_host.exe'
 if ($env:OPENBOX_NATIVE_HOST) { $script:HostBinary = $env:OPENBOX_NATIVE_HOST }
 
@@ -73,8 +96,13 @@ if (-not (Test-Path -LiteralPath $script:HostBinary)) {
     Invoke-WebApp
 }
 
-$env:OPENBOX_WEB_APP = Join-Path $script:ShareDir 'web_app.py'
-$env:OPENBOX_PYTHON = $script:Python
+$env:OPENBOX_ROOT = $script:ShareDir
+if ($script:ServerBin) {
+    $env:OPENBOX_SERVER_BIN = $script:ServerBin
+} else {
+    $env:OPENBOX_WEB_APP = Join-Path $script:ShareDir 'web_app.py'
+    $env:OPENBOX_PYTHON = Resolve-Python
+}
 # The host is a GUI-subsystem binary: ``&`` neither waits for it nor sets
 # $LASTEXITCODE, and the fallback below must not run while a window is up.
 $start = @{ FilePath = $script:HostBinary; Wait = $true; PassThru = $true }

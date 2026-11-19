@@ -31,16 +31,18 @@ def run_pass(script, extra_args, games, settings, extra_env, schema=7):
     data = Path(tempfile.mkdtemp(prefix="obx-ui-smoke-"))
     env = dict(os.environ, OPENBOX_DATA_DIR=str(data), PYTHONPATH=str(ROOT))
     log = open(data / "server.log", "wb")
+    server_bin = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
     if schema == 6:
-        # A v6 library: the server migrates it at startup, which is what the
-        # migration gate is for.
+        # A v6 library: OpenBox 3.0 migrates schema 6 explicitly via --migrate-library
+        # (ADR 0108), then presents the pre-app migration gate on the next boot.
         (data / "library.json").write_text(json.dumps({
             "schema_version": 6, "games": games, "profiles": {}, "history": [],
             "settings": settings, "playlists": [], "queue": [], "notifications": [],
             "ui_state": {}, "active_sessions": [], "trash": [], "party_decks": [],
             "emulator_settings": {}, "achievement_overrides": {},
         }), encoding="utf-8")
-    server_bin = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
+        migrate_cmd = [server_bin, "--migrate-library"] if server_bin else [sys.executable, "-B", "web_app.py", "--migrate-library"]
+        subprocess.run(migrate_cmd, cwd=ROOT, env=env, check=True)
     server_cmd = [server_bin, "--no-browser", *extra_args] if server_bin else [sys.executable, "-B", "web_app.py", "--no-browser", *extra_args]
     server = subprocess.Popen(server_cmd,
                               cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)

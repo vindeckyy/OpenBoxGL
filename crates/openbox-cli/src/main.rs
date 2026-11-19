@@ -109,9 +109,10 @@ fn main() {
 
     rt.block_on(async move {
         let app = AppState::new(Some(data_dir.clone()), root_dir, None);
-        app.set_sync_hook(Arc::new(
-            openbox_sync::time_machine::record_transaction_hook,
-        ));
+        app.set_sync_hooks(
+            Arc::new(openbox_sync::time_machine::capture_transaction_snapshot),
+            Arc::new(openbox_sync::time_machine::record_transaction_hook),
+        );
 
         // Bootstrap canonical state (purge dev fixtures + merge emulator profiles from defs)
         let defs_root = app.root_dir.clone();
@@ -148,7 +149,7 @@ fn main() {
             Ok(())
         };
 
-        if let Err(err) = app.transact_state(bootstrap) {
+        if let Err(err) = app.transact_local_state(bootstrap) {
             match &err {
                 openbox_store::StateError::FutureVersion(_)
                 | openbox_store::StateError::SchemaTooOld(_) => {
@@ -159,7 +160,7 @@ fn main() {
                         .lock()
                         .push(format!("Library data could not be read: {err}"));
                     if app.store.recover().is_ok() {
-                        let _ = app.transact_state(bootstrap);
+                        let _ = app.transact_local_state(bootstrap);
                         app.startup_errors.lock().push(
                             "Library data was restored from the last-known-good backup.".to_owned(),
                         );
@@ -169,7 +170,7 @@ fn main() {
         }
 
         // Reconcile persisted active_sessions from previous run and refresh tray recent + theme bg
-        if let Ok(state) = app.load_state() {
+        let reconciled = if let Ok(state) = app.load_state_view() {
             let theme = state
                 .get("settings")
                 .and_then(|s| s.get("theme"))
@@ -177,20 +178,23 @@ fn main() {
                 .unwrap_or("");
             write_native_background(theme, &app.data_dir, &app.root_dir);
             let _ = write_recent_games(&app.data_dir, &state, RECENT_LIMIT);
-
-            let (reattached, abandoned) = openbox_emulators::reconcile_sessions_on_startup(&state);
-            if !reattached.is_empty() || !abandoned.is_empty() {
-                let mut combined = reattached.clone();
-                combined.extend(abandoned);
-                let _ = app.transact_state(move |st| {
-                    st["active_sessions"] = serde_json::Value::Array(combined);
-                    Ok(())
-                });
-                let mut reg = app.registry.lock();
-                for sess in reattached {
-                    if let Some(lid) = sess.get("launch_id").and_then(serde_json::Value::as_str) {
-                        reg.running.insert(lid.to_owned(), sess);
-                    }
+            Some(openbox_emulators::reconcile_sessions_on_startup(&state))
+        } else {
+            None
+        };
+        if let Some((reattached, abandoned)) = reconciled
+            && (!reattached.is_empty() || !abandoned.is_empty())
+        {
+            let mut combined = reattached.clone();
+            combined.extend(abandoned);
+            let _ = app.transact_local_state(move |st| {
+                st["active_sessions"] = serde_json::Value::Array(combined);
+                Ok(())
+            });
+            let mut reg = app.registry.lock();
+            for sess in reattached {
+                if let Some(lid) = sess.get("launch_id").and_then(serde_json::Value::as_str) {
+                    reg.running.insert(lid.to_owned(), sess);
                 }
             }
         }

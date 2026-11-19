@@ -27,6 +27,7 @@ use crate::registry::ProcessRegistry;
 use crate::sse::SseHub;
 use crate::webhooks::{WebhookDispatcher, build_event};
 
+pub type CaptureBeforeHook = Arc<dyn Fn(&Value) -> Option<Value> + Send + Sync>;
 pub type PostCommitHook = Arc<dyn Fn(&Value, &mut Value) + Send + Sync>;
 
 pub struct AppState {
@@ -45,6 +46,7 @@ pub struct AppState {
     pub startup_errors: Mutex<Vec<String>>,
     pub bound_port: AtomicU16,
     pub shutdown_notify: Arc<Notify>,
+    capture_before_hook: Mutex<Option<CaptureBeforeHook>>,
     sync_hook: Mutex<Option<PostCommitHook>>,
 }
 
@@ -84,12 +86,18 @@ impl AppState {
             startup_errors: Mutex::new(Vec::new()),
             bound_port: AtomicU16::new(0),
             shutdown_notify: Arc::new(Notify::new()),
+            capture_before_hook: Mutex::new(None),
             sync_hook: Mutex::new(None),
         })
     }
 
     pub fn set_sync_hook(&self, hook: PostCommitHook) {
         *self.sync_hook.lock() = Some(hook);
+    }
+
+    pub fn set_sync_hooks(&self, capture_before: CaptureBeforeHook, post_commit: PostCommitHook) {
+        *self.capture_before_hook.lock() = Some(capture_before);
+        *self.sync_hook.lock() = Some(post_commit);
     }
 
     pub fn load_state(&self) -> Result<Value, StateError> {
@@ -114,11 +122,16 @@ impl AppState {
     where
         F: FnOnce(&mut Value) -> Result<T, StateError>,
     {
+        let capture = self.capture_before_hook.lock().clone();
         let hook = self.sync_hook.lock().clone();
         let mut out_slot: Option<T> = None;
         let state = self.store.update(|current| {
             let before = if hook.is_some() {
-                Some(current.clone())
+                if let Some(ref cap) = capture {
+                    cap(current)
+                } else {
+                    Some(current.clone())
+                }
             } else {
                 None
             };
@@ -142,6 +155,26 @@ impl AppState {
             state,
             out_slot.expect("mutator succeeded and populated output"),
         ))
+    }
+
+    /// Transactional mutation for local-only state fields (e.g., favorites, queue, notifications,
+    /// settings, profiles) that cannot alter shared catalog fields. Mirrors Python's
+    /// `openbox.local_only_mutation` so no catalog snapshot is taken before/after the write.
+    pub fn transact_local_state<T, F>(&self, mutator: F) -> Result<(Arc<Value>, T), StateError>
+    where
+        F: FnOnce(&mut Value) -> Result<T, StateError>,
+    {
+        let (state, out) = self.store.update_with_result(mutator)?;
+        self.invalidate_caches();
+        if self.read_model.enabled() {
+            let sig = self.store.signature();
+            let rm = Arc::clone(&self.read_model);
+            let st_bg = Arc::clone(&state);
+            std::thread::spawn(move || {
+                let _ = rm.rebuild(&st_bg, sig);
+            });
+        }
+        Ok((state, out))
     }
 
     pub fn emit_notification(&self, spec: NotificationSpec<'_>) {

@@ -211,7 +211,8 @@ def test_runtime_manifest():
         assert not mod.startswith("build/"), f"manifest should not contain build files: {mod}"
     build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
     flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text(encoding="utf-8")
-    assert "runtime_modules.txt" in build_script
+    assert "openbox-server" in build_script
+    assert "plugin_runner_v2.py" in build_script
     assert "runtime_modules.txt" in flatpak
     print("  Runtime module manifest: ok")
 
@@ -473,37 +474,10 @@ def test_windows_installer_rollback():
 
 def test_build_appimage_validation():
     build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
-    assert "runtime_modules.txt" in build_script
-    assert "missing runtime module" in build_script
+    assert "openbox-server" in build_script
+    assert "missing openbox-server binary" in build_script
     assert "sbom-manifest.json" in build_script
     assert "gen_sbom.py" in build_script
-
-    if os.name == "nt":
-        # The validation loop below is bash; the AppImage build has no Windows
-        # counterpart, so only the script references are checked here.
-        print("  Build AppImage validation: script references ok (bash loop skipped on Windows)")
-        return
-
-    # Test validation failure on missing module in a mock loop
-    test_script = """
-set -e
-source_root="%s"
-while IFS= read -r file; do
-  file="$(echo "$file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-  [ -n "$file" ] || continue
-  [[ "$file" =~ ^# ]] && continue
-  if [ ! -f "$source_root/$file" ]; then
-    echo "missing runtime module: $file" >&2
-    exit 1
-  fi
-done <<'EOF'
-openbox.py
-nonexistent_test_module_xyz.py
-EOF
-""" % ROOT
-    res = subprocess.run(["bash", "-c", test_script], capture_output=True, text=True, check=False)
-    assert res.returncode != 0
-    assert "missing runtime module: nonexistent_test_module_xyz.py" in res.stderr
     print("  Build AppImage validation: ok")
 
 def _ci_job_block(job_name: str) -> str:
@@ -763,9 +737,9 @@ def test_appimage_library_scope():
 
         marker.unlink()
         native.unlink()
-        python = root / "usr" / "bin" / "python3"
-        python.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n", encoding="utf-8")
-        python.chmod(0o755)
+        server_bin = share / "openbox-server"
+        server_bin.write_text("#!/bin/sh\nprintf '%s' \"$LD_LIBRARY_PATH\" > \"$OPENBOX_TEST_ENV\"\n", encoding="utf-8")
+        server_bin.chmod(0o755)
         subprocess.run([str(app_run_path)], env=env, check=True, timeout=10)
         assert marker.read_text(encoding="utf-8") == f"{root / 'usr' / 'lib'}:{root / 'usr' / 'lib64'}"
     print("  AppImage library scope: ok")

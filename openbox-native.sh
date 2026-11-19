@@ -12,8 +12,23 @@ if [ -n "${APPDIR:-}" ]; then
 else
   SHARE="$SCRIPT_DIR"
   for candidate in "$SCRIPT_DIR" "$SCRIPT_DIR/../share/openbox" "/usr/local/share/openbox"; do
-    if [ -f "$candidate/web_app.py" ]; then
+    if [ -f "$candidate/index.html" ] || [ -f "$candidate/web_app.py" ]; then
       SHARE="$candidate"
+      break
+    fi
+  done
+fi
+
+SERVER_BIN=""
+if [ "${OPENBOX_BACKEND:-}" != "python" ]; then
+  for candidate in \
+    "${OPENBOX_SERVER_BIN:-}" \
+    "$SHARE/openbox-server" \
+    "$SCRIPT_DIR/openbox-server" \
+    "$SCRIPT_DIR/target/release/openbox-server" \
+    "$(command -v openbox-server 2>/dev/null || true)"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      SERVER_BIN="$candidate"
       break
     fi
   done
@@ -23,7 +38,10 @@ fi
 for arg in "$@"; do
   case "$arg" in
     --check-library|--repair-library|--migrate-library|--rollback-library)
-      exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@" ;;
+      if [ -n "$SERVER_BIN" ]; then
+        OPENBOX_ROOT="$SHARE" exec "$SERVER_BIN" "$@"
+      fi
+      exec "${OPENBOX_PYTHON:-python3}" -B "$SHARE/web_app.py" "$@" ;;
   esac
 done
 HOST_BIN="${OPENBOX_NATIVE_HOST:-$SHARE/native_host}"
@@ -42,14 +60,21 @@ fi
 
 run_web_app()
 {
+  if [ -n "$SERVER_BIN" ]; then
+    if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
+      exec env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" OPENBOX_ROOT="$SHARE" "$SERVER_BIN" "$@"
+    else
+      OPENBOX_ROOT="$SHARE" exec "$SERVER_BIN" "$@"
+    fi
+  fi
   if ! "${OPENBOX_PYTHON:-python3}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-    echo "OpenBox needs Python 3.11 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+    echo "OpenBox needs either openbox-server or Python 3.11+ (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
     exit 1
   fi
   if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
-    exec env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+    exec env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "${OPENBOX_PYTHON:-python3}" -B "$SHARE/web_app.py" "$@"
   else
-    exec "${OPENBOX_PYTHON:-python3}" "$SHARE/web_app.py" "$@"
+    exec "${OPENBOX_PYTHON:-python3}" -B "$SHARE/web_app.py" "$@"
   fi
 }
 
@@ -58,7 +83,13 @@ if [ ! -x "$HOST_BIN" ]; then
   run_web_app "$@"
 fi
 
-export OPENBOX_WEB_APP="$SHARE/web_app.py"
+export OPENBOX_ROOT="$SHARE"
+if [ -n "$SERVER_BIN" ]; then
+  export OPENBOX_SERVER_BIN="$SERVER_BIN"
+fi
+if [ -f "$SHARE/web_app.py" ]; then
+  export OPENBOX_WEB_APP="$SHARE/web_app.py"
+fi
 export OPENBOX_PYTHON="${OPENBOX_PYTHON:-python3}"
 if [ -n "${OPENBOX_BUNDLED_LIB_PATH:-}" ]; then
   env LD_LIBRARY_PATH="$OPENBOX_BUNDLED_LIB_PATH" "$HOST_BIN" "$@" && exit 0

@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use openbox_core::{APP_VERSION, ApiError};
 use openbox_emulators::{
@@ -15,7 +16,9 @@ use openbox_imports::{
 };
 use openbox_runtime::cache::{CachedPayload, available_locales};
 use openbox_runtime::{AppState, MEDIA_TYPES_ALL};
+use openbox_store::StateError;
 use openbox_sync::save_tools::save_tool_status;
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde_json::{Map, Value, json};
 
 pub const REGION_PRIORITY_DEFAULT: &[&str] = &["North America", "World", "Europe", "Japan", ""];
@@ -901,29 +904,7 @@ fn project_game(
     })
 }
 
-pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
-    let sig = app.store.signature();
-    if let Some(cached) = app.cache.get_cached_state(sig) {
-        return Ok(cached);
-    }
-    let state = app
-        .load_state_view()
-        .map_err(|e| ApiError::state_unavailable(e.to_string()))?;
-    let settings = state.get("settings").cloned().unwrap_or_else(|| json!({}));
-    let plat_cats = platform_categories(&settings);
-    let raw_games = state
-        .get("games")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[]);
-    let overrides = state
-        .get("achievement_overrides")
-        .and_then(Value::as_object);
-    let games: Vec<Value> = raw_games
-        .iter()
-        .enumerate()
-        .map(|(i, g)| project_game(app, g, i, &plat_cats, overrides))
-        .collect();
+fn build_source_labels(raw_games: &[Value]) -> Map<String, Value> {
     let mut source_labels = Map::new();
     source_labels.insert("Local".into(), Value::String("Local".to_owned()));
     for g in raw_games {
@@ -938,6 +919,81 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
             source_labels.insert(src.to_owned(), Value::String(lbl.to_owned()));
         }
     }
+    source_labels
+}
+
+struct StreamingGames<'a> {
+    app: &'a AppState,
+    raw_games: &'a [Value],
+    plat_cats: &'a std::collections::BTreeMap<String, String>,
+    overrides: Option<&'a Map<String, Value>>,
+}
+
+impl Serialize for StreamingGames<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(Some(self.raw_games.len()))?;
+        for (i, g) in self.raw_games.iter().enumerate() {
+            let projected = project_game(self.app, g, i, self.plat_cats, self.overrides);
+            seq.serialize_element(&projected)?;
+        }
+        seq.end()
+    }
+}
+
+struct StreamingPublicState<'a> {
+    games: StreamingGames<'a>,
+    playlists: &'a Value,
+    filter_presets: Vec<Value>,
+    smart_collections: Vec<Value>,
+    ra_configured: bool,
+    ra_hardcore: bool,
+    settings: Value,
+    discovery: Value,
+    media_epoch: u64,
+    startup_errors: Vec<Value>,
+    source_labels: Map<String, Value>,
+}
+
+impl Serialize for StreamingPublicState<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Emit keys in sorted order matching serde_json::Map / json! output.
+        let mut map = serializer.serialize_map(Some(11))?;
+        map.serialize_entry("discovery", &self.discovery)?;
+        map.serialize_entry("filter_presets", &self.filter_presets)?;
+        map.serialize_entry("games", &self.games)?;
+        map.serialize_entry("media_epoch", &self.media_epoch)?;
+        map.serialize_entry("playlists", self.playlists)?;
+        map.serialize_entry("ra_configured", &self.ra_configured)?;
+        map.serialize_entry("ra_hardcore", &self.ra_hardcore)?;
+        map.serialize_entry("settings", &self.settings)?;
+        map.serialize_entry("smart_collections", &self.smart_collections)?;
+        map.serialize_entry("source_labels", &self.source_labels)?;
+        map.serialize_entry("startup_errors", &self.startup_errors)?;
+        map.end()
+    }
+}
+
+/// Stream the full public library JSON directly into a byte buffer (never retaining a
+/// `Vec<Value>` of projected games in RAM) and cache the `Bytes` + gzip representation.
+pub fn public_state_cached(app: &AppState) -> Result<Arc<CachedPayload>, StateError> {
+    let sig = app.store.signature();
+    if let Some(cached) = app.cache.get_cached_state(sig) {
+        return Ok(cached);
+    }
+    let state = app.load_state_view()?;
+    let empty_obj = json!({});
+    let empty_arr = json!([]);
+    let settings = state.get("settings").unwrap_or(&empty_obj);
+    let plat_cats = platform_categories(settings);
+    let raw_games = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let overrides = state
+        .get("achievement_overrides")
+        .and_then(Value::as_object);
+    let source_labels = build_source_labels(raw_games);
     let startup_errors: Vec<Value> = app
         .startup_errors
         .lock()
@@ -963,20 +1019,130 @@ pub fn public_state_cached(app: &AppState) -> Result<CachedPayload, ApiError> {
         None,
         Some(&app.root_dir),
     );
-    let payload = json!({
-        "games": games,
+    let playlists = state.get("playlists").unwrap_or(&empty_arr);
+    let streaming = StreamingPublicState {
+        games: StreamingGames {
+            app,
+            raw_games,
+            plat_cats: &plat_cats,
+            overrides,
+        },
+        playlists,
+        filter_presets: openbox_discovery::filter_presets::list_presets(&state),
+        smart_collections: openbox_discovery::collections::list_collections(&state),
+        ra_configured,
+        ra_hardcore,
+        settings: pub_set,
+        discovery,
+        media_epoch: app.cache.media_epoch(),
+        startup_errors,
+        source_labels,
+    };
+    let mut buf = Vec::with_capacity(raw_games.len().saturating_mul(2048).min(32 * 1024 * 1024));
+    let _ = serde_json::to_writer(&mut buf, &streaming);
+    Ok(app.cache.set_cached_state_bytes(sig, buf))
+}
+
+/// Project only the requested `[offset..offset+limit)` page of games without projecting
+/// the entire library.
+pub fn public_library_page(
+    app: &AppState,
+    offset: usize,
+    limit: usize,
+) -> Result<Value, StateError> {
+    let state = app.load_state_view()?;
+    let empty_obj = json!({});
+    let settings = state.get("settings").unwrap_or(&empty_obj);
+    let plat_cats = platform_categories(settings);
+    let raw_games = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let overrides = state
+        .get("achievement_overrides")
+        .and_then(Value::as_object);
+    let total_count = raw_games.len();
+    let start = offset.min(total_count);
+    let end = start.saturating_add(limit).min(total_count);
+    let page: Vec<Value> = raw_games[start..end]
+        .iter()
+        .enumerate()
+        .map(|(rel, g)| project_game(app, g, start + rel, &plat_cats, overrides))
+        .collect();
+    let source_labels = build_source_labels(raw_games);
+    let startup_errors: Vec<Value> = app
+        .startup_errors
+        .lock()
+        .iter()
+        .take(20)
+        .cloned()
+        .map(Value::String)
+        .collect();
+    let pub_set = public_settings(app, &state);
+    let ra_configured =
+        openbox_metadata::retroachievements::load_credentials(&app.data_dir).is_some();
+    Ok(json!({
+        "games": page,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
         "playlists": state.get("playlists").cloned().unwrap_or_else(|| json!([])),
         "filter_presets": openbox_discovery::filter_presets::list_presets(&state),
-        "smart_collections": openbox_discovery::collections::list_collections(&state),
-        "ra_configured": ra_configured,
-        "ra_hardcore": ra_hardcore,
         "settings": pub_set,
-        "discovery": discovery,
         "media_epoch": app.cache.media_epoch(),
+        "ra_configured": ra_configured,
         "startup_errors": startup_errors,
         "source_labels": Value::Object(source_labels),
-    });
-    Ok(app.cache.set_cached_state(sig, payload))
+    }))
+}
+
+/// Project only the explicitly requested game IDs in O(k) using the store's `games_by_id` index.
+pub fn public_library_delta(app: &AppState, ids: &[&str]) -> Result<Value, StateError> {
+    let state = app.load_state_view()?;
+    let empty_obj = json!({});
+    let settings = state.get("settings").unwrap_or(&empty_obj);
+    let plat_cats = platform_categories(settings);
+    let raw_games = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let overrides = state
+        .get("achievement_overrides")
+        .and_then(Value::as_object);
+    let mut seen = HashSet::new();
+    let mut delta_games = Vec::with_capacity(ids.len());
+    let mut fallback_map: Option<HashMap<String, usize>> = None;
+    for &id_val in ids {
+        let mut found_idx = app.store.get_game_index_by_id(id_val).ok().flatten();
+        if found_idx.is_none()
+            && let Ok(num) = id_val.parse::<usize>()
+            && num < raw_games.len()
+        {
+            found_idx = Some(num);
+        }
+        if found_idx.is_none() {
+            let map = fallback_map.get_or_insert_with(|| games_by_id_map(raw_games));
+            found_idx = map.get(id_val).copied();
+        }
+        if let Some(idx) = found_idx
+            && idx < raw_games.len()
+            && seen.insert(idx)
+        {
+            delta_games.push(project_game(
+                app,
+                &raw_games[idx],
+                idx,
+                &plat_cats,
+                overrides,
+            ));
+        }
+    }
+    Ok(json!({
+        "games": delta_games,
+        "media_epoch": app.cache.media_epoch(),
+    }))
 }
 
 pub fn public_state_etag(app: &AppState) -> String {

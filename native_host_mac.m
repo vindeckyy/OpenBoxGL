@@ -369,6 +369,11 @@ static NSString *BridgeScript(void)
     }
     /* The other hosts accept an explicit web_app.py path; keep the same
      * override so a host built beside a checkout can point at it. */
+    NSString *rootOverride = [[[NSProcessInfo processInfo] environment] objectForKey:@"OPENBOX_ROOT"];
+    if (rootOverride.length > 0) {
+        _share_dir = [rootOverride stringByStandardizingPath];
+        return _share_dir;
+    }
     NSString *override = [[[NSProcessInfo processInfo] environment] objectForKey:@"OPENBOX_WEB_APP"];
     if (override.length > 0) {
         _share_dir = [override stringByStandardizingPath].stringByDeletingLastPathComponent;
@@ -379,14 +384,41 @@ static NSString *BridgeScript(void)
         executable = [[NSProcessInfo processInfo].arguments.firstObject stringByStandardizingPath];
     }
     NSString *bundleResources = [executable stringByAppendingPathComponent:@"Contents/Resources/openbox"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:
-            [bundleResources stringByAppendingPathComponent:@"web_app.py"]]) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if ([fm fileExistsAtPath:[bundleResources stringByAppendingPathComponent:@"index.html"]] ||
+        [fm fileExistsAtPath:[bundleResources stringByAppendingPathComponent:@"web_app.py"]]) {
         _share_dir = bundleResources;
     } else {
         _share_dir = [[[NSProcessInfo processInfo].arguments.firstObject stringByStandardizingPath]
                         stringByDeletingLastPathComponent];
     }
     return _share_dir;
+}
+
+- (NSString *)resolvedServerBinPath
+{
+    NSDictionary *env = [[NSProcessInfo processInfo] environment];
+    if ([[env objectForKey:@"OPENBOX_BACKEND"] isEqualToString:@"python"]) {
+        return nil;
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *override = [env objectForKey:@"OPENBOX_SERVER_BIN"];
+    if (override.length > 0 && [fm isExecutableFileAtPath:override]) {
+        return override;
+    }
+    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+    NSArray<NSString *> *candidates = @[
+        [bundlePath stringByAppendingPathComponent:@"Contents/MacOS/openbox-server"],
+        [[self shareDirectory] stringByAppendingPathComponent:@"openbox-server"],
+        [[[[NSProcessInfo processInfo].arguments.firstObject stringByStandardizingPath]
+            stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"openbox-server"],
+    ];
+    for (NSString *cand in candidates) {
+        if (cand.length > 0 && [fm isExecutableFileAtPath:cand]) {
+            return cand;
+        }
+    }
+    return nil;
 }
 
 - (NSString *)pythonPath
@@ -441,16 +473,21 @@ static NSString *BridgeScript(void)
         return NO;
     }
 
+    NSString *server_bin = [self resolvedServerBinPath];
     NSString *web_app = [[self shareDirectory] stringByAppendingPathComponent:@"web_app.py"];
-    if (!path_exists(web_app)) {
-        fprintf(stderr, "native_host: OPENBOX_WEB_APP must point at web_app.py\n");
-        return NO;
+    NSString *python = nil;
+    if (!server_bin) {
+        if (!path_exists(web_app)) {
+            fprintf(stderr, "native_host: openbox-server or OPENBOX_WEB_APP must be available\n");
+            return NO;
+        }
+        python = [self resolvedPythonPath];
+        setenv("OPENBOX_WEB_APP", web_app.fileSystemRepresentation, 1);
+        setenv("OPENBOX_PYTHON", python.fileSystemRepresentation, 1);
     }
-    NSString *python = [self resolvedPythonPath];
 
     setenv("OPENBOX_NATIVE_HOST", "1", 1);
-    setenv("OPENBOX_WEB_APP", web_app.fileSystemRepresentation, 1);
-    setenv("OPENBOX_PYTHON", python.fileSystemRepresentation, 1);
+    setenv("OPENBOX_ROOT", [self shareDirectory].fileSystemRepresentation, 1);
     NSString *certificate = [[self shareDirectory] stringByAppendingPathComponent:@"cacert.pem"];
     if (path_exists(certificate) &&
         [[[NSProcessInfo processInfo] environment] objectForKey:@"SSL_CERT_FILE"] == nil) {
@@ -471,16 +508,27 @@ static NSString *BridgeScript(void)
     posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
     posix_spawnattr_setpgroup(&attributes, 0);
 
-    char *arguments[] = {
-        (char *)python.fileSystemRepresentation,
-        (char *)"-B",
-        (char *)web_app.fileSystemRepresentation,
-        (char *)"--no-browser",
-        NULL
-    };
     pid_t pid = 0;
-    int result = posix_spawn(&pid, python.fileSystemRepresentation, &actions, &attributes,
+    int result = 0;
+    if (server_bin) {
+        char *arguments[] = {
+            (char *)server_bin.fileSystemRepresentation,
+            (char *)"--no-browser",
+            NULL
+        };
+        result = posix_spawn(&pid, server_bin.fileSystemRepresentation, &actions, &attributes,
                              arguments, environ);
+    } else {
+        char *arguments[] = {
+            (char *)python.fileSystemRepresentation,
+            (char *)"-B",
+            (char *)web_app.fileSystemRepresentation,
+            (char *)"--no-browser",
+            NULL
+        };
+        result = posix_spawn(&pid, python.fileSystemRepresentation, &actions, &attributes,
+                             arguments, environ);
+    }
     posix_spawn_file_actions_destroy(&actions);
     posix_spawnattr_destroy(&attributes);
     if (result != 0) {

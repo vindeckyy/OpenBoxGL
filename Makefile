@@ -17,8 +17,9 @@ DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-
 STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css) $(wildcard static/*.svg)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
+RUST_SERVER = target/release/openbox-server
 
-.PHONY: install uninstall appimage check rust-check version-check dev-venv test-one native-host native-host-macos macos-app contracts ratchets
+.PHONY: install uninstall appimage check rust-check build-rust version-check dev-venv test-one native-host native-host-macos macos-app contracts ratchets
 
 # Feature-regression ratchets (ADR 0060). Regenerates the frozen contracts in
 # scripts/contracts/ after an intentional surface change. Run this only when a
@@ -70,7 +71,10 @@ dev-venv:
 check: dev-venv
 	python3 scripts/check_tests.py
 
-# Rust workspace quality & supply-chain gate (ADR 0115).
+# Rust workspace build & quality / supply-chain gates (ADR 0115).
+build-rust:
+	cargo build --release -p openbox-cli
+
 rust-check:
 	cargo fmt --all -- --check
 	cargo clippy --workspace --all-targets -- -D warnings
@@ -96,6 +100,8 @@ install: native-host
 	install -d $(DESTDIR)$(METAINFODIR)
 	install -d $(DESTDIR)$(LICENSEDIR)
 	install -Dm755 $(NATIVE_HOST) $(DESTDIR)$(SHAREDIR)/$(NATIVE_HOST)
+	if [ -x "$(RUST_SERVER)" ]; then install -Dm755 "$(RUST_SERVER)" "$(DESTDIR)$(SHAREDIR)/openbox-server"; fi
+	install -Dm644 openbox-release.pub $(DESTDIR)$(SHAREDIR)/openbox-release.pub
 	install -d $(DESTDIR)$(SHAREDIR)/emulator_defs
 	for f in emulator_defs/*.yaml; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/emulator_defs/"; done
 	install -Dm755 scripts/openbox-launcher.sh $(DESTDIR)$(SHAREDIR)/openbox-launcher.sh

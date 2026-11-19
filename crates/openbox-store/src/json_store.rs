@@ -204,6 +204,36 @@ pub fn sync_envelope(state: &mut Map<String, Value>) -> bool {
 }
 
 fn normalize_game_ids(games: &mut [Value]) -> bool {
+    // Fast path: check if every game already has a unique, trimmed, non-legacy game_id
+    // and valid legacy_game_ids without allocating any String.
+    {
+        let mut seen: HashSet<&str> = HashSet::with_capacity(games.len());
+        let mut all_clean = true;
+        for game in games.iter() {
+            let Some(obj) = game.as_object() else {
+                continue;
+            };
+            if let Some(legacy) = obj.get("legacy_game_ids")
+                && !legacy.is_array()
+            {
+                all_clean = false;
+                break;
+            }
+            let Some(gid) = obj.get("game_id").and_then(Value::as_str) else {
+                all_clean = false;
+                break;
+            };
+            if gid.is_empty() || gid.trim() != gid || is_legacy_indexed_id(gid) || !seen.insert(gid)
+            {
+                all_clean = false;
+                break;
+            }
+        }
+        if all_clean {
+            return false;
+        }
+    }
+
     let mut changed = false;
     let mut used: HashSet<String> = HashSet::with_capacity(games.len());
     for game in games.iter_mut() {
@@ -487,24 +517,35 @@ fn validate_state(state: &Map<String, Value>) -> Result<(), StateError> {
     Ok(())
 }
 
-/// Normalize and optionally migrate raw state matching `state_store.py::normalize_state`.
-pub fn normalize_state(raw: &Value, migrate: bool) -> Result<(Value, bool), StateError> {
+fn raw_schema_version_map(obj: &Map<String, Value>) -> i64 {
+    match obj.get("schema_version") {
+        None => 1,
+        Some(Value::Number(n)) => n.as_i64().unwrap_or(1),
+        Some(Value::String(s)) => s.trim().parse::<i64>().unwrap_or(1),
+        _ => 1,
+    }
+}
+
+/// Normalize and optionally migrate raw state without cloning the input `Value`.
+pub fn normalize_state_owned(raw: Value, migrate: bool) -> Result<(Value, bool), StateError> {
     let mut changed = false;
-    let mut state: Map<String, Value> = if let Some(arr) = raw.as_array() {
-        changed = true;
-        let mut m = Map::new();
-        m.insert("games".into(), Value::Array(arr.clone()));
-        m.insert("schema_version".into(), json!(1));
-        m
-    } else if let Some(obj) = raw.as_object() {
-        obj.clone()
-    } else {
-        return Err(StateError::Corrupt(
-            "OpenBox library.json must contain an object or legacy game list.".to_owned(),
-        ));
+    let mut state: Map<String, Value> = match raw {
+        Value::Array(arr) => {
+            changed = true;
+            let mut m = Map::new();
+            m.insert("games".into(), Value::Array(arr));
+            m.insert("schema_version".into(), json!(1));
+            m
+        }
+        Value::Object(obj) => obj,
+        _ => {
+            return Err(StateError::Corrupt(
+                "OpenBox library.json must contain an object or legacy game list.".to_owned(),
+            ));
+        }
     };
 
-    let version = raw_schema_version(&Value::Object(state.clone()));
+    let version = raw_schema_version_map(&state);
     if version > i64::from(STATE_SCHEMA_VERSION) {
         return Err(StateError::FutureVersion(format!(
             "This library uses schema {version}; this build supports {STATE_SCHEMA_VERSION}. Install a newer OpenBox."
@@ -561,12 +602,76 @@ pub fn normalize_state(raw: &Value, migrate: bool) -> Result<(Value, bool), Stat
     Ok((Value::Object(state), changed))
 }
 
-/// 16-byte BLAKE2b digest over deterministic JSON (matches `state_store.py::_state_digest`).
+/// Normalize and optionally migrate raw state matching `state_store.py::normalize_state`.
+pub fn normalize_state(raw: &Value, migrate: bool) -> Result<(Value, bool), StateError> {
+    normalize_state_owned(raw.clone(), migrate)
+}
+
+/// Validate and repair an already-current-schema state in place without cloning the catalog.
+/// Mirrors `state_store.py::_normalize_committed_state`.
+fn normalize_committed_state_in_place(state: &mut Value) -> Result<(), StateError> {
+    let Some(obj) = state.as_object_mut() else {
+        return Err(StateError::Corrupt(
+            "OpenBox state must be an object.".to_owned(),
+        ));
+    };
+    let version = raw_schema_version_map(obj);
+    let required = [
+        "games",
+        "profiles",
+        "history",
+        "settings",
+        "playlists",
+        "ui_state",
+    ];
+    if version != i64::from(STATE_SCHEMA_VERSION) || required.iter().any(|k| !obj.contains_key(*k))
+    {
+        let owned = std::mem::replace(state, Value::Null);
+        let (normalized, _) = normalize_state_owned(owned, true)?;
+        *state = normalized;
+        return Ok(());
+    }
+    if let Value::Object(defaults) = default_state() {
+        for (k, v) in defaults {
+            obj.entry(k).or_insert(v);
+        }
+    }
+    if let Some(Value::Object(settings)) = obj.get_mut("settings") {
+        let _ = prune_unknown_settings(settings);
+    }
+    obj.insert("schema_version".into(), json!(STATE_SCHEMA_VERSION));
+    sync_envelope(obj);
+    if !obj.get("games").is_some_and(Value::is_array) {
+        return Err(StateError::Corrupt(
+            "OpenBox library.json has an invalid games collection.".to_owned(),
+        ));
+    }
+    normalize_feature_fields(obj);
+    if let Some(Value::Array(games)) = obj.get_mut("games") {
+        normalize_game_ids(games);
+    }
+    validate_state(obj)?;
+    Ok(())
+}
+
+struct Blake2Writer(Blake2b<U16>);
+
+impl Write for Blake2Writer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// 16-byte BLAKE2b digest over deterministic JSON (zero intermediate buffer allocations).
 pub fn state_digest(state: &Value) -> [u8; 16] {
-    let bytes = serde_json::to_vec(state).unwrap_or_default();
-    let mut hasher = Blake2b::<U16>::new();
-    hasher.update(&bytes);
-    let result = hasher.finalize();
+    let mut writer = Blake2Writer(Blake2b::<U16>::new());
+    let _ = serde_json::to_writer(&mut writer, state);
+    let result = writer.0.finalize();
     let mut out = [0u8; 16];
     out.copy_from_slice(&result);
     out
@@ -626,31 +731,6 @@ fn resolve_portable_paths(state: &mut Value) {
     }
 }
 
-fn build_persistable(state: &Value) -> Value {
-    let Some(obj) = state.as_object() else {
-        return state.clone();
-    };
-    let mut out = Map::with_capacity(obj.len());
-    for (k, v) in obj {
-        if k == "active_sessions" {
-            continue;
-        }
-        out.insert(k.clone(), v.clone());
-    }
-    if out.get("path_mode").and_then(Value::as_str) == Some("portable")
-        && let Some(root) = out
-            .get("library_root")
-            .and_then(Value::as_str)
-            .filter(|r| !r.is_empty())
-            .map(ToOwned::to_owned)
-        && let Some(Value::Array(games)) = out.get("games")
-    {
-        let encoded = encode_games(games, &root);
-        out.insert("games".into(), Value::Array(encoded));
-    }
-    Value::Object(out)
-}
-
 #[derive(Debug, Default)]
 struct StoreCache {
     state: Option<Arc<Value>>,
@@ -672,6 +752,9 @@ impl StoreCache {
         let Some(games) = state.get("games").and_then(Value::as_array) else {
             return;
         };
+        if self.games_by_id.capacity() < games.len() {
+            self.games_by_id.reserve(games.len());
+        }
         for (idx, game) in games.iter().enumerate() {
             if let Some(obj) = game.as_object() {
                 if let Some(gid) = obj
@@ -775,13 +858,14 @@ impl JsonStateStore {
     }
 
     fn read_json_file(path: &Path) -> Result<Value, StateError> {
-        let text = fs::read_to_string(path).map_err(|_| {
+        let file = File::open(path).map_err(|_| {
             StateError::Corrupt(format!(
                 "Unable to read {}. The original file was preserved; restore or inspect it before continuing.",
                 path.display()
             ))
         })?;
-        serde_json::from_str(&text).map_err(|_| {
+        let reader = std::io::BufReader::with_capacity(256 * 1024, file);
+        serde_json::from_reader(reader).map_err(|_| {
             StateError::Corrupt(format!(
                 "Unable to read {}. The original file was preserved; restore or inspect it before continuing.",
                 path.display()
@@ -801,7 +885,7 @@ impl JsonStateStore {
         let had_active_sessions = raw
             .as_object()
             .is_some_and(|o| o.contains_key("active_sessions"));
-        let (mut state, changed) = normalize_state(&raw, false)?;
+        let (mut state, changed) = normalize_state_owned(raw, false)?;
         if !had_active_sessions && let Some(obj) = state.as_object_mut() {
             obj.insert(
                 "active_sessions".into(),
@@ -813,7 +897,12 @@ impl JsonStateStore {
         Ok((state, changed || had_active_sessions))
     }
 
-    fn write_unlocked(&self, cache: &mut StoreCache, state: &mut Value) -> Result<(), StateError> {
+    fn write_unlocked(
+        &self,
+        cache: &mut StoreCache,
+        mut state: Value,
+        precomputed_digest: Option<[u8; 16]>,
+    ) -> Result<Arc<Value>, StateError> {
         if is_library_frozen() {
             return Err(StateError::Frozen);
         }
@@ -822,23 +911,11 @@ impl JsonStateStore {
         if let Some(obj) = state.as_object_mut() {
             sync_envelope(obj);
         }
-        let persisted = build_persistable(state);
         let games_count = state
             .get("games")
             .and_then(Value::as_array)
             .map(Vec::len)
             .unwrap_or(0);
-        let raw_bytes = if games_count > 500 {
-            serde_json::to_vec(&persisted).map_err(|e| StateError::Corrupt(e.to_string()))?
-        } else {
-            let pretty = serde_json::to_vec_pretty(&persisted)
-                .map_err(|e| StateError::Corrupt(e.to_string()))?;
-            if pretty.len() > COMPACT_JSON_THRESHOLD {
-                serde_json::to_vec(&persisted).map_err(|e| StateError::Corrupt(e.to_string()))?
-            } else {
-                pretty
-            }
-        };
 
         let fname = self
             .path
@@ -849,23 +926,70 @@ impl JsonStateStore {
             .prefix(&format!(".{fname}."))
             .suffix(".tmp")
             .tempfile_in(parent)?;
-        temp.write_all(&raw_bytes)?;
-        temp.write_all(b"\n")?;
-        temp.flush()?;
+
+        // Temporarily detach `active_sessions` and encode portable paths in place while serializing
+        // so we never clone the full games array for `library.json`.
+        let saved_sessions = state
+            .as_object_mut()
+            .and_then(|obj| obj.remove("active_sessions"));
+        let mut saved_expanded_games: Option<Value> = None;
+        if let Some(obj) = state.as_object_mut()
+            && obj.get("path_mode").and_then(Value::as_str) == Some("portable")
+            && let Some(root) = obj
+                .get("library_root")
+                .and_then(Value::as_str)
+                .filter(|r| !r.is_empty())
+                .map(ToOwned::to_owned)
+            && let Some(Value::Array(games)) = obj.get("games")
+        {
+            let encoded = encode_games(games, &root);
+            saved_expanded_games = obj.insert("games".into(), Value::Array(encoded));
+        }
+
+        let serialize_res: Result<(), StateError> = if games_count > 500 {
+            let mut bw = std::io::BufWriter::with_capacity(256 * 1024, temp.as_file_mut());
+            serde_json::to_writer(&mut bw, &state)
+                .map_err(|e| StateError::Corrupt(e.to_string()))
+                .and_then(|()| bw.write_all(b"\n").map_err(StateError::Io))
+                .and_then(|()| bw.flush().map_err(StateError::Io))
+        } else {
+            let pretty = serde_json::to_vec_pretty(&state)
+                .map_err(|e| StateError::Corrupt(e.to_string()))?;
+            let raw_bytes = if pretty.len() > COMPACT_JSON_THRESHOLD {
+                serde_json::to_vec(&state).map_err(|e| StateError::Corrupt(e.to_string()))?
+            } else {
+                pretty
+            };
+            temp.write_all(&raw_bytes)
+                .and_then(|()| temp.write_all(b"\n"))
+                .and_then(|()| temp.flush())
+                .map_err(StateError::Io)
+        };
+
+        // Restore detached fields immediately before propagating any error.
+        if let Some(orig_games) = saved_expanded_games
+            && let Some(obj) = state.as_object_mut()
+        {
+            obj.insert("games".into(), orig_games);
+        }
+        if let Some(sess_val) = saved_sessions
+            && let Some(obj) = state.as_object_mut()
+        {
+            obj.insert("active_sessions".into(), sess_val);
+        }
+        serialize_res?;
+
         temp.as_file().sync_all()?;
         let temp_path = temp.into_temp_path();
         set_mode(&temp_path, 0o600)?;
 
-        // Backup first with separate inode before replacing primary
-        let mut bak_tmp = Builder::new()
+        // Backup first with separate inode before replacing primary (matching state_store.py).
+        let bak_tmp = Builder::new()
             .prefix(&format!(".{fname}.bak."))
             .suffix(".tmp")
             .tempfile_in(parent)?;
-        bak_tmp.write_all(&raw_bytes)?;
-        bak_tmp.write_all(b"\n")?;
-        bak_tmp.flush()?;
-        bak_tmp.as_file().sync_all()?;
         let bak_temp_path = bak_tmp.into_temp_path();
+        fs::copy(&temp_path, &bak_temp_path)?;
         set_mode(&bak_temp_path, 0o600)?;
         bak_temp_path
             .persist(&self.backup_path)
@@ -880,9 +1004,9 @@ impl JsonStateStore {
         let sessions = state
             .get("active_sessions")
             .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        write_sessions_file(parent, &sessions)?;
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        write_sessions_file(parent, sessions)?;
 
         {
             let mut pending = self.coalesce_lock.lock();
@@ -892,12 +1016,13 @@ impl JsonStateStore {
         fsync_directory(parent);
         self.rotate_snapshots_locked(cache, false);
 
-        let digest = state_digest(state);
-        cache.state = Some(Arc::new(state.clone()));
+        let digest = precomputed_digest.unwrap_or_else(|| state_digest(&state));
+        let arc = Arc::new(state);
+        cache.state = Some(Arc::clone(&arc));
         cache.signature = self.signature();
         cache.committed_digest = Some(digest);
         cache.reindex();
-        Ok(())
+        Ok(arc)
     }
 
     pub fn rotate_snapshots(&self, force: bool) {
@@ -999,23 +1124,29 @@ impl JsonStateStore {
             return Ok(Arc::clone(cached));
         }
         let _flock = file_lock(&self.lock_path, true, DEFAULT_LOCK_TIMEOUT)?;
-        let (mut state, changed) = self.load_unlocked()?;
+        let (state, changed) = self.load_unlocked()?;
         if changed {
-            self.write_unlocked(&mut cache, &mut state)?;
-            return Ok(Arc::clone(
-                cache.state.as_ref().expect("populated by write_unlocked"),
-            ));
+            return self.write_unlocked(&mut cache, state, None);
         }
+        let digest = state_digest(&state);
         let arc = Arc::new(state);
         cache.state = Some(Arc::clone(&arc));
         cache.signature = self.signature();
-        cache.committed_digest = None;
+        cache.committed_digest = Some(digest);
         cache.reindex();
         Ok(arc)
     }
 
     pub fn load(&self) -> Result<Value, StateError> {
         Ok((*self.load_readonly()?).clone())
+    }
+
+    /// O(1) lookup of a game's array index by `game_id`.
+    pub fn get_game_index_by_id(&self, game_id: &str) -> Result<Option<usize>, StateError> {
+        let needle = game_id.trim();
+        let _arc = self.load_readonly()?;
+        let cache = self.thread_lock.lock();
+        Ok(cache.games_by_id.get(needle).copied())
     }
 
     /// O(1) lookup of a game by `game_id`.
@@ -1054,9 +1185,9 @@ impl JsonStateStore {
         let mut cache = self.thread_lock.lock();
         let _flock = file_lock(&self.lock_path, true, DEFAULT_LOCK_TIMEOUT)?;
         match normalize_state(raw, true) {
-            Ok((mut normalized, _)) => {
-                self.write_unlocked(&mut cache, &mut normalized)?;
-                Ok(normalized)
+            Ok((normalized, _)) => {
+                let arc = self.write_unlocked(&mut cache, normalized, None)?;
+                Ok((*arc).clone())
             }
             Err(err) => {
                 cache.clear();
@@ -1075,7 +1206,11 @@ impl JsonStateStore {
         let sig = self.signature();
         let from_cache = cache.state.is_some() && sig == cache.signature;
         let mut state = if from_cache {
-            (**cache.state.as_ref().expect("checked")).clone()
+            // Take ownership of the cached Arc without cloning when unshared (common case).
+            match cache.state.take() {
+                Some(arc) => Arc::try_unwrap(arc).unwrap_or_else(|shared| (*shared).clone()),
+                None => self.load_unlocked()?.0,
+            }
         } else {
             self.load_unlocked()?.0
         };
@@ -1086,23 +1221,18 @@ impl JsonStateStore {
                 return Err(e);
             }
         };
-        let (mut normalized, _) = match normalize_state(&state, true) {
-            Ok(pair) => pair,
-            Err(e) => {
-                cache.clear();
-                return Err(e);
-            }
-        };
-        let digest = state_digest(&normalized);
+        if let Err(e) = normalize_committed_state_in_place(&mut state) {
+            cache.clear();
+            return Err(e);
+        }
+        let digest = state_digest(&state);
         if from_cache && cache.committed_digest == Some(digest) {
-            let arc = Arc::new(normalized);
+            let arc = Arc::new(state);
             cache.state = Some(Arc::clone(&arc));
-            cache.signature = self.signature();
-            cache.reindex();
+            cache.signature = sig;
             return Ok((arc, res));
         }
-        self.write_unlocked(&mut cache, &mut normalized)?;
-        let arc = Arc::clone(cache.state.as_ref().expect("populated"));
+        let arc = self.write_unlocked(&mut cache, state, Some(digest))?;
         Ok((arc, res))
     }
 
@@ -1143,14 +1273,14 @@ impl JsonStateStore {
                 ))
             });
         }
-        let (mut state, _) = normalize_state(&raw, true).map_err(|_| {
+        let (state, _) = normalize_state_owned(raw, true).map_err(|_| {
             StateError::Corrupt(format!(
                 "The last-known-good state is also unusable: {}",
                 self.backup_path.display()
             ))
         })?;
-        self.write_unlocked(&mut cache, &mut state)?;
-        Ok(state)
+        let arc = self.write_unlocked(&mut cache, state, None)?;
+        Ok((*arc).clone())
     }
 
     pub fn restore_snapshot(&self, name: &str) -> Result<Value, StateError> {
@@ -1164,9 +1294,9 @@ impl JsonStateStore {
         let mut cache = self.thread_lock.lock();
         let _flock = file_lock(&self.lock_path, true, DEFAULT_LOCK_TIMEOUT)?;
         let raw = Self::read_json_file(&candidate)?;
-        let (mut state, _) = normalize_state(&raw, true)?;
-        self.write_unlocked(&mut cache, &mut state)?;
-        Ok(state)
+        let (state, _) = normalize_state_owned(raw, true)?;
+        let arc = self.write_unlocked(&mut cache, state, None)?;
+        Ok((*arc).clone())
     }
 
     pub fn flush_coalesced(&self) -> Result<(), StateError> {
@@ -1176,8 +1306,8 @@ impl JsonStateStore {
             let mut guard = self.coalesce_lock.lock();
             guard.take()
         };
-        if let Some(mut state) = pending {
-            self.write_unlocked(&mut cache, &mut state)?;
+        if let Some(state) = pending {
+            self.write_unlocked(&mut cache, state, None)?;
         }
         Ok(())
     }
@@ -1201,7 +1331,10 @@ pub(crate) fn commit_migrated_state(
     state: &mut Value,
 ) -> Result<(), StateError> {
     let mut cache = store.thread_lock.lock();
-    store.write_unlocked(&mut cache, state)
+    let owned = std::mem::replace(state, Value::Null);
+    let arc = store.write_unlocked(&mut cache, owned, None)?;
+    *state = (*arc).clone();
+    Ok(())
 }
 
 /// Ensure a data directory's legacy file is not lost when migrating from schema 6.

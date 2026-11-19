@@ -3,9 +3,11 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+use bytes::Bytes;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use openbox_store::FileSignature;
@@ -238,19 +240,18 @@ impl FacetCache {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CachedPayload {
     pub signature: (Option<FileSignature>, u64, u64),
-    pub payload: Value,
-    pub raw_json: Vec<u8>,
-    pub raw_gzip: Option<Vec<u8>>,
+    pub raw_json: Bytes,
+    pub raw_gzip: Option<Bytes>,
     pub etag: String,
 }
 
 pub struct CacheCoordinator {
     media_epoch: AtomicU64,
     plugin_epoch: AtomicU64,
-    public_state_cache: Mutex<Option<CachedPayload>>,
+    public_state_cache: Mutex<Option<Arc<CachedPayload>>>,
     public_settings_cache: Mutex<Option<(Option<FileSignature>, Value)>>,
     pub facets: FacetCache,
 }
@@ -296,7 +297,7 @@ impl CacheCoordinator {
         self.facets.clear();
     }
 
-    pub fn get_cached_state(&self, sig: Option<FileSignature>) -> Option<CachedPayload> {
+    pub fn get_cached_state(&self, sig: Option<FileSignature>) -> Option<Arc<CachedPayload>> {
         let expected = (sig, self.media_epoch(), self.plugin_epoch());
         let guard = self.public_state_cache.lock();
         guard
@@ -305,28 +306,39 @@ impl CacheCoordinator {
             .cloned()
     }
 
-    pub fn set_cached_state(&self, sig: Option<FileSignature>, payload: Value) -> CachedPayload {
-        let raw_json = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec());
-        let raw_gzip = if raw_json.len() >= GZIP_THRESHOLD {
+    pub fn set_cached_state_bytes(
+        &self,
+        sig: Option<FileSignature>,
+        raw_json_vec: Vec<u8>,
+    ) -> Arc<CachedPayload> {
+        let raw_gzip = if raw_json_vec.len() >= GZIP_THRESHOLD {
             let mut enc = GzEncoder::new(Vec::new(), Compression::fast());
-            if enc.write_all(&raw_json).is_ok() {
-                enc.finish().ok()
+            if enc.write_all(&raw_json_vec).is_ok() {
+                enc.finish().ok().map(Bytes::from)
             } else {
                 None
             }
         } else {
             None
         };
-        let digest = blake2_short_hex(&raw_json);
-        let entry = CachedPayload {
+        let digest = blake2_short_hex(&raw_json_vec);
+        let entry = Arc::new(CachedPayload {
             signature: (sig, self.media_epoch(), self.plugin_epoch()),
-            payload,
-            raw_json,
+            raw_json: Bytes::from(raw_json_vec),
             raw_gzip,
             etag: format!("\"{digest}\""),
-        };
-        *self.public_state_cache.lock() = Some(entry.clone());
+        });
+        *self.public_state_cache.lock() = Some(Arc::clone(&entry));
         entry
+    }
+
+    pub fn set_cached_state(
+        &self,
+        sig: Option<FileSignature>,
+        payload: Value,
+    ) -> Arc<CachedPayload> {
+        let raw_json = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec());
+        self.set_cached_state_bytes(sig, raw_json)
     }
 
     pub fn get_cached_settings(&self, sig: Option<FileSignature>) -> Option<Value> {

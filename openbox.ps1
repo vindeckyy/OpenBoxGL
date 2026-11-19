@@ -1,4 +1,4 @@
-# OpenBox launcher for Windows.
+﻿# OpenBox launcher for Windows.
 #
 # Desktop sessions open the native host by default (the WebView2 window). Pass
 # --web to fall back to the loopback web server in the default browser.
@@ -25,11 +25,28 @@ function Resolve-ShareDirectory {
     $candidates += (Join-Path $PSScriptRoot '..\share\openbox')
     if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'OpenBox\share\openbox') }
     foreach ($candidate in $candidates) {
-        if ($candidate -and (Test-Path -LiteralPath (Join-Path $candidate 'web_app.py'))) {
+        if ($candidate -and ((Test-Path -LiteralPath (Join-Path $candidate 'index.html')) -or (Test-Path -LiteralPath (Join-Path $candidate 'web_app.py')))) {
             return (Resolve-Path -LiteralPath $candidate).Path
         }
     }
-    throw 'Could not locate web_app.py. Set OPENBOX_SHARE to the OpenBox install folder.'
+    throw 'Could not locate OpenBox share files. Set OPENBOX_SHARE to the OpenBox install folder.'
+}
+
+function Resolve-ServerBin {
+    if ($env:OPENBOX_BACKEND -eq 'python') { return $null }
+    $candidates = @()
+    if ($env:OPENBOX_SERVER_BIN) { $candidates += $env:OPENBOX_SERVER_BIN }
+    $candidates += (Join-Path $script:ShareDir 'openbox-server.exe')
+    $candidates += (Join-Path $PSScriptRoot 'openbox-server.exe')
+    $candidates += (Join-Path $PSScriptRoot 'target\release\openbox-server.exe')
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    $onPath = Get-Command 'openbox-server.exe' -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    return $null
 }
 
 function Resolve-Python {
@@ -38,7 +55,7 @@ function Resolve-Python {
         $found = Get-Command $name -ErrorAction SilentlyContinue
         if ($found) { return $found.Source }
     }
-    throw 'No Python 3 interpreter found. Install Python 3.11+ or set OPENBOX_PYTHON.'
+    throw 'Neither openbox-server.exe nor Python 3 was found. Install Python 3.11+ or set OPENBOX_SERVER_BIN.'
 }
 
 function Find-NativeHost {
@@ -62,12 +79,22 @@ function Find-NativeHost {
 
 function Invoke-WebApp {
     param([string[]] $Forwarded)
-    & $script:Python -B (Join-Path $script:ShareDir 'web_app.py') @Forwarded
+    $env:OPENBOX_ROOT = $script:ShareDir
+    if ($script:ServerBin) {
+        & $script:ServerBin @Forwarded
+        exit $LASTEXITCODE
+    }
+    $python = Resolve-Python
+    & $python -B (Join-Path $script:ShareDir 'web_app.py') @Forwarded
     exit $LASTEXITCODE
 }
 
 $script:ShareDir = Resolve-ShareDirectory
-$script:Python = Resolve-Python
+$script:ServerBin = Resolve-ServerBin
+if ($script:ServerBin) {
+    $env:OPENBOX_SERVER_BIN = $script:ServerBin
+}
+$env:OPENBOX_ROOT = $script:ShareDir
 
 # ``--web`` skips the native host entirely and forwards the remaining flags.
 # Library maintenance runs headless: no native host, no window.

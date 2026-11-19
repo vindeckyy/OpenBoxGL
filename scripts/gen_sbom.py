@@ -38,6 +38,50 @@ def runtime_modules():
     return [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
 
+def cargo_lock_components():
+    """Parse Cargo.lock [[package]] stanzas into CycloneDX library components."""
+    lock_path = ROOT / "Cargo.lock"
+    if not lock_path.is_file():
+        return []
+    components = []
+    cur: dict[str, str] = {}
+
+    def flush():
+        name = cur.get("name", "")
+        ver = cur.get("version", "")
+        if not name or not ver:
+            return
+        entry = {
+            "type": "library",
+            "bom-ref": f"pkg:cargo/{name}@{ver}",
+            "name": name,
+            "version": ver,
+            "purl": f"pkg:cargo/{name}@{ver}",
+            "properties": [
+                {"name": "openbox:component", "value": "rust-crate"},
+            ],
+        }
+        checksum = cur.get("checksum", "")
+        if checksum:
+            entry["hashes"] = [{"alg": "SHA-256", "content": checksum}]
+        components.append(entry)
+
+    for raw_line in lock_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line == "[[package]]":
+            flush()
+            cur = {}
+            continue
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip('"')
+            if k in ("name", "version", "checksum"):
+                cur[k] = v
+    flush()
+    return components
+
+
 def artifact_components(appdir, version):
     root = Path(appdir).expanduser()
     if not root.is_dir():
@@ -146,6 +190,9 @@ def build_sbom(version, include_stdlib=True, appdir=None):
                 {"name": "openbox:component", "value": "bundled-stdlib"},
             ],
         })
+
+    # Pinned Rust workspace and dependency crates from Cargo.lock.
+    components.extend(cargo_lock_components())
 
     if appdir is not None:
         components.extend(artifact_components(appdir, version))

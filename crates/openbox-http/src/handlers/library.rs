@@ -41,11 +41,13 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::handlers::projection::{
-    clean_extras, find_game_index, games_by_id_map, public_settings, public_state_cached,
-    public_state_etag,
+    clean_extras, find_game_index, public_library_delta, public_library_page, public_settings,
+    public_state_cached, public_state_etag,
 };
 use crate::handlers::shared::{RequestCtx, bool_field, str_field};
-use crate::middleware::{api_error_response, apply_security_headers, json_response};
+use crate::middleware::{
+    api_error_response, apply_security_headers, json_response, state_error_response,
+};
 
 static ENV_KEY_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").expect("valid env key regex"));
@@ -168,7 +170,16 @@ fn clean_game_fields(
     if let Some(dc) = source.get("disc_count") {
         let n = dc
             .as_i64()
-            .or_else(|| dc.as_str().and_then(|s| s.trim().parse().ok()))
+            .or_else(|| {
+                dc.as_str().and_then(|s| {
+                    let t = s.trim();
+                    if t.is_empty() {
+                        Some(0)
+                    } else {
+                        t.parse().ok()
+                    }
+                })
+            })
             .or_else(|| if dc.is_null() { Some(0) } else { None })
             .ok_or_else(|| ApiError::bad_request("Disc count must be a number."))?;
         game.insert("disc_count".into(), json!(n.max(0)));
@@ -424,10 +435,6 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                 );
                 return Some(resp);
             }
-            let cached = match public_state_cached(&ctx.app) {
-                Ok(c) => c,
-                Err(err) => return Some(api_error_response(&err, ctx.request_id, ctx.instance)),
-            };
             if offset_str.is_some() || limit_str.is_some() {
                 let offset: isize = match offset_str.as_deref().filter(|s| !s.is_empty()) {
                     None => 0,
@@ -462,31 +469,19 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                         ctx.instance,
                     ));
                 }
-                let games = cached
-                    .payload
-                    .get("games")
-                    .and_then(Value::as_array)
-                    .map(Vec::as_slice)
-                    .unwrap_or(&[]);
-                let total_count = games.len();
-                let start = (offset as usize).min(total_count);
-                let end = (start + limit as usize).min(total_count);
-                let page = &games[start..end];
-                let resp_payload = json!({
-                    "games": page,
-                    "total_count": total_count,
-                    "offset": offset,
-                    "limit": limit,
-                    "playlists": cached.payload.get("playlists").cloned().unwrap_or_else(|| json!([])),
-                    "filter_presets": cached.payload.get("filter_presets").cloned().unwrap_or_else(|| json!([])),
-                    "settings": cached.payload.get("settings").cloned().unwrap_or_else(|| json!({})),
-                    "media_epoch": cached.payload.get("media_epoch").cloned().unwrap_or_else(|| json!(0)),
-                    "ra_configured": cached.payload.get("ra_configured").cloned().unwrap_or(Value::Bool(false)),
-                    "startup_errors": cached.payload.get("startup_errors").cloned().unwrap_or_else(|| json!([])),
-                    "source_labels": cached.payload.get("source_labels").cloned().unwrap_or_else(|| json!({})),
-                });
-                return Some(json_response(StatusCode::OK, &resp_payload, ctx.instance));
+                return Some(
+                    match public_library_page(&ctx.app, offset as usize, limit as usize) {
+                        Ok(resp_payload) => {
+                            json_response(StatusCode::OK, &resp_payload, ctx.instance)
+                        }
+                        Err(err) => state_error_response(&err, ctx.request_id, ctx.instance),
+                    },
+                );
             }
+            let cached = match public_state_cached(&ctx.app) {
+                Ok(c) => c,
+                Err(err) => return Some(state_error_response(&err, ctx.request_id, ctx.instance)),
+            };
 
             let accepts_gzip = ctx
                 .headers
@@ -542,34 +537,12 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     ctx.instance,
                 ));
             }
-            let cached = match public_state_cached(&ctx.app) {
-                Ok(c) => c,
-                Err(err) => return Some(api_error_response(&err, ctx.request_id, ctx.instance)),
-            };
-            let games = cached
-                .payload
-                .get("games")
-                .and_then(Value::as_array)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            let map = games_by_id_map(games);
-            let mut seen = HashSet::new();
-            let mut delta_games = Vec::new();
-            for id_val in ids {
-                if let Some(&idx) = map.get(id_val)
-                    && seen.insert(idx)
-                {
-                    delta_games.push(games[idx].clone());
+            match public_library_delta(&ctx.app, &ids) {
+                Ok(resp_payload) => {
+                    Some(json_response(StatusCode::OK, &resp_payload, ctx.instance))
                 }
+                Err(err) => Some(state_error_response(&err, ctx.request_id, ctx.instance)),
             }
-            Some(json_response(
-                StatusCode::OK,
-                &json!({
-                    "games": delta_games,
-                    "media_epoch": cached.payload.get("media_epoch").cloned().unwrap_or_else(|| json!(0)),
-                }),
-                ctx.instance,
-            ))
         }
         "/api/v2/library/search" => {
             let query = ctx.query_first("q").unwrap_or_default();
@@ -675,12 +648,11 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
             ))
         }
         "/api/v2/launcher/menu" => {
-            let cached = match public_state_cached(&ctx.app) {
-                Ok(c) => c,
-                Err(err) => return Some(api_error_response(&err, ctx.request_id, ctx.instance)),
+            let state = match ctx.app.load_state_view() {
+                Ok(s) => s,
+                Err(err) => return Some(state_error_response(&err, ctx.request_id, ctx.instance)),
             };
-            let games = cached
-                .payload
+            let games = state
                 .get("games")
                 .and_then(Value::as_array)
                 .map(Vec::as_slice)
@@ -801,10 +773,9 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                 )),
             }
         }
-        "/api/v2/discovery" => match public_state_cached(&ctx.app) {
-            Ok(cached) => {
-                let games = cached
-                    .payload
+        "/api/v2/discovery" => match ctx.app.load_state_view() {
+            Ok(state) => {
+                let games = state
                     .get("games")
                     .and_then(Value::as_array)
                     .map(Vec::as_slice)
@@ -815,13 +786,13 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     games,
                     &ctx.app.data_dir.join("plugins"),
                     12,
-                    Some(&cached.payload),
+                    Some(&state),
                     None,
                     Some(&ctx.app.root_dir),
                 );
                 Some(json_response(StatusCode::OK, &payload, ctx.instance))
             }
-            Err(err) => Some(api_error_response(&err, ctx.request_id, ctx.instance)),
+            Err(err) => Some(state_error_response(&err, ctx.request_id, ctx.instance)),
         },
         "/api/v2/related/rich" => {
             let state = match ctx.app.load_state_view() {
@@ -918,7 +889,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
     match ctx.path {
         "/api/v2/favorite" => {
             let mut fav_res: Result<bool, ApiError> = Ok(false);
-            let tx = ctx.app.transact_state(|state| {
+            let tx = ctx.app.transact_local_state(|state| {
                 let Some(Value::Array(games)) = state.get_mut("games") else {
                     fav_res = Err(ApiError::game_not_found("Game not found."));
                     return Err(openbox_store::StateError::Corrupt("not found".into()));
@@ -1044,6 +1015,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 .get("settings")
                 .cloned()
                 .unwrap_or_else(|| json!({}));
+            drop(state_snap);
             if let Err(err) = clean_game_lists_and_misc(ctx, &mut game, &source, &settings) {
                 return Some(api_error_response(&err, ctx.request_id, ctx.instance));
             }
@@ -1142,7 +1114,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                             }
                         }
                         Err(err) => {
-                            mut_err = Some(err);
+                            mut_err = Some(ApiError::bad_request(err.message));
                             return Err(openbox_store::StateError::Corrupt("not found".into()));
                         }
                     }
@@ -1315,19 +1287,25 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
             }
         }
         "/api/v2/games/bulk" => {
-            let state_snap = match ctx.app.load_state_view() {
-                Ok(s) => s,
-                Err(err) => {
-                    return Some(api_error_response(
-                        &ApiError::state_unavailable(err.to_string()),
-                        ctx.request_id,
-                        ctx.instance,
-                    ));
-                }
-            };
+            let touches_catalog = payload
+                .get("changes")
+                .and_then(Value::as_object)
+                .is_none_or(|changes| {
+                    changes.keys().any(|k| {
+                        openbox_sync::library_sync::CATALOG_FIELDS.contains(&k.as_str())
+                            || k == "tags_add"
+                            || k == "tags_remove"
+                    })
+                });
             if let Some(changes) = payload.get("changes").and_then(Value::as_object)
                 && changes.contains_key("progress")
             {
+                let state_snap = match ctx.app.load_state_view() {
+                    Ok(s) => s,
+                    Err(err) => {
+                        return Some(state_error_response(&err, ctx.request_id, ctx.instance));
+                    }
+                };
                 let prog = canon_progress(changes.get("progress"));
                 if !prog.is_empty() && !allowed_progress(&state_snap).contains(&prog) {
                     return Some(api_error_response(
@@ -1342,7 +1320,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
             let migrate_media = payload.get("migrate_media") == Some(&Value::Bool(true));
             let data_dir = ctx.app.data_dir.clone();
             let mut bulk_res: Result<(usize, usize, Vec<Value>), ApiError> = Ok((0, 0, Vec::new()));
-            let tx = ctx.app.transact_state(|state| {
+            let mut run_mut = |state: &mut Value| {
                 bulk_res = bulk_update_with_media(
                     state,
                     payload.get("ids"),
@@ -1354,7 +1332,12 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                     return Err(openbox_store::StateError::Corrupt(err.message.clone()));
                 }
                 Ok(())
-            });
+            };
+            let tx = if touches_catalog {
+                ctx.app.transact_state(&mut run_mut)
+            } else {
+                ctx.app.transact_local_state(&mut run_mut)
+            };
             match (tx, bulk_res) {
                 (_, Err(err)) => Some(api_error_response(&err, ctx.request_id, ctx.instance)),
                 (Err(err), _) => Some(api_error_response(
@@ -1880,6 +1863,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 .get("settings")
                 .cloned()
                 .unwrap_or_else(|| json!({}));
+            drop(state_snap);
             if let Err(err) = clean_game_lists_and_misc(ctx, &mut game, &source, &settings) {
                 return Some(api_error_response(&err, ctx.request_id, ctx.instance));
             }
@@ -2014,6 +1998,7 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                 .get("settings")
                 .cloned()
                 .unwrap_or_else(|| json!({}));
+            drop(state_snap);
             if let Err(err) = clean_game_lists_and_misc(ctx, &mut game, &source, &settings) {
                 return Some(api_error_response(&err, ctx.request_id, ctx.instance));
             }

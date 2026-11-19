@@ -13,23 +13,52 @@ if [ -n "${APPDIR:-}" ]; then
 else
   SHARE="$SCRIPT_DIR"
   for candidate in "$SCRIPT_DIR" "$SCRIPT_DIR/../share/openbox" "/usr/local/share/openbox"; do
-    if [ -f "$candidate/web_app.py" ]; then
+    if [ -f "$candidate/index.html" ] || [ -f "$candidate/web_app.py" ]; then
       SHARE="$candidate"
       break
     fi
   done
 fi
 
+# Resolve the Rust openbox-server binary unless OPENBOX_BACKEND=python is set
+# for side-by-side soak testing (ADR 0115).
+SERVER_BIN=""
+if [ "${OPENBOX_BACKEND:-}" != "python" ]; then
+  for candidate in \
+    "${OPENBOX_SERVER_BIN:-}" \
+    "$SHARE/openbox-server" \
+    "$SCRIPT_DIR/openbox-server" \
+    "$SCRIPT_DIR/target/release/openbox-server" \
+    "$(command -v openbox-server 2>/dev/null || true)"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      SERVER_BIN="$candidate"
+      break
+    fi
+  done
+fi
+
+run_backend()
+{
+  if [ -n "$SERVER_BIN" ]; then
+    OPENBOX_ROOT="$SHARE" exec "$SERVER_BIN" "$@"
+  fi
+  if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+    echo "OpenBox needs either openbox-server or Python 3.11+ (Homebrew: brew install python@3.12)." >&2
+    exit 1
+  fi
+  exec python3 -B "$SHARE/web_app.py" "$@"
+}
+
 # Library maintenance runs headless: no server, no window.
 for arg in "$@"; do
   case "$arg" in
     --check-library|--repair-library|--migrate-library|--rollback-library)
-      exec python3 "$SHARE/web_app.py" "$@" ;;
+      run_backend "$@" ;;
   esac
 done
 if [ "${1:-}" = "--web" ]; then
   shift
-  exec python3 "$SHARE/web_app.py" "$@"
+  run_backend "$@"
 fi
 
 # An app started from the Finder inherits a minimal PATH, so the Homebrew
@@ -44,8 +73,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
   export PATH
 fi
 
-if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-  echo "OpenBox needs Python 3.11 or newer (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
+if [ -n "$SERVER_BIN" ]; then
+  export OPENBOX_SERVER_BIN="$SERVER_BIN"
+  export OPENBOX_ROOT="$SHARE"
+elif ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  echo "OpenBox needs either openbox-server or Python 3.11+ (Homebrew: brew install python@3.12), or the OpenBox.app bundle." >&2
   exit 1
 fi
 
@@ -59,4 +91,4 @@ for candidate in "$SCRIPT_DIR/openbox-native.sh" "$SCRIPT_DIR/openbox-native" "$
 done
 
 echo "openbox-native launcher not found; falling back to the web app." >&2
-exec python3 "$SHARE/web_app.py" "$@"
+run_backend "$@"

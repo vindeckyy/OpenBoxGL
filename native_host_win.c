@@ -106,6 +106,7 @@ static char *g_token;
 static unsigned short g_port;
 static char *g_data_dir;        /* absolute, UTF-8 */
 static wchar_t *g_data_dir_wide;
+static wchar_t *g_server_bin_path;
 static wchar_t *g_web_app_path;
 static wchar_t *g_python_path;
 static HANDLE g_server_process;
@@ -1342,10 +1343,15 @@ boot_server(void)
 
     StrBuf command;
     sb_init(&command);
-    append_quoted_arg(&command, g_python_path);
-    sb_append_str(&command, " -B ");
-    append_quoted_arg(&command, g_web_app_path);
-    sb_append_str(&command, " --no-browser");
+    if (g_server_bin_path && path_exists(g_server_bin_path)) {
+        append_quoted_arg(&command, g_server_bin_path);
+        sb_append_str(&command, " --no-browser");
+    } else {
+        append_quoted_arg(&command, g_python_path);
+        sb_append_str(&command, " -B ");
+        append_quoted_arg(&command, g_web_app_path);
+        sb_append_str(&command, " --no-browser");
+    }
     char *command_utf8 = sb_take(&command);
     wchar_t *command_line = utf8_to_wide(command_utf8);
     free(command_utf8);
@@ -3262,12 +3268,13 @@ window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 static wchar_t *
 resolve_icon_path(void)
 {
-    if (g_web_app_path) {
-        const wchar_t *slash = wcsrchr(g_web_app_path, L'\\');
+    const wchar_t *base_path = g_web_app_path ? g_web_app_path : g_server_bin_path;
+    if (base_path) {
+        const wchar_t *slash = wcsrchr(base_path, L'\\');
         if (slash) {
-            wchar_t *directory = dup_wstr(g_web_app_path);
+            wchar_t *directory = dup_wstr(base_path);
             if (directory) {
-                directory[slash - g_web_app_path] = L'\0';
+                directory[slash - base_path] = L'\0';
                 wchar_t *candidate = path_join(directory, L"openbox.ico");
                 free(directory);
                 if (candidate && path_exists(candidate)) {
@@ -3379,6 +3386,31 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
 
     /* Resolve configurable paths from the environment. */
     wchar_t buffer[MAX_PATH * 2];
+    int force_python = 0;
+    if (GetEnvironmentVariableW(L"OPENBOX_BACKEND", buffer, MAX_PATH * 2) > 0 &&
+        _wcsicmp(buffer, L"python") == 0) {
+        force_python = 1;
+    }
+    if (!force_python) {
+        if (GetEnvironmentVariableW(L"OPENBOX_SERVER_BIN", buffer, MAX_PATH * 2) > 0 &&
+            path_exists(buffer)) {
+            g_server_bin_path = dup_wstr(buffer);
+        } else {
+            wchar_t module[MAX_PATH * 2];
+            if (GetModuleFileNameW(NULL, module, MAX_PATH * 2) > 0) {
+                wchar_t *slash = wcsrchr(module, L'\\');
+                if (slash) {
+                    *slash = L'\0';
+                    wchar_t *sibling = path_join(module, L"openbox-server.exe");
+                    if (sibling && path_exists(sibling)) {
+                        g_server_bin_path = sibling;
+                    } else {
+                        free(sibling);
+                    }
+                }
+            }
+        }
+    }
     if (GetEnvironmentVariableW(L"OPENBOX_WEB_APP", buffer, MAX_PATH * 2) > 0) {
         g_web_app_path = dup_wstr(buffer);
     }
@@ -3450,8 +3482,9 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
      * after the single-instance handoff: a forwarding instance (a deeplink or
      * protocol invocation) must not fail just because the environment is bare.
      */
-    if (!g_web_app_path || !path_exists(g_web_app_path)) {
-        log_line("native_host: OPENBOX_WEB_APP must point at web_app.py\n");
+    if ((!g_server_bin_path || !path_exists(g_server_bin_path)) &&
+        (!g_web_app_path || !path_exists(g_web_app_path))) {
+        log_line("native_host: OPENBOX_SERVER_BIN or OPENBOX_WEB_APP must be set\n");
         release_single_instance();
         return 1;
     }
@@ -3589,6 +3622,7 @@ wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR command_line, int show_c
     free(g_origin_wide);
     free(g_token);
     clear_recent_games();
+    free(g_server_bin_path);
     free(g_web_app_path);
     free(g_python_path);
     native_request_clear(&g_pending_request);

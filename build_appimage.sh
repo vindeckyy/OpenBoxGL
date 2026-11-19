@@ -16,28 +16,24 @@ mkdir -p "$build_root/tools"
 temporary="$(mktemp -d "$build_root/appimage.XXXXXX")"
 trap 'rm -rf -- "$temporary"' EXIT
 appdir="$temporary/OpenBox.AppDir"
-mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdir/usr/share/openbox/handlers" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/scalable/apps" "$appdir/usr/share/metainfo"
+mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/scalable/apps" "$appdir/usr/share/metainfo"
 
-python_binary="$(readlink -f "$(command -v python3)")"
-stdlib="$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')"
-python_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-stdlib_platlib="$(python3 -c 'import sys; print(getattr(sys, "platlibdir", "lib"))')"
-python_stdlib_dir="$appdir/usr/$stdlib_platlib/python$python_version"
-mkdir -p "$(dirname "$python_stdlib_dir")"
-cp "$python_binary" "$appdir/usr/bin/python3"
-cp -a "$stdlib" "$python_stdlib_dir"
-find "$python_stdlib_dir" -type d -name __pycache__ -prune -exec rm -rf -- {} +
+# Build or reuse the standalone Rust openbox-server binary (ADR 0115: zero bundled CPython).
+server_bin="${OPENBOX_SERVER_BIN:-$source_root/target/release/openbox-server}"
+if [ ! -x "$server_bin" ]; then
+  (cd "$source_root" && cargo build --release -p openbox-cli)
+  server_bin="$source_root/target/release/openbox-server"
+fi
+[ -x "$server_bin" ] || {
+  echo "build_appimage.sh: missing openbox-server binary at $server_bin" >&2
+  exit 1
+}
+install -Dm755 "$server_bin" "$appdir/usr/share/openbox/openbox-server"
+ln -sf ../share/openbox/openbox-server "$appdir/usr/bin/openbox-server"
 
-while IFS= read -r file; do
-  file="$(echo "$file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-  [ -n "$file" ] || continue
-  [[ "$file" =~ ^# ]] && continue
-  if [ ! -f "$source_root/$file" ]; then
-    echo "build_appimage.sh: missing runtime module: $file" >&2
-    exit 1
-  fi
-  install -Dm644 "$source_root/$file" "$appdir/usr/share/openbox/$file"
-done < "$source_root/runtime_modules.txt"
+# Optional host-Python v2 plugin bridge script (invoked strictly on demand for .py plugins).
+install -Dm644 "$source_root/plugin_runner_v2.py" "$appdir/usr/share/openbox/plugin_runner_v2.py"
+install -Dm644 "$source_root/openbox-release.pub" "$appdir/usr/share/openbox/openbox-release.pub"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
 cp "$source_root/openbox.svg" "$appdir/usr/share/openbox/openbox.svg"
 mkdir -p "$appdir/usr/share/openbox/static"
@@ -59,15 +55,6 @@ cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalo
 mkdir -p "$appdir/usr/share/openbox/themes"
 cp "$source_root"/themes/*.css "$appdir/usr/share/openbox/themes/"
 gcc -O2 "$source_root/native_host.c" -o "$appdir/usr/share/openbox/native_host" $(pkg-config --cflags --libs webkit2gtk-4.1)
-while IFS= read -r library; do
-  cp -L "$library" "$appdir/usr/lib/$(basename "$library")"
-done < <(
-  find "$appdir/usr/bin/python3" "$python_stdlib_dir/lib-dynload" -type f -print0 |
-    xargs -0 -n1 ldd 2>/dev/null |
-    awk '/=> \// {print $3} /^\// {print $1}' |
-    grep -vE '/(libc|libm|libpthread|libdl|librt|ld-linux)[^/]*\.so' |
-    sort -u
-)
 
 install -m 755 /dev/stdin "$appdir/AppRun" <<'EOF'
 #!/bin/bash
@@ -82,21 +69,19 @@ else
 fi
 export APPDIR="$app_root"
 export PATH="$app_root/usr/bin:${PATH:-/usr/bin:/bin}"
-export PYTHONHOME="$app_root/usr"
-export PYTHONPATH="$app_root/usr/share/openbox${PYTHONPATH:+:$PYTHONPATH}"
 lib_path="$app_root/usr/lib:$app_root/usr/lib64"
-python="$app_root/usr/bin/python3"
+server_bin="$app_root/usr/share/openbox/openbox-server"
 data_dir="${OPENBOX_DATA_DIR:-$HOME/.local/share/openbox-game-launcher}"
 mkdir -p "$data_dir"
 # Capture loader-level failures (missing libwebkit2gtk, etc.) that are
 # otherwise invisible on a file-manager double-click.
 exec 2>>"$data_dir/openbox-launch.log"
+export OPENBOX_ROOT="$app_root/usr/share/openbox"
+export OPENBOX_SERVER_BIN="$server_bin"
 if [ "${1:-}" = "--web" ]; then
   shift
-  exec env LD_LIBRARY_PATH="$lib_path" "$python" "$app_root/usr/share/openbox/web_app.py" "$@"
+  exec env LD_LIBRARY_PATH="$lib_path" "$server_bin" "$@"
 fi
-export OPENBOX_WEB_APP="$app_root/usr/share/openbox/web_app.py"
-export OPENBOX_PYTHON="$python"
 export APPDIR
 export OPENBOX_BUNDLED_LIB_PATH="$lib_path"
 unset LD_LIBRARY_PATH
@@ -149,7 +134,7 @@ manifest = {
 }
 out_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
-python3 "$source_root/scripts/gen_sbom.py" --appdir "$appdir" --out "$build_root/sbom.json"
+python3 "$source_root/scripts/gen_sbom.py" --no-stdlib --appdir "$appdir" --out "$build_root/sbom.json"
 if [ -n "${OPENBOX_APPDIR:-}" ]; then
   preserved_appdir="$OPENBOX_APPDIR"
   mkdir -p "$preserved_appdir"

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build the macOS app bundle: OpenBox.app with a universal native host, a
-# bundled CPython, and the runtime payload.
+# universal Rust openbox-server binary, and the runtime assets (ADR 0115: zero
+# bundled CPython).
 #
 # The bundle is ad-hoc signed (no Developer ID, no notarization), so a
 # downloaded copy needs one user action the first time: Privacy & Security
@@ -13,26 +14,8 @@ cd "$source_root"
 
 output="${1:-$source_root/build/macos/OpenBox-macos.zip}"
 build_root="$source_root/build/macos"
-cache_root="$build_root/cache"
 bundle="$build_root/OpenBox.app"
 work_root="$build_root/work"
-
-# --- Pinned inputs -------------------------------------------------------
-# python-build-standalone release 20261021 (CPython 3.12.15). The hashes
-# come from that release's SHA256SUMS file; a mismatch fails the build.
-PBS_RELEASE="20261021"
-PBS_PYTHON_VERSION="3.12.15"
-PBS_BASE_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_RELEASE}"
-PBS_ARM64_ASSET="cpython-${PBS_PYTHON_VERSION}+${PBS_RELEASE}-aarch64-apple-darwin-install_only.tar.gz"
-PBS_ARM64_SHA256="a18cc33862b53bd54a148c710def5375c1b47470cccedf817a19c2d211764584"
-PBS_X86_64_ASSET="cpython-${PBS_PYTHON_VERSION}+${PBS_RELEASE}-x86_64-apple-darwin-install_only.tar.gz"
-PBS_X86_64_SHA256="869e0b30959beccc616ce14907439f4d0b3170c5830a2362dade07f07b0ed3b8"
-
-# certifi carries the CA bundle the bundled interpreter trusts. It is a
-# build-time input only: the runtime stays stdlib-only.
-CERTIFI_VERSION="2026.10.23"
-CERTIFI_WHEEL_URL="https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-${CERTIFI_VERSION}-py3-none-any.whl"
-CERTIFI_WHEEL_SHA256="e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1"
 
 BUNDLE_ID="io.openbox.GameLauncher"
 
@@ -46,90 +29,28 @@ command -v lipo >/dev/null 2>&1 || die "lipo is required: install the Xcode Comm
 command -v codesign >/dev/null 2>&1 || die "codesign is required: install the Xcode Command Line Tools."
 command -v ditto >/dev/null 2>&1 || die "ditto is required."
 command -v shasum >/dev/null 2>&1 || die "shasum is required."
-command -v python3 >/dev/null 2>&1 || die "python3 is required."
+command -v cargo >/dev/null 2>&1 || die "cargo is required to build openbox-server."
 
-mkdir -p "$cache_root" "$build_root"
-
-# --- 1. The bundled interpreter ------------------------------------------
-fetch() {
-  local url="$1" target="$2"
-  if [ ! -f "$target" ]; then
-    say "Downloading $(basename "$target")..."
-    curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --output "$target" "$url" \
-      || die "download failed: $url"
-  fi
-}
-
-verify_sha256() {
-  local file="$1" expected="$2"
-  local actual
-  actual="$(shasum -a 256 "$file" | awk '{print $1}')"
-  [ "$actual" = "$expected" ] || die "checksum mismatch for $(basename "$file"): $actual != $expected"
-}
-
-say "== 1/8 Bundled interpreter =="
-fetch "${PBS_BASE_URL}/${PBS_ARM64_ASSET}" "$cache_root/$PBS_ARM64_ASSET"
-verify_sha256 "$cache_root/$PBS_ARM64_ASSET" "$PBS_ARM64_SHA256"
-fetch "${PBS_BASE_URL}/${PBS_X86_64_ASSET}" "$cache_root/$PBS_X86_64_ASSET"
-verify_sha256 "$cache_root/$PBS_X86_64_ASSET" "$PBS_X86_64_SHA256"
-fetch "$CERTIFI_WHEEL_URL" "$cache_root/certifi-${CERTIFI_VERSION}-py3-none-any.whl"
-verify_sha256 "$cache_root/certifi-${CERTIFI_VERSION}-py3-none-any.whl" "$CERTIFI_WHEEL_SHA256"
-
+mkdir -p "$build_root"
 rm -rf "$work_root"
-mkdir -p "$work_root/arm64" "$work_root/x86_64"
-tar -xzf "$cache_root/$PBS_ARM64_ASSET" -C "$work_root/arm64"
-tar -xzf "$cache_root/$PBS_X86_64_ASSET" -C "$work_root/x86_64"
-arm_tree="$work_root/arm64/python"
-x86_tree="$work_root/x86_64/python"
-[ -d "$arm_tree" ] || die "the arm64 archive did not contain a python directory."
-[ -d "$x86_tree" ] || die "the x86_64 archive did not contain a python directory."
+mkdir -p "$work_root"
 
-# Merge the two trees into one universal interpreter: every Mach-O file is
-# merged with lipo, every other file must be identical in both trees.
-merged_tree="$work_root/python"
-mkdir -p "$merged_tree"
-while IFS= read -r relative; do
-  if file -b "$arm_tree/$relative" | grep -q "Mach-O"; then
-    mkdir -p "$(dirname "$merged_tree/$relative")"
-    lipo -create "$arm_tree/$relative" "$x86_tree/$relative" -output "$merged_tree/$relative" \
-      || die "lipo could not merge $relative"
-  else
-    # The interpreter and the pure-python standard library must be
-    # identical in both builds. The headers, the build configuration, and
-    # the bundled Tcl/Tk data carry the build paths, so they differ and only
-    # the arm64 copy is kept.
-    case "$relative" in
-      lib/python3.12/_sysconfigdata*) ;;
-      bin/*|lib/python3.12/*.py)
-        cmp -s "$arm_tree/$relative" "$x86_tree/$relative" \
-          || die "the two interpreter builds differ in $relative"
-        ;;
-    esac
-    mkdir -p "$(dirname "$merged_tree/$relative")"
-    cp "$arm_tree/$relative" "$merged_tree/$relative"
-  fi
-done <<EOF
-$(cd "$arm_tree" && find . -type f | sed 's|^\./||' | sort)
-EOF
-while IFS= read -r relative; do
-  mkdir -p "$(dirname "$merged_tree/$relative")"
-  ln -sf "$(cd "$(dirname "$x86_tree/$relative")" && readlink "$(basename "$relative")")" "$merged_tree/$relative"
-done <<EOF
-$(cd "$arm_tree" && find . -type l | sed 's|^\./||' | sort)
-EOF
-while IFS= read -r relative; do
-  merged_archs="$(lipo -archs "$merged_tree/$relative" 2>/dev/null || true)"
-  for arch in arm64 x86_64; do
-    case " $merged_archs " in
-      *" $arch "*) ;;
-      *) die "the merged file $relative is missing the $arch slice ($merged_archs)" ;;
-    esac
-  done
-done <<EOF
-$(cd "$merged_tree" && find . -type f | sed 's|^\./||' | while read -r f; do
-  if file -b "$merged_tree/$f" | grep -q "Mach-O"; then echo "$f"; fi
-done)
-EOF
+# --- 1. The universal Rust server binary ----------------------------------
+say "== 1/8 Universal openbox-server =="
+if [ -n "${OPENBOX_SERVER_BIN:-}" ] && [ -x "${OPENBOX_SERVER_BIN}" ]; then
+  cp "$OPENBOX_SERVER_BIN" "$work_root/openbox-server"
+else
+  cargo build --release -p openbox-cli --target aarch64-apple-darwin \
+    || die "aarch64-apple-darwin Rust build failed."
+  cargo build --release -p openbox-cli --target x86_64-apple-darwin \
+    || die "x86_64-apple-darwin Rust build failed."
+  lipo -create \
+    "$source_root/target/aarch64-apple-darwin/release/openbox-server" \
+    "$source_root/target/x86_64-apple-darwin/release/openbox-server" \
+    -output "$work_root/openbox-server" \
+    || die "lipo could not merge openbox-server."
+fi
+chmod 755 "$work_root/openbox-server"
 
 # --- 2. The native host ---------------------------------------------------
 say "== 2/8 Native host =="
@@ -145,19 +66,12 @@ printf 'APPL????' > "$bundle/Contents/PkgInfo"
 cp "$work_root/native_host" "$bundle/Contents/MacOS/OpenBox"
 chmod 755 "$bundle/Contents/MacOS/OpenBox"
 
-cp -R "$merged_tree" "$bundle/Contents/Resources/python"
+cp "$work_root/openbox-server" "$bundle/Contents/MacOS/openbox-server"
+chmod 755 "$bundle/Contents/MacOS/openbox-server"
 
 share="$bundle/Contents/Resources/openbox"
 mkdir -p "$share"
-while IFS= read -r module; do
-  [ -n "$module" ] || continue
-  case "$module" in
-    *.py) ;;
-    *) continue ;;
-  esac
-  mkdir -p "$share/$(dirname "$module")"
-  cp "$source_root/$module" "$share/$module"
-done < "$source_root/runtime_modules.txt"
+cp "$source_root/plugin_runner_v2.py" "$share/"
 cp "$source_root/index.html" "$source_root/openbox.svg" "$share/"
 cp "$source_root/openbox-release.pub" "$share/"
 mkdir -p "$share/static"
@@ -180,16 +94,6 @@ mkdir -p "$share/themes"
 cp "$source_root"/themes/*.css "$share/themes/"
 cp "$source_root/LICENSE" "$share/"
 
-# The CA bundle the bundled interpreter trusts.
-python3 - "$cache_root/certifi-${CERTIFI_VERSION}-py3-none-any.whl" "$share/cacert.pem" <<'PY'
-import sys, zipfile
-wheel, target = sys.argv[1], sys.argv[2]
-with zipfile.ZipFile(wheel) as package:
-    data = package.read("certifi/cacert.pem")
-with open(target, "wb") as handle:
-    handle.write(data)
-PY
-
 # --- 4. The CLI shim ------------------------------------------------------
 say "== 4/8 CLI shim =="
 cat > "$bundle/Contents/Resources/bin/openbox" <<'SHIM'
@@ -199,15 +103,18 @@ set -euo pipefail
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 app="$(cd -- "$here/../../.." && pwd)"
 share="$app/Contents/Resources/openbox"
+server="$app/Contents/MacOS/openbox-server"
+export OPENBOX_ROOT="$share"
 if [ "${1:-}" = "--web" ]; then
   shift
-  exec "$app/Contents/Resources/python/bin/python3" -B "$share/web_app.py" "$@"
+  exec "$server" "$@"
 fi
-# Game Mode needs gamescope, so web_app.py refuses it on macOS (exit 2) rather than opening a window.
+# Headless maintenance and Game Mode refusal bypass the native GUI host.
 for arg in "$@"; do
-  if [ "$arg" = "--game-mode" ]; then
-    exec "$app/Contents/Resources/python/bin/python3" -B "$share/web_app.py" "$@"
-  fi
+  case "$arg" in
+    --game-mode|--check-library|--repair-library|--migrate-library|--rollback-library|--dump-contracts)
+      exec "$server" "$@" ;;
+  esac
 done
 exec "$app/Contents/MacOS/OpenBox" "$@"
 SHIM
@@ -280,16 +187,8 @@ else
   sign_flags=(--force --sign - --timestamp=none)
   sign_entitlements=()
 fi
-find "$bundle/Contents/Resources/python" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$bundle" -name "*.pyc" -delete 2>/dev/null || true
-while IFS= read -r file; do
-  codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} "$file" >/dev/null 2>&1 \
-    || die "codesign failed for $file"
-done <<EOF
-$(find "$bundle/Contents/Resources/python" -type f | while read -r f; do
-  if file -b "$f" | grep -q "Mach-O"; then echo "$f"; fi
-done)
-EOF
+codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} --identifier "$BUNDLE_ID.server" "$bundle/Contents/MacOS/openbox-server" >/dev/null
 codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} --identifier "$BUNDLE_ID" "$bundle/Contents/MacOS/OpenBox" >/dev/null
 codesign "${sign_flags[@]}" ${sign_entitlements[@]+"${sign_entitlements[@]}"} --identifier "$BUNDLE_ID" "$bundle" >/dev/null
 codesign --verify --strict --verbose=2 "$bundle" >/dev/null 2>&1 || die "the bundle signature does not verify."
@@ -322,7 +221,7 @@ ditto -c -k --sequesterRsrc --keepParent "$bundle" "$output"
 ( cd "$(dirname "$output")" && shasum -a 256 "$(basename "$output")" > "$(basename "$output").sha256" )
 
 sbom="$(dirname "$output")/OpenBox-${version}-macos-sbom.json"
-python3 "$source_root/scripts/gen_sbom.py" --version "$version" --appdir "$share" --out "$sbom" \
+python3 "$source_root/scripts/gen_sbom.py" --no-stdlib --version "$version" --appdir "$share" --out "$sbom" \
   || die "the SBOM could not be produced."
 
 say "Built $output"

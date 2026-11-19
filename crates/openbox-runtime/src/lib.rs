@@ -12,7 +12,7 @@ pub mod registry;
 pub mod sse;
 pub mod webhooks;
 
-pub use app_state::{AppState, PostCommitHook};
+pub use app_state::{AppState, CaptureBeforeHook, PostCommitHook};
 pub use cache::{CacheCoordinator, CachedPayload, FACET_DEGRADED, FacetCache, GZIP_THRESHOLD};
 pub use commands::{clean_commands, run_configured_commands};
 pub use job_manager::{JobContext, JobManager, operation_title_for_name, operation_type_for_name};
