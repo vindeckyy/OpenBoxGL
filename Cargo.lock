@@ -1096,6 +1096,7 @@ dependencies = [
  "openbox-store",
  "openbox-sync",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -1433,6 +1434,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "unicode-normalization",
  "uuid",
 ]
 
