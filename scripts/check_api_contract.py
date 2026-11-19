@@ -49,6 +49,8 @@ def _surface(prefix: str) -> list[dict[str, str]]:
 
 
 def _registry_problems() -> list[str]:
+    if contract_ratchet.use_rust_source():
+        return []
     from routes import GET_TABLE, POST_TABLE
     from routes.registry import all_routes
 
@@ -97,6 +99,15 @@ def _retired_entries(contract: dict) -> list[dict]:
 
 
 def live_contract(retired: list[dict] | None = None) -> dict[str, object]:
+    if contract_ratchet.use_rust_source():
+        raw = contract_ratchet.rust_contracts()["api_contracts"]
+        return {
+            "format": raw["format"],
+            "app_version": raw["app_version"],
+            "public": raw["public"],
+            "host": raw["host"],
+            "retired": retired or [],
+        }
     from updates import VERSION
 
     return {

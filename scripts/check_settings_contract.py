@@ -54,6 +54,8 @@ USER_DATA_KEYS = frozenset({
 
 def live_keys() -> set[str]:
     """Return the live KNOWN_SETTINGS keys, read from the real module."""
+    if contract_ratchet.use_rust_source():
+        return set(contract_ratchet.rust_contracts()["known_settings"])
     from settings_schema import KNOWN_SETTINGS
 
     return set(KNOWN_SETTINGS)

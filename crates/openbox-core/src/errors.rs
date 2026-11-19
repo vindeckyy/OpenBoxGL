@@ -94,6 +94,9 @@ impl ApiError {
     pub fn bad_request(msg: impl Into<String>) -> Self {
         Self::new(400, "BAD_REQUEST", msg)
     }
+    pub fn range_parse(msg: impl Into<String>) -> Self {
+        Self::new(400, "RANGE_PARSE_ERROR", msg)
+    }
     pub fn unauthorized(msg: impl Into<String>) -> Self {
         Self::new(403, "HTTP_403", msg)
     }

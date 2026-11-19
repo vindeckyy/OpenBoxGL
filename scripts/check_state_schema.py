@@ -19,6 +19,11 @@ ENVELOPE_FIELDS = ["format", "schema_version", "library_id", "created_with", "pa
 
 
 def live_contract() -> dict:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import contract_ratchet
+
+    if contract_ratchet.use_rust_source():
+        return contract_ratchet.rust_contracts()["state_schema"]
     sys.path.insert(0, str(ROOT))
     import state_store
     from updates import VERSION

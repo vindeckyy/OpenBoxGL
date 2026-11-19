@@ -568,4 +568,100 @@ impl OperationService {
             "limit": lim,
         })
     }
+
+    pub fn list_items(&self, job_id: &str, cursor: Option<&str>, limit: usize) -> Value {
+        let offset = cursor.and_then(|c| c.parse::<usize>().ok()).unwrap_or(0);
+        let lim = limit.clamp(1, MAX_ITEMS_LIST_LIMIT);
+        let res = self.get_items(job_id, offset, lim);
+        let total = res["total"].as_u64().unwrap_or(0) as usize;
+        let count = res["items"].as_array().map(|a| a.len()).unwrap_or(0);
+        let next_cursor = if offset + count < total {
+            Value::String((offset + count).to_string())
+        } else {
+            Value::Null
+        };
+        json!({
+            "job_id": job_id,
+            "cursor": cursor,
+            "next_cursor": next_cursor,
+            "items": res["items"],
+            "total": total,
+        })
+    }
+
+    pub fn create_linked(
+        &self,
+        op_type: &str,
+        title: &str,
+        input_data: Option<&Value>,
+        root_job_id: Option<&str>,
+        retry_of: Option<&str>,
+        resume_of: Option<&str>,
+    ) -> Value {
+        let mut created = self.create(op_type, title, input_data);
+        let jid = created["job_id"].as_str().unwrap_or("").to_owned();
+        {
+            let mut guard = self.inner.lock();
+            if let Some(Value::Object(obj)) = guard.operations.get_mut(&jid) {
+                if let Some(r) = root_job_id {
+                    obj.insert("root_job_id".into(), Value::String(r.to_owned()));
+                }
+                if let Some(r) = retry_of {
+                    obj.insert("retry_of".into(), Value::String(r.to_owned()));
+                }
+                if let Some(r) = resume_of {
+                    obj.insert("resume_of".into(), Value::String(r.to_owned()));
+                }
+                created = Value::Object(obj.clone());
+            }
+        }
+        self.persist();
+        created
+    }
+
+    pub fn retry(&self, job_id: &str) -> Result<Value, ApiError> {
+        let orig = self.get(job_id).ok_or_else(|| {
+            ApiError::job_state_conflict(format!("Operation {job_id} does not exist."))
+        })?;
+        if !orig
+            .get("can_retry")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            return Err(ApiError::job_state_conflict(format!(
+                "Operation {job_id} cannot be retried."
+            )));
+        }
+        Ok(self.create_linked(
+            orig["type"].as_str().unwrap_or("setup.scan"),
+            orig["title"].as_str().unwrap_or("Retry"),
+            orig.get("input"),
+            orig["root_job_id"].as_str(),
+            Some(job_id),
+            None,
+        ))
+    }
+
+    pub fn resume(&self, job_id: &str) -> Result<Value, ApiError> {
+        let orig = self.get(job_id).ok_or_else(|| {
+            ApiError::job_state_conflict(format!("Operation {job_id} does not exist."))
+        })?;
+        if !orig
+            .get("can_resume")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            return Err(ApiError::job_not_resumable(format!(
+                "Operation {job_id} cannot be resumed."
+            )));
+        }
+        Ok(self.create_linked(
+            orig["type"].as_str().unwrap_or("setup.scan"),
+            orig["title"].as_str().unwrap_or("Resume"),
+            orig.get("input"),
+            orig["root_job_id"].as_str(),
+            None,
+            Some(job_id),
+        ))
+    }
 }

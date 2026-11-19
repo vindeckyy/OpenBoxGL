@@ -26,6 +26,20 @@ FRAMEABLE_HOME = Path("handlers/data.py")
 
 def _failures() -> list[str]:
     failures = []
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import contract_ratchet
+
+    if contract_ratchet.use_rust_source():
+        csp = contract_ratchet.rust_contracts()["csp"]
+        default_csp = csp.get("default", "")
+        frameable_csp = csp.get("frameable", "")
+        if "frame-ancestors 'none'" not in default_csp:
+            failures.append("Rust CSP_DEFAULT must contain frame-ancestors 'none'")
+        if default_csp.replace("frame-ancestors 'none'", "frame-ancestors 'self'") != frameable_csp:
+            failures.append("Rust CSP_FRAMEABLE must relax only frame-ancestors 'none' -> 'self'")
+        if csp.get("x_frame_options_default") != "DENY" or csp.get("x_frame_options_frameable") != "SAMEORIGIN":
+            failures.append("Rust X-Frame-Options DENY/SAMEORIGIN pairing is missing")
+        return failures
     source = (ROOT / "web_app.py").read_text(encoding="utf-8")
 
     default = re.search(r'^CSP_DEFAULT = "(.*)"$', source, re.MULTILINE)

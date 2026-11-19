@@ -158,3 +158,41 @@ def ledger_failures(
             failures.append(f"RETIRED-REWRITTEN {key}: the recorded reason was changed")
 
     return failures
+
+
+_RUST_CONTRACTS_CACHE: dict | None = None
+
+
+def use_rust_source() -> bool:
+    return os.environ.get("OPENBOX_CONTRACT_SOURCE", "").strip().lower() == "rust"
+
+
+def rust_contracts() -> dict:
+    """Invoke `openbox-server --dump-contracts` and return the parsed contract JSON."""
+    global _RUST_CONTRACTS_CACHE
+    if _RUST_CONTRACTS_CACHE is not None:
+        return _RUST_CONTRACTS_CACHE
+    override = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
+    candidates = [Path(override)] if override else [
+        ROOT / "target" / "release" / "openbox-server",
+        ROOT / "target" / "debug" / "openbox-server",
+        ROOT / "target" / "release" / "openbox-server.exe",
+        ROOT / "target" / "debug" / "openbox-server.exe",
+    ]
+    binary = next((p for p in candidates if p.is_file()), None)
+    if binary is None:
+        raise RuntimeError(
+            "OPENBOX_CONTRACT_SOURCE=rust set but openbox-server binary not found. "
+            "Build it with `cargo build -p openbox-cli` or set OPENBOX_SERVER_BIN."
+        )
+    proc = subprocess.run(
+        [str(binary), "--dump-contracts"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"{binary} --dump-contracts failed ({proc.returncode}): {proc.stderr}")
+    _RUST_CONTRACTS_CACHE = json.loads(proc.stdout)
+    return _RUST_CONTRACTS_CACHE

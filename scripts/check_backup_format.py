@@ -18,6 +18,11 @@ sys.path.insert(0, str(ROOT))
 
 
 def live_contract() -> dict:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import contract_ratchet
+
+    if contract_ratchet.use_rust_source():
+        return contract_ratchet.rust_contracts()["backup_format"]
     from pkg.parity import parity_backup as backup
 
     return {

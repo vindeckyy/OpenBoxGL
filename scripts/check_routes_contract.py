@@ -55,6 +55,13 @@ def live_routes() -> dict[str, list[str]]:
     what the server actually dispatches, including multi-path decorators and
     the v1 alias expansion.
     """
+    if contract_ratchet.use_rust_source():
+        raw = contract_ratchet.rust_contracts()["routes"]
+        return {
+            path: sorted(methods)
+            for path, methods in sorted(raw.items())
+            if not any(path.startswith(prefix) for prefix in IGNORED_PREFIXES)
+        }
     from routes import GET_TABLE, POST_TABLE
     from routes.registry import all_routes
 
