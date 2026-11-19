@@ -16,7 +16,8 @@ use serde_json::json;
 
 use crate::contracts::is_registered_api_route;
 use crate::handlers::{
-    arcade, defs, emulators, faugus, health, jobs, launch, native, sessions, shared, wine,
+    arcade, defs, emulators, faugus, health, imports, jobs, launch, library, library_storage,
+    native, sessions, settings, setup, shared, wine,
 };
 use crate::middleware::{
     AuthRateLimiter, MAX_BODY, api_error_response, check_host_api_version, check_retired_route,
@@ -174,6 +175,21 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         if let Some(resp) = arcade::handle_get(&ctx) {
             return resp;
         }
+        if let Some(resp) = library::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = library_storage::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = settings::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = imports::handle_get(&ctx) {
+            return resp;
+        }
+        if let Some(resp) = setup::handle_get(&ctx) {
+            return resp;
+        }
         // Optional Strangler Proxy for unmigrated registered routes during Phases 3–9
         if is_registered_api_route("GET", &path)
             && let Some(proxy) = &state.strangler
@@ -227,6 +243,21 @@ async fn dispatch_request(State(state): State<Arc<HttpState>>, req: Request<Body
         return resp;
     }
     if let Some(resp) = arcade::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = library::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = library_storage::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = settings::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = imports::handle_post(&ctx, &payload) {
+        return resp;
+    }
+    if let Some(resp) = setup::handle_post(&ctx, &payload) {
         return resp;
     }
 

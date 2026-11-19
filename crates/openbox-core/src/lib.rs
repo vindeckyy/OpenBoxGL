@@ -15,7 +15,9 @@ pub use identity::{
     python_canonical_ascii_json, stable_game_id,
 };
 pub use locking::{OrderedMutex, OrderedRwLock, lock_level};
-pub use machines::{MACHINES, Machine, SESSION_ABANDONED, SESSION_ACTIVE, SESSION_STOPPING};
+pub use machines::{
+    MACHINES, Machine, SESSION_ABANDONED, SESSION_ACTIVE, SESSION_STOPPING, job_result_state,
+};
 pub use redact::{
     EXPORT_EXCLUDED_TOP_LEVEL_KEYS, REDACTED_KEYS, merge_preserved_credentials, redact_settings,
     redact_state_for_export,

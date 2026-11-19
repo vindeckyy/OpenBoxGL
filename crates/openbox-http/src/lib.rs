@@ -1,6 +1,8 @@
 //! Axum-based HTTP server, security middleware, declarative 417-route contract registry,
 //! static Range/304 file serving, SSE streaming, Strangler proxy, and domain handlers.
 
+#![recursion_limit = "512"]
+
 pub mod contracts;
 pub mod handlers;
 pub mod middleware;

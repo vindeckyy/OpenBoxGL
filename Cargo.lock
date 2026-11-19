@@ -1200,6 +1200,7 @@ dependencies = [
  "openbox-sync",
  "parking_lot",
  "rand 0.8.8",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
@@ -1211,6 +1212,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
+ "uuid",
  "zip",
 ]
 
@@ -1218,6 +1220,7 @@ dependencies = [
 name = "openbox-imports"
 version = "3.0.0"
 dependencies = [
+ "base64 0.23.1",
  "hex",
  "jiff",
  "openbox-core",
@@ -1228,14 +1231,17 @@ dependencies = [
  "openbox-store",
  "parking_lot",
  "quick-xml",
+ "rand 0.8.8",
  "regex",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "uuid",
+ "zip",
 ]
 
 [[package]]

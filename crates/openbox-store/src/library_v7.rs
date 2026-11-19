@@ -27,6 +27,7 @@ pub const PRIMARY_NAME: &str = "library.json";
 pub const REPORT_NAME: &str = "migration-report.json";
 pub const MARKER_NAME: &str = "migration-in-progress.json";
 pub const ROLLBACK_REPORT_NAME: &str = "rollback-report.json";
+pub const ACK_FILE: &str = "migration-acknowledged.json";
 pub const REPORT_FORMAT: u32 = 1;
 pub const MOVE_PLAN_FORMAT: u32 = 1;
 pub const EXAMPLE_LIMIT: usize = 20;
@@ -803,4 +804,67 @@ pub fn apply_move(
         "library_root": new_root_str,
         "path_mode": "portable",
     }))
+}
+
+/// Report what the last migration did and whether the user has acknowledged it.
+pub fn migration_status(data_dir: &Path) -> Value {
+    let report = read_json_obj(&data_dir.join(REPORT_NAME))
+        .map(Value::Object)
+        .unwrap_or_else(|| json!({}));
+    let ack = read_json_obj(&data_dir.join(ACK_FILE))
+        .map(Value::Object)
+        .unwrap_or_else(|| json!({}));
+    let completed_at = report
+        .get("completed_at")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let ack_completed = ack
+        .get("completed_at")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let has_report = report.as_object().is_some_and(|m| !m.is_empty());
+    let pending = has_report && ack_completed != completed_at;
+    let backup_name = report
+        .get("backup")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(V6_BACKUP_NAME);
+    let backup = data_dir.join(backup_name);
+    let backup_path = if backup.is_file() {
+        backup.to_string_lossy().into_owned()
+    } else {
+        String::new()
+    };
+    json!({
+        "pending": pending,
+        "report": report,
+        "backup_path": backup_path,
+        "acknowledged_at": ack.get("acknowledged_at").and_then(Value::as_str).unwrap_or(""),
+    })
+}
+
+/// Record that the user has seen the migration report.
+pub fn acknowledge_migration(data_dir: &Path) -> Value {
+    let Some(report) = read_json_obj(&data_dir.join(REPORT_NAME)) else {
+        return json!({"status": "no_migration"});
+    };
+    if report.is_empty() {
+        return json!({"status": "no_migration"});
+    }
+    let completed_at = report
+        .get("completed_at")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    let acknowledged_at = utc_now();
+    let payload = json!({
+        "completed_at": completed_at,
+        "acknowledged_at": acknowledged_at,
+    });
+    let _ = write_json(&data_dir.join(ACK_FILE), &payload);
+    json!({
+        "status": "acknowledged",
+        "completed_at": completed_at,
+        "acknowledged_at": acknowledged_at,
+    })
 }

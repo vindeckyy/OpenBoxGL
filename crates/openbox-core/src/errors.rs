@@ -58,6 +58,11 @@ impl ApiError {
         }
     }
 
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.code = code.into();
+        self
+    }
+
     pub fn with_detail(mut self, detail: Value) -> Self {
         self.detail = Some(detail);
         self
@@ -237,6 +242,9 @@ impl ApiError {
     }
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::new(500, "INTERNAL_ERROR", msg)
+    }
+    pub fn state_unavailable(msg: impl Into<String>) -> Self {
+        Self::new(503, "STATE_UNAVAILABLE", msg)
     }
 }
 

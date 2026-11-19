@@ -132,7 +132,11 @@ impl AppState {
         self.invalidate_caches();
         if self.read_model.enabled() {
             let sig = self.store.signature();
-            let _ = self.read_model.rebuild(&state, sig);
+            let rm = Arc::clone(&self.read_model);
+            let st_bg = Arc::clone(&state);
+            std::thread::spawn(move || {
+                let _ = rm.rebuild(&st_bg, sig);
+            });
         }
         Ok((
             state,
