@@ -1,0 +1,3 @@
+[build]
+# Keep parallel compilation responsive without exhausting RAM on 15 GiB hosts.
+jobs = 8

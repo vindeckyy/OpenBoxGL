@@ -89,8 +89,10 @@ def _start_server(data_dir):
     env["OPENBOX_DATA_DIR"] = str(data_dir)
     env["OPENBOX_SAFE_MODE"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
+    server_bin = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
+    server_cmd = [server_bin, "--no-browser"] if server_bin else [sys.executable, "-B", "web_app.py", "--no-browser"]
     process = subprocess.Popen(
-        [sys.executable, "-B", "web_app.py", "--no-browser"],
+        server_cmd,
         cwd=ROOT,
         env=env,
         stdout=subprocess.PIPE,

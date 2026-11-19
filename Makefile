@@ -18,7 +18,7 @@ STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css) $(wildcard stati
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
 
-.PHONY: install uninstall appimage check version-check dev-venv test-one native-host native-host-macos macos-app contracts ratchets
+.PHONY: install uninstall appimage check rust-check version-check dev-venv test-one native-host native-host-macos macos-app contracts ratchets
 
 # Feature-regression ratchets (ADR 0060). Regenerates the frozen contracts in
 # scripts/contracts/ after an intentional surface change. Run this only when a
@@ -69,6 +69,13 @@ dev-venv:
 # Dev-only dependencies live in .venv-dev; the runtime app stays dep-free.
 check: dev-venv
 	python3 scripts/check_tests.py
+
+# Rust workspace quality & supply-chain gate (ADR 0115).
+rust-check:
+	cargo fmt --all -- --check
+	cargo clippy --workspace --all-targets -- -D warnings
+	cargo deny check
+	cargo test --workspace
 
 # A single test file, e.g. `make test-one TEST=tests/test_saves.py`.
 test-one:

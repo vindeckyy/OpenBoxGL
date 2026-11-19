@@ -16,6 +16,7 @@ emumovies.json
 **/emumovies.json
 
 build/
+target/
 *.AppImage
 *.AppImage.sha256
 *.AppImage.zsync

@@ -40,7 +40,9 @@ def run_pass(script, extra_args, games, settings, extra_env, schema=7):
             "ui_state": {}, "active_sessions": [], "trash": [], "party_decks": [],
             "emulator_settings": {}, "achievement_overrides": {},
         }), encoding="utf-8")
-    server = subprocess.Popen([sys.executable, "-B", "web_app.py", "--no-browser", *extra_args],
+    server_bin = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
+    server_cmd = [server_bin, "--no-browser", *extra_args] if server_bin else [sys.executable, "-B", "web_app.py", "--no-browser", *extra_args]
+    server = subprocess.Popen(server_cmd,
                               cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
         for _ in range(60):

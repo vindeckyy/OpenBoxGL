@@ -1,0 +1,350 @@
+{
+  "cases": [
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "",
+            "i18n": "sayit.chip.unplayed",
+            "key": "unplayed",
+            "label": "Unplayed",
+            "value": true
+          },
+          {
+            "display": "≤ 2000",
+            "i18n": "sayit.chip.year_range",
+            "key": "year_range",
+            "label": "Year",
+            "value": [
+              null,
+              2000
+            ]
+          },
+          {
+            "display": "rpg / role-playing / role playing",
+            "i18n": "sayit.chip.genre_any",
+            "key": "genre_any",
+            "label": "Genre",
+            "value": [
+              "rpg",
+              "role-playing",
+              "role playing"
+            ]
+          }
+        ],
+        "clauses": [
+          {
+            "kind": "unplayed"
+          },
+          {
+            "kind": "year_range",
+            "max": 2000,
+            "min": null
+          },
+          {
+            "kind": "genre_any",
+            "terms": [
+              "rpg",
+              "role-playing",
+              "role playing"
+            ]
+          }
+        ],
+        "complete": false,
+        "hint": "",
+        "ok": true,
+        "parsed": true,
+        "rules": {},
+        "text": "unplayed retro rpg",
+        "unparsed": []
+      },
+      "query": "unplayed retro rpg"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "≤ 5 h",
+            "i18n": "sayit.chip.ttb_max",
+            "key": "ttb_max",
+            "label": "Length",
+            "value": 5.0
+          },
+          {
+            "display": "",
+            "i18n": "sayit.chip.coop",
+            "key": "coop",
+            "label": "Co-op",
+            "value": true
+          }
+        ],
+        "clauses": [
+          {
+            "hours": 5.0,
+            "kind": "ttb_max"
+          },
+          {
+            "kind": "coop"
+          }
+        ],
+        "complete": false,
+        "hint": "",
+        "ok": true,
+        "parsed": true,
+        "rules": {},
+        "text": "short co-op games under 5 hours",
+        "unparsed": []
+      },
+      "query": "short co-op games under 5 hours"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "≥ 4",
+            "i18n": "sayit.chip.rating_min",
+            "key": "rating_min",
+            "label": "Rating",
+            "value": 4.0
+          },
+          {
+            "display": "snes",
+            "i18n": "sayit.chip.query",
+            "key": "query",
+            "label": "Search",
+            "value": "snes"
+          },
+          {
+            "display": "1990–1999",
+            "i18n": "sayit.chip.year_range",
+            "key": "year_range",
+            "label": "Year",
+            "value": [
+              1990,
+              1999
+            ]
+          }
+        ],
+        "clauses": [
+          {
+            "kind": "rating_min",
+            "value": 4.0
+          },
+          {
+            "kind": "year_range",
+            "max": 1999,
+            "min": 1990
+          }
+        ],
+        "complete": false,
+        "hint": "Some words aren't in the query grammar and were used as a plain text search.",
+        "ok": true,
+        "parsed": true,
+        "rules": {
+          "query": "snes"
+        },
+        "text": "highly rated snes games from the 90s",
+        "unparsed": [
+          "snes"
+        ]
+      },
+      "query": "highly rated snes games from the 90s"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "≥ 180 days ago",
+            "i18n": "sayit.chip.idle_days",
+            "key": "idle_days",
+            "label": "Last played",
+            "value": 180
+          }
+        ],
+        "clauses": [
+          {
+            "days": 180,
+            "kind": "idle_days"
+          }
+        ],
+        "complete": false,
+        "hint": "",
+        "ok": true,
+        "parsed": true,
+        "rules": {},
+        "text": "haven't played in 6 months",
+        "unparsed": []
+      },
+      "query": "haven't played in 6 months"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "rpg",
+            "i18n": "sayit.chip.genre_any",
+            "key": "genre_any",
+            "label": "Genre",
+            "value": [
+              "rpg"
+            ]
+          },
+          {
+            "display": "-platform:pc chrono trigger",
+            "i18n": "sayit.chip.query",
+            "key": "query",
+            "label": "Search",
+            "value": "-platform:pc chrono trigger"
+          },
+          {
+            "display": "favorite",
+            "i18n": "sayit.chip.tag",
+            "key": "tag",
+            "label": "Tag",
+            "value": "favorite"
+          }
+        ],
+        "clauses": [
+          {
+            "kind": "genre_any",
+            "terms": [
+              "rpg"
+            ]
+          },
+          {
+            "kind": "tag",
+            "term": "favorite"
+          }
+        ],
+        "complete": false,
+        "hint": "Some words aren't in the query grammar and were used as a plain text search.",
+        "ok": true,
+        "parsed": true,
+        "rules": {
+          "query": "-platform:pc chrono trigger"
+        },
+        "text": "genre:rpg -platform:pc #favorite \"chrono trigger\"",
+        "unparsed": [
+          "-platform:pc",
+          "chrono trigger"
+        ]
+      },
+      "query": "genre:rpg -platform:pc #favorite \"chrono trigger\""
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "≥ 4.5",
+            "i18n": "sayit.chip.rating_min",
+            "key": "rating_min",
+            "label": "Rating",
+            "value": 4.5
+          },
+          {
+            "display": "4+ players e10+",
+            "i18n": "sayit.chip.query",
+            "key": "query",
+            "label": "Search",
+            "value": "4+ players e10+"
+          }
+        ],
+        "clauses": [
+          {
+            "kind": "rating_min",
+            "value": 4.5
+          }
+        ],
+        "complete": false,
+        "hint": "Some words aren't in the query grammar and were used as a plain text search.",
+        "ok": true,
+        "parsed": true,
+        "rules": {
+          "query": "4+ players e10+"
+        },
+        "text": "top rated 4+ players E10+",
+        "unparsed": [
+          "4+",
+          "players",
+          "e10+"
+        ]
+      },
+      "query": "top rated 4+ players E10+"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "≥ 20 h",
+            "i18n": "sayit.chip.ttb_min",
+            "key": "ttb_min",
+            "label": "Length",
+            "value": 20.0
+          },
+          {
+            "display": "Beaten",
+            "i18n": "sayit.chip.progress",
+            "key": "progress",
+            "label": "Progress",
+            "value": "Beaten"
+          },
+          {
+            "display": "2015..2020",
+            "i18n": "sayit.chip.query",
+            "key": "query",
+            "label": "Search",
+            "value": "2015..2020"
+          }
+        ],
+        "clauses": [
+          {
+            "hours": 20.0,
+            "kind": "ttb_min"
+          }
+        ],
+        "complete": false,
+        "hint": "Some words aren't in the query grammar and were used as a plain text search.",
+        "ok": true,
+        "parsed": true,
+        "rules": {
+          "progress": "Beaten",
+          "query": "2015..2020"
+        },
+        "text": "long beaten games 2015..2020",
+        "unparsed": [
+          "2015..2020"
+        ]
+      },
+      "query": "long beaten games 2015..2020"
+    },
+    {
+      "parsed": {
+        "chips": [
+          {
+            "display": "plain title search",
+            "i18n": "sayit.chip.query",
+            "key": "query",
+            "label": "Search",
+            "value": "plain title search"
+          }
+        ],
+        "clauses": [],
+        "complete": true,
+        "hint": "No query grammar matched — this is a plain text search.",
+        "ok": true,
+        "parsed": false,
+        "plain_query": "just plain title search",
+        "rules": {
+          "query": "plain title search"
+        },
+        "text": "just plain title search",
+        "unparsed": [
+          "plain",
+          "title",
+          "search"
+        ]
+      },
+      "query": "just plain title search"
+    }
+  ]
+}

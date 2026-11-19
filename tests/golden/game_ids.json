@@ -1,0 +1,234 @@
+{
+  "cases": [
+    {
+      "game_id": "game-df0ce388b6f6e9ab2e4a87fd",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "/games/quake/quake.sh",
+        "platform": "PC",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Quake",
+        "path": "/games/quake/quake.sh",
+        "platform": "PC"
+      }
+    },
+    {
+      "game_id": "game-4d31a467a162263b14d10e30",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "/roms/SNES/クロノ・トリガー (JP).sfc",
+        "platform": "SNES",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Chrono Trigger — クロノ・トリガー",
+        "path": "/roms/SNES/クロノ・トリガー (JP).sfc",
+        "platform": "SNES"
+      }
+    },
+    {
+      "game_id": "game-192bba059ae553f189af0cd5",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "/games/🚀/rl.exe",
+        "platform": "PC",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Rocket 🚀 League",
+        "path": "/games/🚀/rl.exe",
+        "platform": "PC"
+      }
+    },
+    {
+      "game_id": "game-ff1bdc9ce70373f608878fd1",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "/roms/GBA/Éclair/rom.gba",
+        "platform": "Game Boy Advance",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Accented Café Éclair",
+        "path": "/roms/GBA/Café//../Éclair/./rom.gba",
+        "platform": "Game Boy Advance"
+      }
+    },
+    {
+      "game_id": "game-869da2020905d0c0f5f771d9",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "name": "Manual Shelf Entry",
+        "path": "",
+        "platform": "Switch",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Manual Shelf Entry",
+        "platform": "Switch"
+      }
+    },
+    {
+      "game_id": "game-a60e2988b9d26eb8caaf363f",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "",
+        "platform": "PC",
+        "steam_app_id": "367520"
+      },
+      "input": {
+        "name": "Steam Only",
+        "platform": "PC",
+        "steam_app_id": "367520"
+      }
+    },
+    {
+      "game_id": "game-d668997de12a1850d4cd5835",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "gog_id": "1207658924",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "",
+        "platform": "PC",
+        "steam_app_id": ""
+      },
+      "input": {
+        "gog_id": "1207658924",
+        "name": "GOG Native",
+        "platform": "PC"
+      }
+    },
+    {
+      "game_id": "game-b4b7b4538dab6b3c6d4d9361",
+      "identity_payload": {
+        "ea_id": "Origin.OFR.50.0001234",
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "",
+        "platform": "PC",
+        "steam_app_id": ""
+      },
+      "input": {
+        "ea_id": "Origin.OFR.50.0001234",
+        "name": "EA Native",
+        "platform": "PC"
+      }
+    },
+    {
+      "game_id": "game-7cad725ee81e2dc432e4bc7f",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "",
+        "platform": "PC",
+        "steam_app_id": "",
+        "ubisoft_id": "520"
+      },
+      "input": {
+        "name": "Ubisoft Native",
+        "platform": "PC",
+        "ubisoft_id": "520"
+      }
+    },
+    {
+      "game_id": "game-e733fdba23d9bff5344c4199",
+      "identity_payload": {
+        "gameyfin_id": "g4",
+        "heroic_app_id": "h2",
+        "launchbox_db_id": "lb5",
+        "lutris_id": "l3",
+        "path": "/a/b/c",
+        "platform": "PC",
+        "steam_app_id": "1"
+      },
+      "input": {
+        "gameyfin_id": "g4",
+        "heroic_app_id": "h2",
+        "launchbox_db_id": "lb5",
+        "lutris_id": "l3",
+        "name": "All Core Storefronts",
+        "path": "/a/b/c",
+        "platform": "PC",
+        "steam_app_id": "1"
+      }
+    },
+    {
+      "game_id": "game-26a9d82249ef52b376a845d6",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "name": "Quotes & Escapes \"\\\n\t\b",
+        "path": "",
+        "platform": "PC",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Quotes & Escapes \"\\\n\t\b\f",
+        "platform": "PC"
+      }
+    },
+    {
+      "game_id": "game-742e1518948c1924fbd8d428",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "//server/share/rom.nes",
+        "platform": "NES",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Double Leading Slash",
+        "path": "//server/share/rom.nes",
+        "platform": "NES"
+      }
+    },
+    {
+      "game_id": "game-bec4b707b2cac0667bee51ef",
+      "identity_payload": {
+        "gameyfin_id": "",
+        "heroic_app_id": "",
+        "launchbox_db_id": "",
+        "lutris_id": "",
+        "path": "/var/roms/rom.nes",
+        "platform": "NES",
+        "steam_app_id": ""
+      },
+      "input": {
+        "name": "Triple Leading Slash",
+        "path": "///var/roms/rom.nes",
+        "platform": "NES"
+      }
+    }
+  ],
+  "version": 1
+}

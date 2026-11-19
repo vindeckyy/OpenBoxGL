@@ -1,0 +1,124 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/openbox-core",
+    "crates/openbox-platform",
+    "crates/openbox-io",
+    "crates/openbox-store",
+    "crates/openbox-runtime",
+    "crates/openbox-emulators",
+    "crates/openbox-imports",
+    "crates/openbox-metadata",
+    "crates/openbox-sync",
+    "crates/openbox-discovery",
+    "crates/openbox-plugins",
+    "crates/openbox-integrations",
+    "crates/openbox-http",
+    "crates/openbox-cli",
+    "crates/openbox-parity-tests",
+]
+
+[workspace.package]
+version = "3.0.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT"
+repository = "https://github.com/vindeckyy/OpenBoxGL"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+# Internal workspace crates
+openbox-core = { path = "crates/openbox-core" }
+openbox-platform = { path = "crates/openbox-platform" }
+openbox-io = { path = "crates/openbox-io" }
+openbox-store = { path = "crates/openbox-store" }
+openbox-runtime = { path = "crates/openbox-runtime" }
+openbox-emulators = { path = "crates/openbox-emulators" }
+openbox-imports = { path = "crates/openbox-imports" }
+openbox-metadata = { path = "crates/openbox-metadata" }
+openbox-sync = { path = "crates/openbox-sync" }
+openbox-discovery = { path = "crates/openbox-discovery" }
+openbox-plugins = { path = "crates/openbox-plugins" }
+openbox-integrations = { path = "crates/openbox-integrations" }
+openbox-http = { path = "crates/openbox-http" }
+
+# Async & HTTP
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "process", "sync", "signal", "fs", "io-util"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+axum = { version = "0.8", features = ["json", "query", "tokio", "http1"] }
+hyper = { version = "1", features = ["server", "client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "client-legacy", "http1", "server-auto"] }
+http = "1"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util", "timeout"] }
+tower-http = { version = "0.6", features = ["compression-gzip"] }
+bytes = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "gzip", "json", "stream", "http2"] }
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "handshake"] }
+url = "2"
+percent-encoding = "2"
+mime_guess = "2"
+
+# Serialization & formats
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+quick-xml = "0.42"
+csv = "1"
+
+# Storage
+rusqlite = { version = "0.43", features = ["bundled", "vtab", "functions"] }
+tempfile = "3"
+
+# Crypto, hashing, & encoding
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+blake2 = "0.10"
+hmac = "0.12"
+subtle = "2"
+rand = "0.8"
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+base64 = "0.23"
+hex = "0.4"
+crc32fast = "1"
+
+# Archives
+zip = { version = "9.7", default-features = false, features = ["deflate-flate2", "time"] }
+flate2 = "1"
+tar = "0.4"
+
+# Text, time, logging, errors, concurrency
+jiff = { version = "1.0", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+unicode-normalization = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+thiserror = "2"
+parking_lot = "0.12"
+
+# Platform FFI (only used inside openbox-platform)
+libc = "0.2"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Power",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+opt-level = 3

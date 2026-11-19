@@ -1,0 +1,47 @@
+[package]
+name = "openbox-http"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+axum.workspace = true
+bytes.workspace = true
+jiff.workspace = true
+flate2.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+mime_guess.workspace = true
+openbox-core.workspace = true
+openbox-discovery.workspace = true
+openbox-emulators.workspace = true
+openbox-imports.workspace = true
+openbox-integrations.workspace = true
+openbox-io.workspace = true
+openbox-metadata.workspace = true
+openbox-platform.workspace = true
+openbox-plugins.workspace = true
+openbox-runtime.workspace = true
+openbox-store.workspace = true
+openbox-sync.workspace = true
+parking_lot.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+url.workspace = true

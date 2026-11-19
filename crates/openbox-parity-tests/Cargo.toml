@@ -1,0 +1,29 @@
+[package]
+name = "openbox-parity-tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+openbox-core.workspace = true
+openbox-discovery.workspace = true
+openbox-emulators.workspace = true
+openbox-http.workspace = true
+openbox-imports.workspace = true
+openbox-integrations.workspace = true
+openbox-io.workspace = true
+openbox-metadata.workspace = true
+openbox-platform.workspace = true
+openbox-plugins.workspace = true
+openbox-runtime.workspace = true
+openbox-store.workspace = true
+openbox-sync.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
