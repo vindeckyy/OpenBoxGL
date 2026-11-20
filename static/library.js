@@ -556,12 +556,18 @@ function renderFilterButtonTooltip() {
   button.title = text;
   button.setAttribute('aria-label', text);
 }
+function detailsHasContent() {
+  if (document.body.classList.contains('details-popup')) return true;
+  if (AppState.selectedId !== null && AppState.games.some(item => item.id === AppState.selectedId)) return true;
+  return AppState.platform !== 'all' || AppState.platformCategory !== 'all' || Boolean(AppState.activePlaylist);
+}
 function applyDetailsLayout() {
   const workspace = document.querySelector('.workspace');
   const details = $('details');
   if (!workspace || !details) return;
   const narrow = window.matchMedia('(max-width:760px)').matches;
-  const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
+  const hasContent = detailsHasContent();
+  const collapsed = !hasContent || localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
   const width = Math.min(640, Math.max(280, Number(localStorage.getItem(DETAILS_WIDTH_KEY)) || 410));
   details.classList.toggle('details-collapsed', collapsed && !narrow);
   if (narrow) {
@@ -605,6 +611,7 @@ function applyDetailsLayout() {
     details.style.overflow = '';
   }
 }
+let detailsResizeDocBound = false;
 function bindDetailsResize() {
   const handle = $('detailsResizeHandle');
   if (!handle || handle.dataset.bound) return;
@@ -636,8 +643,11 @@ function bindDetailsResize() {
     localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
     applyDetailsLayout();
   });
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', stopDrag);
+  if (!detailsResizeDocBound) {
+    detailsResizeDocBound = true;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', stopDrag);
+  }
   handle.addEventListener('dblclick', () => {
     const collapsed = localStorage.getItem(DETAILS_COLLAPSED_KEY) === '1';
     localStorage.setItem(DETAILS_COLLAPSED_KEY, collapsed ? '0' : '1');
@@ -690,7 +700,6 @@ function bindFilterDrawer() {
     </div>
     <label class="field"><span>Developer contains</span><input id="smartFilterDeveloper" type="search" placeholder="Developer"></label>
     <label class="field"><span>Publisher contains</span><input id="smartFilterPublisher" type="search" placeholder="Publisher"></label>
-    <div class="extras"><button type="button" class="primary" id="applySmartFilters">Apply smart filters</button></div>
     <details class="advanced-search-help"><summary>Advanced search help</summary><p class="description">Use typed tokens in search: <code>developer:"Name"</code>, <code>publisher:"Name"</code>, <code>favorite:yes</code>, <code>installed:yes</code>, <code>progress:Playing</code>, <code>import_batch_id:"id"</code>. Prefix with <code>-</code> to exclude. Click a filter once to include it, again to exclude it, and again to clear it.</p></details>`;
   paintSmartButtons();
   const sourceRule = AppState.smartFilterRules?.achievements_source;
@@ -1055,7 +1064,7 @@ function markFilterAria() {
       });
     }
     function renderPlaylists() {
-      $('playlists').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => `<div class="playlist-row"><button class="platform ${AppState.activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Create a playlist to pin one here.</span>';
+      $('playlists').innerHTML = AppState.playlists.length ? AppState.playlists.map(item => `<div class="playlist-row"><button class="platform ${AppState.activePlaylist === item.name ? 'active' : ''}" data-playlist="${escapeHtml(item.name)}">${escapeHtml(item.name)} <small>${item.type === 'manual' ? `(${(item.members || []).length})` : '↻'}</small></button><button class="playlist-delete" data-delete-playlist="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description sidebar-empty-hint">No playlists yet.</span>';
       document.querySelectorAll('[data-playlist]').forEach(button => button.onclick = () => {
         const item = AppState.playlists.find(playlist => playlist.name === button.dataset.playlist);
         if (!item) return;
@@ -1072,7 +1081,12 @@ function markFilterAria() {
     function renderFilterPresets() {
       const container = $('filterPresets');
       if (!container) return;
-      container.innerHTML = AppState.filterPresets.length ? AppState.filterPresets.map(item => `<div class="playlist-row"><button class="platform ${AppState.activeFilterPreset === item.name ? 'active' : ''}" data-filter-preset="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.bigbox_quick ? ' ★' : ''}</button><button class="playlist-delete" data-delete-preset="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a preset to pin filters.</span>';
+      const isEmpty = !AppState.filterPresets.length;
+      container.classList.toggle('sidebar-section-empty', isEmpty);
+      if (container.previousElementSibling?.classList.contains('section-title')) {
+        container.previousElementSibling.classList.toggle('sidebar-section-empty', isEmpty);
+      }
+      container.innerHTML = AppState.filterPresets.length ? AppState.filterPresets.map(item => `<div class="playlist-row"><button class="platform ${AppState.activeFilterPreset === item.name ? 'active' : ''}" data-filter-preset="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.bigbox_quick ? ' ★' : ''}</button><button class="playlist-delete" data-delete-preset="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '';
       document.querySelectorAll('[data-filter-preset]').forEach(button => button.onclick = () => {
         const item = AppState.filterPresets.find(preset => preset.name === button.dataset.filterPreset);
         if (!item) return;
@@ -1115,12 +1129,19 @@ function markFilterAria() {
     function selectGame(id) {
       const pane = gridPane();
       if (pane) detailSheetScrollTop = pane.scrollTop;
+      const wasCollapsed = $('details')?.classList.contains('details-collapsed');
       AppState.selectedId = id;
+      try { localStorage.removeItem(DETAILS_COLLAPSED_KEY); } catch {}
       document.querySelectorAll('[data-game]').forEach(item => {
         const row = item.closest('.card,.list-row') || item;
         row.classList.toggle('selected', Number(item.dataset.game) === id);
       });
+      applyDetailsLayout();
       renderDetails();
+      if (wasCollapsed) {
+        _gridGeoCache = null;
+        renderGrid({ fromScroll: true });
+      }
     }
     function imageMarkup(game, imageGroup) {
       const flags = {cover:'has_cover',background:'has_background',screenshot:'available_screenshots',clear_logo:'has_clear_logo',fanart:'has_fanart',banner:'has_banner',icon:'has_icon',box_back:'has_box_back',box_spine:'has_box_spine',box_3d:'has_box_3d',title_screen:'has_title_screen',cart_front:'has_cart_front',cart_back:'has_cart_back',disc:'has_disc',advertisement:'has_advertisement',manual:'has_manual'};
@@ -1196,9 +1217,12 @@ function markFilterAria() {
       const rowGap = parseFloat(getComputedStyle($('grid')).rowGap) || 0;
       const rows = [];
       let top = 0;
+      const showSectionHeaders = sections.length > 1;
       for (const section of sections) {
-        rows.push({kind:'header', label:section.label, count:section.games.length, top, height:ratioHeadH});
-        top += ratioHeadH + rowGap;
+        if (showSectionHeaders) {
+          rows.push({kind:'header', label:section.label, count:section.games.length, top, height:ratioHeadH});
+          top += ratioHeadH + rowGap;
+        }
         const cardRows = Math.ceil(section.games.length / cols);
         for (let r = 0; r < cardRows; r++) {
           const games = section.games.slice(r * cols, (r + 1) * cols);
@@ -1439,6 +1463,7 @@ function markFilterAria() {
         return;
       }
       const listView = (AppState.appSettings.library_view || 'grid') === 'list';
+      if ($('displayMenuWrap')) $('displayMenuWrap').hidden = listView;
       $('grid').className = listView ? 'list-view' : 'grid';
       // contain-intrinsic-size bookkeeping for virtual rows (skip when virtual disabled)
       if (isVirtualEnabled()) $('grid').style.containIntrinsicSize = 'auto 800px';
@@ -1475,7 +1500,7 @@ function markFilterAria() {
         }
         const chunk = isVirtualEnabled() ? visible.slice(start, end) : visible;
         rendered = chunk.map((game,index) => listView
-           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${!animate ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game)}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
+           ? `<button type="button" class="list-row${motionClass} ${AppState.selectedId === game.id || selectedIds.has(game.id) ? 'selected' : ''}"${!animate ? '' : ` style="--motion-index:${Math.min(index,10)}"`} data-game="${game.id}" aria-label="Open ${escapeHtml(game.name)}"><strong>${escapeHtml(game.name)}<span class="badge-row">${renderBadges(game, { omit: ['progress', 'rating'] })}</span></strong><span>${escapeHtml(game.platform || '')}</span><span>${escapeHtml(game.genre || '')}</span><span>${escapeHtml(game.esrb || '-')}</span><span>${escapeHtml(game.progress || '')}</span><span>${game.play_count || 0}</span><span>${game.rating || ''}</span></button>`
            : gridCardHTML(game, index, imageGroup, !animate, motionClass)).join('');
       }
       const focusedGameId = $('grid')?.contains(document.activeElement) ? document.activeElement?.closest?.('[data-game]')?.dataset.game : null;
@@ -1567,13 +1592,16 @@ function markFilterAria() {
       if (!measuredBefore && gridRowHeight && total) renderGrid({fromScroll});
       syncHash();
     }
+    const HERO_DISMISSED_KEY = 'openbox.hero.dismissed';
     function renderHomeHero() {
       const host = $('homeHero');
       if (!host) return;
+      let dismissed = false;
+      try { dismissed = sessionStorage.getItem(HERO_DISMISSED_KEY) === '1'; } catch {}
       const recent = [...AppState.games].filter(game => game.last_played && !game.hidden)
         .sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
       const query = $('sidebarSearch')?.value?.trim();
-      const show = Boolean(recent) && AppState.platform === 'all' && AppState.platformCategory === 'all'
+      const show = !dismissed && Boolean(recent) && AppState.platform === 'all' && AppState.platformCategory === 'all'
         && !AppState.activePlaylist && !AppState.activeFilterPreset && !AppState.bulkMode && !query && !isTrashView();
       host.hidden = !show;
       if (!show) { host.innerHTML = ''; return; }
@@ -1586,11 +1614,17 @@ function markFilterAria() {
     <div class="home-hero-actions">
       <button type="button" class="play" id="homeHeroPlay">${escapeHtml(t('library.jump_back_play'))}</button>
       <button type="button" class="icon-button" id="homeHeroDetails">${escapeHtml(t('library.jump_back_details'))}</button>
+      <button type="button" class="icon-button home-hero-dismiss" id="homeHeroDismiss" aria-label="${escapeHtml(t('library.dismiss_hero'))}" title="${escapeHtml(t('library.dismiss_hero'))}">×</button>
     </div>
   </article>`;
       if (recent.has_background) host.querySelector('.home-hero-card').style.setProperty('--hero-art', `url('${media(recent,'background')}')`);
       $('homeHeroPlay').onclick = () => launch(recent.id);
       $('homeHeroDetails').onclick = () => selectGame(recent.id);
+      $('homeHeroDismiss').onclick = () => {
+        try { sessionStorage.setItem(HERO_DISMISSED_KEY, '1'); } catch {}
+        host.hidden = true;
+        host.innerHTML = '';
+      };
     }
     const ONBOARDING_DISMISSED_KEY = 'openbox.onboarding.dismissed';
     function onboardingDismissed() {
@@ -1639,6 +1673,15 @@ function markFilterAria() {
         renderDetails();
       };
     }
+    function detailsResizeHandleMarkup() {
+      return `<div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="${escapeHtml(t('library.resize_details'))}" tabindex="0"></div>`;
+    }
+    function presentFact(label, value) {
+      if (value == null) return '';
+      const text = String(value).trim();
+      if (!text || text === '-') return '';
+      return fact(label, value);
+    }
     function renderDetails() {
       const game = AppState.games.find(item => item.id === AppState.selectedId);
       applyMoodForGame(game).catch(() => {});
@@ -1646,12 +1689,14 @@ function markFilterAria() {
         if (AppState.activePlaylist) renderCollectionDetails(AppState.activePlaylist, visibleGames(), 'Playlist');
         else if (AppState.platformCategory !== 'all') renderCollectionDetails(AppState.platformCategory, AppState.games.filter(item => platformCategoryFor(item) === AppState.platformCategory), 'Category');
         else renderPlatformDetails(AppState.platform);
+        applyDetailsLayout();
         return;
       }
       if (!game) {
         const pane = gridPane();
         if (pane && detailSheetScrollTop) pane.scrollTop = detailSheetScrollTop;
-        $('details').innerHTML = renderOnboardingCard();
+        $('details').innerHTML = detailsResizeHandleMarkup() + renderOnboardingCard();
+        bindDetailsResize();
         bindOnboarding();
         applyDetailsLayout();
         return;
@@ -1667,7 +1712,36 @@ function markFilterAria() {
       const priceCurrency = game.price_currency || AppState.appSettings.currency || 'USD';
       const playedHours = Number(game.total_playtime_seconds || game.playtime_seconds || 0) / 3600;
       const costPerHour = priceCents > 0 && playedHours >= (1 / 60) ? Math.round(priceCents / playedHours) : null;
-      $('details').innerHTML = `<div class="hero motion-enter" ${heroStyle}><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
+      const infoFacts = [
+        presentFact('Release date', game.year),
+        presentFact('Developer', game.developer),
+        presentFact('Publisher', game.publisher),
+        presentFact('ESRB', game.esrb),
+        presentFact('Source', game.source),
+        presentFact('Category', platformCategoryFor(game)),
+        ...Object.entries(game.custom_fields || {}).map(([key, value]) => presentFact(key, value)),
+        presentFact('Max players', game.max_players),
+        presentFact('Controller support', game.controller_support),
+        presentFact('Disc count', game.disc_count),
+        Number(game.playtime_seconds) > 0 ? presentFact('Play time', duration(game.playtime_seconds)) : '',
+        game.time_to_beat_hours != null && game.time_to_beat_hours !== '' ? presentFact('Time to beat', `${game.time_to_beat_hours} h`) : '',
+        Number(game.play_count) > 0 ? presentFact('Launches', game.play_count) : '',
+        presentFact('Last played', game.last_played ? game.last_played.replace('T', ' ') : ''),
+        presentFact('Progress', game.progress),
+        game.rating ? presentFact('Rating', `${game.rating} / 5`) : '',
+        presentFact('Region', game.region),
+        presentFact('Play mode', game.play_mode),
+        presentFact('Wikipedia', game.wikipedia_url),
+        presentFact('Video URL', game.video_url),
+        (() => { const links = gameLinks(game); return links ? `<div class="fact"><small>Links</small><span>${links}</span></div>` : ''; })(),
+      ].filter(Boolean).join('');
+      const backlogFacts = [
+        game.user_rating ? presentFact(t('backlog.my_rating'), `${game.user_rating} / 5`) : '',
+        Number(game.manual_playtime_seconds) > 0 ? presentFact(t('backlog.manual_time'), duration(game.manual_playtime_seconds)) : '',
+        priceCents != null ? presentFact(t('price.paid'), formatMoney(priceCents, priceCurrency)) : '',
+        costPerHour != null ? presentFact(t('price.cost_per_hour'), formatMoney(costPerHour, priceCurrency)) : '',
+      ].filter(Boolean).join('');
+      $('details').innerHTML = `${detailsResizeHandleMarkup()}<div class="hero motion-enter" ${heroStyle}><button type="button" class="detail-close-btn" id="closeDetailsButton" aria-label="${escapeHtml(t('library.close_details'))}" title="${escapeHtml(t('library.close_details'))}">×</button><div class="hero-copy"><div class="hero-kicker">${escapeHtml(game.platform || 'Unspecified platform')}</div><h2>${escapeHtml(game.name)}</h2></div></div>
         <div class="detail-body">
           <div class="detail-tabs" role="tablist" aria-label="${escapeHtml(t('moments.detail_tabs'))}"><button type="button" class="detail-tab active" id="detailsOverviewTab" role="tab" aria-selected="true" aria-controls="detailsOverview">${escapeHtml(t('moments.overview'))}</button><button type="button" class="detail-tab" id="momentsTab" role="tab" aria-selected="false" aria-controls="detailsMoments">${escapeHtml(t('moments.tab'))}${game.moments_count ? ` <span class="tab-count">${escapeHtml(String(game.moments_count))}</span>` : ''}</button><button type="button" class="detail-tab" id="storyTab" role="tab" aria-selected="false" aria-controls="detailsStory">Story</button></div>
           <section class="detail-tab-panel" id="detailsOverview" role="tabpanel" aria-labelledby="detailsOverviewTab">
@@ -1675,21 +1749,12 @@ function markFilterAria() {
           <div class="rating"><strong>${game.favorite ? '★ Favorite' : game.rating ? `${game.rating} ★` : 'Library'}</strong><span>${escapeHtml(game.progress || game.genre || '')}</span><span class="badge-row">${renderBadges(game)}</span></div>
           <button class="play" id="playButton" ${shelfEntry ? '' : game.steam_installable ? '' : game.path_exists && game.store_installed !== false ? '' : game.gameyfin_id && !game.store_installed ? '' : 'disabled'}>${shelfEntry ? 'SET UP LAUNCH' : game.steam_installable ? '⬇ INSTALL' : game.gameyfin_id && !game.store_installed ? '⬇ INSTALL' : '▶ PLAY'}</button>
           <div class="extras">${game.steam_repairable ? '<button class="icon-button" id="steamRepair">Verify Steam files</button>' : ''}</div>
-          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="momentsButton">${escapeHtml(t('moments.tab'))}</button><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="popoutDetailsButton">Pop out</button><button class="icon-button" id="databaseMetadataButton">Find metadata</button><button class="icon-button" id="dnaMoreLikeThis">${escapeHtml(t('dna.more_like_this'))}</button><button class="icon-button" id="sealMemoryButton">${escapeHtml(t('playerlog.seal_memory'))}</button>${game.steam_app_id ? `<button class="icon-button" id="steamMetadataButton">Use Steam data</button><button class="icon-button" id="watchDealsButton">${escapeHtml(t('deals.watch_for_deals'))}</button>` : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button" id="removeGameButton">Remove game</button></div>
-          <div class="detail-card"><h3>Information</h3><div class="facts">
-            ${fact('Release date',game.year)}${fact('Developer',game.developer)}${fact('Publisher',game.publisher)}${fact('ESRB',game.esrb)}${fact('Source',game.source)}${fact('Category',platformCategoryFor(game))}${Object.entries(game.custom_fields || {}).map(([key,value]) => fact(key,value)).join('')}${fact('Max players',game.max_players)}${fact('Controller support',game.controller_support)}${fact('Disc count',game.disc_count)}${fact('Play time',duration(game.playtime_seconds))}${fact('Time to beat',game.time_to_beat_hours != null && game.time_to_beat_hours !== '' ? `${game.time_to_beat_hours} h` : '')}
-            ${fact('Launches',game.play_count)}${fact('Last played',game.last_played ? game.last_played.replace('T',' ') : '')}${fact('Progress',game.progress)}${fact('Rating',game.rating ? `${game.rating} / 5` : '')}${fact('Region',game.region)}${fact('Play mode',game.play_mode)}${fact('Wikipedia',game.wikipedia_url)}${fact('Video URL',game.video_url)}${(() => { const links = gameLinks(game); return links ? `<div class="fact"><small>Links</small><span>${links}</span></div>` : ''; })()}
-          </div>${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}
+          <div class="detail-actions"><span id="resumeActionSlot" class="resume-action-slot"></span><button class="icon-button" id="favoriteButton">${game.favorite ? 'Remove favorite' : 'Add favorite'}</button><button class="icon-button" id="editButton">${shelfEntry ? 'Edit shelf entry' : 'Edit metadata'}</button>${shelfEntry ? '<button class="icon-button" id="convertShelfButton">Set up launch</button>' : ''}<button class="icon-button" id="databaseMetadataButton">Find metadata</button><button class="icon-button" id="dnaMoreLikeThis">${escapeHtml(t('dna.more_like_this'))}</button></div>
+          <details class="detail-more-actions"><summary>${escapeHtml(t('library.more_actions'))}</summary><div class="detail-more-grid"><button class="icon-button" id="popoutDetailsButton">Pop out</button><button class="icon-button" id="sealMemoryButton">${escapeHtml(t('playerlog.seal_memory'))}</button>${game.steam_app_id ? `<button class="icon-button" id="steamMetadataButton">Use Steam data</button><button class="icon-button" id="watchDealsButton">${escapeHtml(t('deals.watch_for_deals'))}</button>` : ''}<button class="icon-button" id="captureScreenshot">Capture screenshot</button><button class="icon-button" id="downloadBezel">Download bezel</button>${game.gameyfin_id && game.store_installed ? '<button class="icon-button" id="uninstallGameyfin">Uninstall Gameyfin copy</button>' : ''}${game.path ? '<button class="icon-button" id="showInFolderButton">Show in folder</button>' : ''}<button class="icon-button danger-button" id="removeGameButton">Remove game</button></div></details>
+          <div class="detail-card"><h3>Information</h3>${infoFacts ? `<div class="facts">${infoFacts}</div>` : ''}${game.description ? `<p class="description">${escapeHtml(game.description)}</p>` : ''}
           ${applications.length || versions.length || documents.length ? `<div class="extras">${applications.map((item,index) => `<button class="icon-button" data-extra="applications:${index}">App · ${escapeHtml(item.name)}</button>`).join('')}${versions.map((item,index) => `<button class="icon-button" data-extra="versions:${index}">Version · ${escapeHtml(item.name)}</button>`).join('')}${documents.map((item,index) => `<button class="icon-button" data-document="${index}">Read ${escapeHtml(item.name)}</button><button class="icon-button" data-extra="documents:${index}" aria-label="Open ${escapeHtml(item.name)} externally">↗</button>`).join('')}</div>` : ''}</div>
           ${game.has_video ? `<div class="detail-card"><h3>Video</h3><video class="media-player" controls preload="metadata" src="${media(game,'video')}"></video></div>` : ''}
-          <div class="detail-card"><h3>${escapeHtml(t('backlog.section'))}</h3><div class="facts">
-            ${fact(t('backlog.status'), game.progress || t('backlog.unplayed'))}
-            ${fact(t('backlog.my_rating'), game.user_rating ? `${game.user_rating} / 5` : '')}
-            ${fact(t('backlog.manual_time'), duration(game.manual_playtime_seconds || 0))}
-            ${fact(t('backlog.total_time'), duration(game.total_playtime_seconds || game.playtime_seconds || 0))}
-            ${priceCents != null ? fact(t('price.paid'), formatMoney(priceCents, priceCurrency)) : ''}
-            ${costPerHour != null ? fact(t('price.cost_per_hour'), formatMoney(costPerHour, priceCurrency)) : ''}
-          </div>
+          <div class="detail-card"><h3>${escapeHtml(t('backlog.section'))}</h3>${backlogFacts ? `<div class="facts">${backlogFacts}</div>` : ''}
           <div class="backlog-controls">
             <label class="field"><span>${escapeHtml(t('backlog.status'))}</span><select id="backlogProgress">
               <option value=""${game.progress ? '' : ' selected'}>${escapeHtml(t('backlog.unplayed'))}</option>
@@ -1708,10 +1773,15 @@ function markFilterAria() {
           <div class="detail-card"><h3>Related Games</h3><div class="related-grid" id="relatedGames"><span class="description">Finding matches...</span></div></div>
           <div class="detail-card"><h3>Achievements</h3><div id="achievementContent"></div><div class="extras">${game.steam_app_id ? '<button class="icon-button" id="downloadTrailer">Download Steam trailer</button>' : ''}${game.heroic_app_id ? '<button class="icon-button" id="downloadGogMedia">Download GOG media</button>' : ''}${AppState.raConfigured || game.ra_game_id ? '<button class="icon-button" id="loadAchievements">Match ROM / load RetroAchievements</button>' : ''}</div></div>
           ${game.platform === 'Arcade' || game.rom_name ? `<div class="detail-card"><h3>High scores</h3><div class="extras"><button class="icon-button" id="loadHighscores">Show table</button><button class="icon-button" id="exportHighscores">Export high scores</button><button class="icon-button" id="importHighscores">Import high scores</button></div><div class="description" id="highscoreTable">Parse MAME .hi files with hi2txt.</div></div>` : ''}
-          <div class="detail-card"><h3>Save management</h3><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><div class="description" id="saveVaultSummary"></div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div>
-          <div class="detail-card doctor-card" id="doctorCard" style="border:1px solid var(--border-card)"><h3>Launch check</h3><div id="doctorChecks" class="description">Checking whether this game can launch…</div></div>
+          <details class="detail-card detail-collapsible"${savePaths.length ? ' open' : ''}><summary><span class="detail-card-heading">Save management</span><span class="detail-summary-meta">${savePaths.length ? `${savePaths.length} location${savePaths.length === 1 ? '' : 's'}` : 'Not configured'}</span></summary><div class="detail-collapsible-body"><div class="extras"><button class="icon-button" id="discoverSaves">Discover locations</button>${savePaths.length ? '<button class="icon-button" id="backupSaves">Back up now</button>' : ''}<button class="icon-button" id="saveHistory">Version history</button><button class="icon-button" id="ludusaviBackup">Ludusavi backup</button><button class="icon-button" id="ludusaviRestore">Ludusavi restore</button>${AppState.appSettings.save_tools?.hoard ? '<button class="icon-button" id="hoardBackup">Hoard backup</button>' : ''}</div><div class="description" id="saveVaultSummary"></div><label class="field"><span>State slot</span><input id="resumeSlot" maxlength="32" pattern="[A-Za-z0-9_-]{1,32}" placeholder="Default slot" value="${escapeHtml(game.resume_slot || '')}"></label><div class="description" id="saveDiscovery">${savePaths.length ? `${savePaths.length} configured location${savePaths.length === 1 ? '' : 's'}` : 'No save location configured.'}${AppState.appSettings.save_tools?.ludusavi ? ' · Ludusavi detected' : ' · Install ludusavi for automatic save discovery'}</div><div class="extras" id="saveBackups"></div></div></details>
+          <details class="detail-card doctor-card detail-collapsible" id="doctorCard"><summary><span class="detail-card-heading">Launch check</span><span class="detail-summary-meta" id="doctorStatusChip">Checking…</span></summary><div class="detail-collapsible-body"><div id="doctorChecks" class="description">Checking whether this game can launch…</div></div></details>
           </section><section class="detail-tab-panel" id="detailsMoments" role="tabpanel" aria-labelledby="momentsTab" hidden><div id="momentsPanel"></div></section><section class="detail-tab-panel" id="detailsStory" role="tabpanel" aria-labelledby="storyTab" hidden><div id="storyPanel"></div></section>
         </div>`;
+      bindDetailsResize();
+      if ($('closeDetailsButton')) $('closeDetailsButton').onclick = () => {
+        AppState.selectedId = null;
+        render();
+      };
       bindCoverModel($('details'));
       if (AppState.appSettings.save_management_enabled === false) $('discoverSaves')?.closest('.detail-card')?.remove();
       const overviewTab = $('detailsOverviewTab');
@@ -1853,10 +1923,20 @@ function markFilterAria() {
     }
     function renderDoctorChecks(container, preflight, game) {
       const checks = preflight.checks || [];
+      const card = $('doctorCard');
+      const chip = $('doctorStatusChip');
       if (!checks.length) {
+        if (chip) { chip.textContent = 'Ready ✓'; chip.className = 'detail-summary-meta is-ok'; }
+        if (card && !grantedAccess.has(String(game.game_id))) card.open = false;
         container.innerHTML = '<span class="description" style="color:var(--brand)">Ready to launch ✓</span>' + grantRowHtml(game);
         return;
       }
+      const hasError = checks.some(c => c.severity === 'error');
+      if (chip) {
+        chip.textContent = `${checks.length} issue${checks.length === 1 ? '' : 's'}`;
+        chip.className = `detail-summary-meta ${hasError ? 'is-error' : 'is-warn'}`;
+      }
+      if (card) card.open = true;
       container.innerHTML = checks.map(check => {
         const fix = check.fix_action || {};
         const kind = fix.kind || '';
@@ -1991,8 +2071,13 @@ function markFilterAria() {
       const container = $('smartCollections');
       if (!container) return;
       const items = AppState.smartCollections || [];
+      const isEmpty = !items.length;
+      container.classList.toggle('sidebar-section-empty', isEmpty);
+      if (container.previousElementSibling?.classList.contains('section-title')) {
+        container.previousElementSibling.classList.toggle('sidebar-section-empty', isEmpty);
+      }
       const activeQuery = ($('sidebarSearch')?.value || '').trim();
-      container.innerHTML = items.length ? items.map(item => `<div class="playlist-row"><button class="platform ${activeQuery && item.query === activeQuery ? 'active' : ''}" data-smart-collection="${escapeHtml(item.name)}" title="${escapeHtml(item.query)}">${escapeHtml(item.name)}</button><button class="playlist-delete" data-delete-collection="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '<span class="description">Save a search as a living collection.</span>';
+      container.innerHTML = items.length ? items.map(item => `<div class="playlist-row"><button class="platform ${activeQuery && item.query === activeQuery ? 'active' : ''}" data-smart-collection="${escapeHtml(item.name)}" title="${escapeHtml(item.query)}">${escapeHtml(item.name)}</button><button class="playlist-delete" data-delete-collection="${escapeHtml(item.name)}" aria-label="Delete ${escapeHtml(item.name)}">×</button></div>`).join('') : '';
       document.querySelectorAll('[data-smart-collection]').forEach(button => button.onclick = () => {
         const item = items.find(entry => entry.name === button.dataset.smartCollection);
         if (!item) return;
@@ -2020,7 +2105,7 @@ function markFilterAria() {
         } catch (error) { notify(error.message); }
       });
     }
-    function render() { renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderSourceFilter(); bindSourceFilter(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); renderFilterButtonTooltip(); applyDetailsLayout(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
+    function render() { applyDetailsLayout(); renderQueryChips(); renderPlatformCategories(); renderPlatforms(); renderSourceFilter(); bindSourceFilter(); renderPlaylists(); renderFilterPresets(); renderSmartCollections(); renderGrid(); renderDetails(); markFilterAria(); renderFilterButtonTooltip(); applySidebarVisibility(); syncHash(); $('status').textContent = `${AppState.games.length} games · local library`; }
     function collectionStats(items) {
       const completed = items.filter(game => ['Beaten','Completed','Mastered'].includes(game.progress)).length;
       const playtime = items.reduce((total, game) => total + Number(game.total_playtime_seconds || game.playtime_seconds || 0), 0);
@@ -2174,7 +2259,13 @@ function markFilterAria() {
       const lastPlayed = [...items].filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0];
       const mostPlayed = [...items].sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0];
       const random = items[Math.floor(Math.random() * items.length)];
-      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">${escapeHtml(kind)}</div><h2>${escapeHtml(title)}</h2><p class="description">${items.length} game${items.length === 1 ? '' : 's'} in this view.</p>${collectionStats(items)}${bigBoxHiddenControl(kind, title)}<div class="detail-card"><h3>Quick actions</h3><div class="extras">${random ? `<button class="primary" id="playRandomCollection">Play random</button>` : ''}${lastPlayed ? `<button class="icon-button" data-collection-game="${lastPlayed.id}">Last played · ${escapeHtml(lastPlayed.name)}</button>` : ''}${mostPlayed ? `<button class="icon-button" data-collection-game="${mostPlayed.id}">Most played · ${escapeHtml(mostPlayed.name)}</button>` : ''}</div></div><div class="detail-card"><h3>Featured games</h3><div class="related-grid">${items.slice(0,8).map(game => `<button class="related-game" data-collection-game="${game.id}" title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</button>`).join('') || '<span class="description">No games found.</span>'}</div></div></div>`;
+      $('details').innerHTML = `${detailsResizeHandleMarkup()}<div class="platform-panel"><button type="button" class="detail-close-btn detail-close-panel" id="closeDetailsButton" aria-label="${escapeHtml(t('library.close_details'))}" title="${escapeHtml(t('library.close_details'))}">×</button><div class="hero-kicker">${escapeHtml(kind)}</div><h2>${escapeHtml(title)}</h2><p class="description">${items.length} game${items.length === 1 ? '' : 's'} in this view.</p>${collectionStats(items)}${bigBoxHiddenControl(kind, title)}<div class="detail-card"><h3>Quick actions</h3><div class="extras">${random ? `<button class="primary" id="playRandomCollection">Play random</button>` : ''}${lastPlayed ? `<button class="icon-button" data-collection-game="${lastPlayed.id}">Last played · ${escapeHtml(lastPlayed.name)}</button>` : ''}${mostPlayed ? `<button class="icon-button" data-collection-game="${mostPlayed.id}">Most played · ${escapeHtml(mostPlayed.name)}</button>` : ''}</div></div><div class="detail-card"><h3>Featured games</h3><div class="related-grid">${items.slice(0,8).map(game => `<button class="related-game" data-collection-game="${game.id}" title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</button>`).join('') || '<span class="description">No games found.</span>'}</div></div></div>`;
+      bindDetailsResize();
+      if ($('closeDetailsButton')) $('closeDetailsButton').onclick = () => {
+        if (kind === 'Playlist') AppState.activePlaylist = '';
+        else if (kind === 'Category') AppState.platformCategory = 'all';
+        render();
+      };
       if (random) $('playRandomCollection').onclick = () => launch(random.id);
       document.querySelectorAll('[data-collection-game]').forEach(button => button.onclick = () => selectGame(Number(button.dataset.collectionGame)));
       bindBigBoxHiddenControls();
@@ -2193,7 +2284,12 @@ function markFilterAria() {
       const platformVideo = AppState.appSettings.platform_videos?.[platformName]
         ? `<div class="detail-card"><h3>Platform video</h3><video class="platform-video" controls preload="metadata" src="${platformVideoUrl}"></video></div>`
         : '';
-      $('details').innerHTML = `<div class="platform-panel"><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}${bigBoxHiddenControl('Platform', platformName)}<div class="detail-card"><h3>Platform</h3><div class="extras"><button type="button" class="icon-button" id="platformRename">Rename platform</button><button type="button" class="icon-button" id="platformDelete">Delete platform</button></div></div><div class="detail-card"><h3>Emulator settings for this platform</h3><label class="field"><span>Adapter id, blank uses detection</span><input id="platformEmulatorAdapter" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.adapter_id || '')}"></label><label class="field"><span>RetroArch core</span><input id="platformEmulatorCore" placeholder="snes9x_libretro.so" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.retroarch_core || '')}"></label><label class="field"><span>Extra arguments</span><input id="platformEmulatorArgs" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.extra_args || '')}"></label><div class="extras"><button type="button" class="icon-button" id="platformEmulatorSave">Save emulator settings</button></div></div><div class="detail-card"><h3>Presentation</h3><label class="field"><span>Cover model</span><select id="platformCoverModel"><option value="">Use global setting</option><option value="box">Box</option><option value="jewel">Jewel case</option><option value="long_jewel">Long jewel case</option><option value="double_jewel">Double jewel case</option><option value="cassette">Cassette</option><option value="none">Flat cover</option></select></label><label class="field"><span>Cassette back</span><select id="platformModelBack"><option value="">Use global setting</option><option value="straight">Straight</option><option value="angled">Angled</option></select></label><label class="field"><span>Cassette case</span><select id="platformModelCase"><option value="">Use global setting</option><option value="clear">Clear</option><option value="solid">Solid</option></select></label><label class="field"><span>3D rotation lock</span><select id="platformModelRotation"><option value="">Use global setting</option><option value="free">Free rotation</option><option value="horizontal">Lock horizontal</option><option value="vertical">Lock vertical</option></select></label><div class="platform-model-preview" id="platformModelPreview"></div><div class="extras"><button type="button" class="icon-button" id="platformVideoPick">Choose platform video</button><button type="button" class="icon-button" id="platformVideoClear">Clear platform video</button></div><p class="description" id="platformVideoStatus">${AppState.appSettings.platform_videos?.[platformName] ? 'A platform video is configured.' : 'No platform video configured.'}</p></div>${platformVideo}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<span class="extras"><button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button><button class="icon-button" data-platform-doc-up="${index}" aria-label="Move ${escapeHtml(item.name)} up">↑</button><button class="icon-button" data-platform-doc-down="${index}" aria-label="Move ${escapeHtml(item.name)} down">↓</button></span>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
+      $('details').innerHTML = `${detailsResizeHandleMarkup()}<div class="platform-panel"><button type="button" class="detail-close-btn detail-close-panel" id="closeDetailsButton" aria-label="${escapeHtml(t('library.close_details'))}" title="${escapeHtml(t('library.close_details'))}">×</button><div class="hero-kicker">Platform</div><h2>${escapeHtml(platformName)}</h2><p class="description">${count} game${count === 1 ? '' : 's'} in this platform view.</p>${collectionStats(items)}${bigBoxHiddenControl('Platform', platformName)}<div class="detail-card"><h3>Platform</h3><div class="extras"><button type="button" class="icon-button" id="platformRename">Rename platform</button><button type="button" class="icon-button" id="platformDelete">Delete platform</button></div></div><div class="detail-card"><h3>Emulator settings for this platform</h3><label class="field"><span>Adapter id, blank uses detection</span><input id="platformEmulatorAdapter" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.adapter_id || '')}"></label><label class="field"><span>RetroArch core</span><input id="platformEmulatorCore" placeholder="snes9x_libretro.so" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.retroarch_core || '')}"></label><label class="field"><span>Extra arguments</span><input id="platformEmulatorArgs" value="${escapeHtml(AppState.appSettings.emulator_platform_settings?.[platformName]?.extra_args || '')}"></label><div class="extras"><button type="button" class="icon-button" id="platformEmulatorSave">Save emulator settings</button></div></div><div class="detail-card"><h3>Presentation</h3><label class="field"><span>Cover model</span><select id="platformCoverModel"><option value="">Use global setting</option><option value="box">Box</option><option value="jewel">Jewel case</option><option value="long_jewel">Long jewel case</option><option value="double_jewel">Double jewel case</option><option value="cassette">Cassette</option><option value="none">Flat cover</option></select></label><label class="field"><span>Cassette back</span><select id="platformModelBack"><option value="">Use global setting</option><option value="straight">Straight</option><option value="angled">Angled</option></select></label><label class="field"><span>Cassette case</span><select id="platformModelCase"><option value="">Use global setting</option><option value="clear">Clear</option><option value="solid">Solid</option></select></label><label class="field"><span>3D rotation lock</span><select id="platformModelRotation"><option value="">Use global setting</option><option value="free">Free rotation</option><option value="horizontal">Lock horizontal</option><option value="vertical">Lock vertical</option></select></label><div class="platform-model-preview" id="platformModelPreview"></div><div class="extras"><button type="button" class="icon-button" id="platformVideoPick">Choose platform video</button><button type="button" class="icon-button" id="platformVideoClear">Clear platform video</button></div><p class="description" id="platformVideoStatus">${AppState.appSettings.platform_videos?.[platformName] ? 'A platform video is configured.' : 'No platform video configured.'}</p></div>${platformVideo}<div class="detail-card"><h3>Platform documents</h3>${documents.length ? `<div class="extras">${documents.map((item,index) => `<span class="extras"><button class="icon-button" data-platform-doc="${index}">${escapeHtml(item.name)}</button><button class="icon-button" data-platform-doc-up="${index}" aria-label="Move ${escapeHtml(item.name)} up">↑</button><button class="icon-button" data-platform-doc-down="${index}" aria-label="Move ${escapeHtml(item.name)} down">↓</button></span>`).join('')}</div>` : '<p class="description">No platform documents configured yet.</p>'}<div class="extras"><button class="icon-button" id="editPlatformDocuments">Edit platform documents</button></div></div><div class="detail-card"><h3>Platform shortcuts</h3><div class="extras"><button class="primary" id="platformRandom">Play random</button>${items.filter(game => game.last_played).sort((a,b) => String(b.last_played).localeCompare(String(a.last_played)))[0] ? `<button class="icon-button" id="platformLast">Last played</button>` : ''}${items.sort((a,b) => Number(b.play_count || 0) - Number(a.play_count || 0))[0] ? `<button class="icon-button" id="platformMost">Most played</button>` : ''}</div></div></div>`;
+      bindDetailsResize();
+      if ($('closeDetailsButton')) $('closeDetailsButton').onclick = () => {
+        AppState.platform = 'all';
+        render();
+      };
       if ($('platformRename')) $('platformRename').onclick = async () => {
         const newName = await promptInput({ title: `Rename ${platformName}`, message: 'Games, profiles, playlists, and platform settings move to the new name.', label: 'New platform name', defaultValue: platformName });
         if (!newName || newName === platformName) return;

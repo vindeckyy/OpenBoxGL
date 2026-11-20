@@ -10,6 +10,7 @@ import { render, selectGame } from './library.js';
     const VALID_FAMILIARITIES = ['any', 'new', 'favorite'];
 
     let lastCriteria = { minutes: 0, mood: 'any', familiarity: 'any', players: 1 };
+    let lastPickId = null;
 
     function openPicker() {
       if (!AppState.games.length) return notify(t('picker.empty'));
@@ -24,6 +25,7 @@ import { render, selectGame } from './library.js';
       $('pickerRandom').onclick = () => doPick(true);
       // Prevent form submit from closing the dialog.
       $('pickerForm').onsubmit = event => { event.preventDefault(); doPick(false); };
+      doPick(false);
     }
 
     function renderPickerControls() {
@@ -83,7 +85,10 @@ import { render, selectGame } from './library.js';
           $('pickerResultEmpty').hidden = false;
           return;
         }
-        showPick(result.picks[0]);
+        const fresh = result.picks.filter(item => String(item.id) !== String(lastPickId));
+        const chosen = fresh.length ? fresh[Math.floor(Math.random() * Math.min(fresh.length, 3))] : result.picks[0];
+        lastPickId = chosen.id;
+        showPick(chosen);
       } catch(error) {
         $('pickerSpinning').hidden = true;
         notify(error.message);

@@ -143,7 +143,7 @@
     "tags": "Tags",
     "playlists": "Playlists",
     "backup": "Backup",
-    "history": "Verlauf",
+    "history": "Spielsitzungen",
     "achievements": "RetroAchievements account",
     "save_filter": "Save current search",
     "save_preset": "Save current view",
@@ -176,24 +176,25 @@
     "group_library": "Library",
     "group_sources": "Imports & extras",
     "group_more": "More",
-    "hint_metadata": "Artwork and game details",
+    "hint_metadata": "Cover und Beschreibungen zuordnen",
     "hint_media": "Images, video, and music",
     "hint_health": "Find and fix library problems",
     "hint_emulators": "Install and configure",
     "hint_themes": "Change the look",
     "hint_constellation": "See how games connect",
-    "hint_mastery": "Completion ranking",
+    "hint_mastery": "Trophäen und Abschlussstufen",
     "hint_time_machine": "Review and undo changes",
     "hint_achievements": "Connect RetroAchievements",
     "hint_storefronts": "Steam, Heroic, Lutris, and more",
     "hint_household": "Share stats with family",
-    "hint_discovery": "Find something to play",
+    "hint_discovery": "Empfehlungen und Backlog-Radio",
     "hint_arcade_room": "Walk around a 3D arcade",
     "hint_netplay": "Play online with friends",
     "netplay": "Online play",
     "hint_plugins": "Extend OpenBox",
     "hint_settings": "All options",
-    "hint_help": "Start here, glossary, shortcuts"
+    "hint_help": "Start here, glossary, shortcuts",
+    "filter_placeholder": "Werkzeuge filtern…"
   },
   "constellation": {
     "title": "Konstellation",
@@ -232,7 +233,8 @@
     "unrated": "Ohne Altersfreigabe",
     "smart_collections": "Sammlungen",
     "filters": "Filter",
-    "unplayed": "Ungespielt"
+    "unplayed": "Ungespielt",
+    "more_filters": "Weitere Filter"
   },
   "library": {
     "all_games": "Alle Spiele",
@@ -315,7 +317,11 @@
     "jump_back_play": "Play",
     "jump_back_details": "View details",
     "jump_back_last_played": "Last played {date}",
-    "jump_back_playtime": "{time} played"
+    "jump_back_playtime": "{time} played",
+    "display": "Anzeige",
+    "close_details": "Details schließen",
+    "dismiss_hero": "Ausblenden",
+    "more_actions": "Weitere Aktionen"
   },
   "dialog": {
     "add_game": "Spiel hinzufügen",
@@ -1237,7 +1243,8 @@
     "osk_symbols": "Symbole",
     "osk_title": "Bildschirmtastatur",
     "empty_view_setup": "Big Box benötigt Spiele in der aktuellen Ansicht — füge Quellen hinzu, um deine Bibliothek aufzubauen",
-    "empty_view_now_empty": "Die aktuelle Ansicht ist jetzt leer"
+    "empty_view_now_empty": "Die aktuelle Ansicht ist jetzt leer",
+    "exit": "Beenden"
   },
   "errors": {
     "copy_details": "Details kopieren",

@@ -82,28 +82,30 @@ try {
     function renderControllerBadges(value) {
       return String(value || '').split(',').map(item => item.trim()).filter(Boolean).map(id => badge(controllerLabel(id), true, 'controller'));
     }
-    function renderBadges(game) {
+    function renderBadges(game, { omit = [] } = {}) {
+      const skip = omit.length ? new Set(omit) : null;
       const visible = badgeVisibility();
+      const show = key => visible.has(key) && !(skip && skip.has(key));
       return [
         game.manual_entry && badge('Shelf entry', true, 'shelf'),
-        visible.has('favorite') && badge('Favorite', game.favorite, 'favorite'),
-        visible.has('installed') && badge(game.store_installed === false && (game.steam_app_id || game.store_catalog) ? 'Missing' : gameInstalled(game) ? 'Installed' : 'Owned', game.store_installed !== false, game.store_installed === false ? 'danger' : undefined),
-        visible.has('missing_media') && badge('Missing media', game.has_missing_media, 'danger'),
-        visible.has('saves') && badge('Saves', game.has_saves),
-        visible.has('documents') && badge('Docs', game.has_documents),
-        visible.has('versions') && badge('Versions', game.has_versions),
-        visible.has('storefront') && badge(game.source || 'Storefront', Boolean(game.source)),
+        show('favorite') && badge('Favorite', game.favorite, 'favorite'),
+        show('installed') && badge(game.store_installed === false && (game.steam_app_id || game.store_catalog) ? 'Missing' : gameInstalled(game) ? 'Installed' : 'Owned', game.store_installed !== false, game.store_installed === false ? 'danger' : undefined),
+        show('missing_media') && badge('Missing media', game.has_missing_media, 'danger'),
+        show('saves') && badge('Saves', game.has_saves),
+        show('documents') && badge('Docs', game.has_documents),
+        show('versions') && badge('Versions', game.has_versions),
+        show('storefront') && badge(game.source || 'Storefront', Boolean(game.source)),
         // [F1d importer plugins] source tag for plugin-imported games.
         game.plugin_source && badge(game.plugin_source_name || game.plugin_source, true, 'source'),
-        visible.has('achievements') && badge('Achievements', game.has_achievements),
-        visible.has('highscores') && badge('High scores', game.has_highscores),
-        visible.has('progress') && badge(game.progress || 'Unplayed', true, 'progress'),
-        visible.has('rating') && badge(`${game.rating} stars`, Number(game.rating) > 0),
-        visible.has('user_rating') && badge(`${'\u2605'.repeat(Number(game.user_rating) || 0)}`, Number(game.user_rating) > 0, 'user-rating'),
-        visible.has('manual') && badge('Manual time', Number(game.manual_playtime_seconds) > 0, 'manual-time'),
-        visible.has('broken') && badge('Broken', game.broken, 'danger'),
-        visible.has('portable') && badge('Portable', game.portable),
-        visible.has('controller') && renderControllerBadges(game.controller_support).join(''),
+        show('achievements') && badge('Achievements', game.has_achievements),
+        show('highscores') && badge('High scores', game.has_highscores),
+        show('progress') && badge(game.progress || 'Unplayed', true, 'progress'),
+        show('rating') && badge(`${game.rating} stars`, Number(game.rating) > 0),
+        show('user_rating') && badge(`${'\u2605'.repeat(Number(game.user_rating) || 0)}`, Number(game.user_rating) > 0, 'user-rating'),
+        show('manual') && badge('Manual time', Number(game.manual_playtime_seconds) > 0, 'manual-time'),
+        show('broken') && badge('Broken', game.broken, 'danger'),
+        show('portable') && badge('Portable', game.portable),
+        show('controller') && renderControllerBadges(game.controller_support).join(''),
         // Launch readiness from the cached audit; absent when the audit is missing or stale, or the setting is off.
         AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'blocked' && badge(tr('launch_audit.badge_blocked'), true, 'danger'),
         AppState.appSettings?.show_launch_badges !== false && AppState.launchReadiness?.[game.game_id] === 'warning' && badge(tr('launch_audit.badge_warning'), true),
@@ -614,7 +616,7 @@ try {
       const order = (AppState.appSettings.sidebar_sections || []).filter(section => allowed.includes(section));
       if (!order.length) return;
       const groups = new Map();
-      container.querySelectorAll('[data-sidebar-section]').forEach(element => {
+      container.querySelectorAll(':scope > [data-sidebar-section]').forEach(element => {
         const key = element.dataset.sidebarSection;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(element);

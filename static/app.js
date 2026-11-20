@@ -347,33 +347,69 @@ window.addEventListener('DOMContentLoaded', () => {
     $('loadStorefrontCatalog').onclick = loadStorefrontCatalog;
     $('importStorefrontInstalled').onclick = () => importStorefrontCatalog(false);
     $('importStorefrontUninstalled').onclick = () => importStorefrontCatalog(true);
-    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('gogButton').onclick = importGog; $('eaButton').onclick = importEa; $('ubisoftButton').onclick = importUbisoft; $('arcadeButton').onclick = importArcade; $('pico8Button').onclick = importPico8; $('msu1Button').onclick = importMsu1; $('whdloadButton').onclick = importWhdload; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; if ($('dealsButton')) $('dealsButton').onclick = openDealsDialog; if ($('itineraryButton')) $('itineraryButton').onclick = openItineraryDialog; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
+    $('addButton').onclick = () => openGameDialog(); $('addShelfButton').onclick = () => openGameDialog(null, {shelf:true}); $('importButton').onclick = importFolder; $('metadataButton').onclick = () => $('metadataDialog').showModal(); $('steamButton').onclick = importSteam; $('heroicButton').onclick = importHeroic; $('lutrisButton').onclick = importLutris; $('gogButton').onclick = importGog; $('eaButton').onclick = importEa; $('ubisoftButton').onclick = importUbisoft; $('arcadeButton').onclick = importArcade; $('pico8Button').onclick = importPico8; $('msu1Button').onclick = importMsu1; $('whdloadButton').onclick = importWhdload; $('arcadeRoomButton').onclick = () => openArcadeRoom({state:AppState, games:() => AppState.games, museumKioskEnabled:Boolean(AppState.appSettings.museum_kiosk_enabled && AppState.appSettings.museum_kiosk_pin_set), verifyMuseumPin, onShowGame:game => { AppState.selectedId = game.id; render(); }, onLaunch:game => launch(game)}); $('householdButton').onclick = openHousehold; if ($('dealsButton')) $('dealsButton').onclick = openDealsDialog; if ($('itineraryButton')) $('itineraryButton').onclick = openItineraryDialog; $('emulatorsButton').onclick = openProfiles; $('settingsButton').onclick = openSettings; if ($('topbarSettingsButton')) $('topbarSettingsButton').onclick = openSettings; $('bigBoxButton').onclick = openBigBox; $('sessionsButton').onclick = openSessions; $('historyButton').onclick = openHistory; $('timeMachineButton').onclick = openTimeMachine; $('themesButton').onclick = openThemes; $('saveFilterButton').onclick = saveFilter; $('savePresetButton').onclick = savePreset; $('playlistsButton').onclick = openPlaylists; $('achievementsButton').onclick = openAchievements; $('pluginsButton').onclick = openPlugins; $('mediaButton').onclick = openMediaManager; $('healthButton').onclick = health; $('constellationButton').onclick = openConstellation; $('masteryButton').onclick = openMastery; $('bulkButton').onclick = bulkAction; $('backupButton').onclick = openBackups;
     $('doneTimeMachine').onclick = () => $('timeMachineDialog').close();
     // ── Accessible Tools menu ──────────────────────────────────────────
     const toolsWrap = $('toolsWrap');
     const toolsButton = $('toolsButton');
     const toolMenu = $('toolMenu');
-    const getToolItems = () => [...toolMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+    const toolMenuSearch = $('toolMenuSearch');
+    const getToolItems = () => [...toolMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')].filter(el => !el.hidden);
     const toolsMenuOpen = () => toolsWrap.classList.contains('open');
+    function filterToolMenu() {
+      const q = (toolMenuSearch?.value || '').trim().toLowerCase();
+      toolMenu.querySelectorAll('[data-tool-group]').forEach(group => {
+        let shown = 0;
+        group.querySelectorAll('[role="menuitem"]').forEach(item => {
+          const match = !q || (item.textContent || '').toLowerCase().includes(q);
+          item.hidden = !match;
+          if (match) shown += 1;
+        });
+        group.hidden = shown === 0;
+      });
+    }
+    if (toolMenuSearch) {
+      toolMenuSearch.addEventListener('input', filterToolMenu);
+      toolMenuSearch.addEventListener('keydown', event => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          getToolItems()[0]?.focus();
+        } else if (event.key === 'Enter') {
+          const first = getToolItems()[0];
+          if (first) { event.preventDefault(); first.click(); }
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          if (toolMenuSearch.value) { toolMenuSearch.value = ''; filterToolMenu(); }
+          else closeToolsMenu(true);
+        }
+      });
+    }
     function openToolsMenu() {
       $('addMenuWrap')?.classList.remove('open');
       $('addMenuButton')?.setAttribute('aria-expanded', 'false');
+      if (toolMenuSearch) { toolMenuSearch.value = ''; filterToolMenu(); }
       toolsWrap.classList.add('open');
       toolsButton.setAttribute('aria-expanded', 'true');
-      const first = getToolItems()[0];
-      if (first) first.focus();
+      if (toolMenuSearch) toolMenuSearch.focus();
+      else getToolItems()[0]?.focus();
     }
     function closeToolsMenu(focusButton) {
       toolsWrap.classList.remove('open');
       toolsButton.setAttribute('aria-expanded', 'false');
+      if (toolMenuSearch && toolMenuSearch.value) { toolMenuSearch.value = ''; filterToolMenu(); }
       if (focusButton) toolsButton.focus();
     }
     toolsButton.addEventListener('click', () => { toolsMenuOpen() ? closeToolsMenu(false) : openToolsMenu(); });
     toolMenu.addEventListener('keydown', event => {
+      if (event.target === toolMenuSearch) return;
       const items = getToolItems();
+      if (!items.length) {
+        if (event.key === 'Escape') { event.preventDefault(); closeToolsMenu(true); }
+        return;
+      }
       const idx = items.indexOf(document.activeElement);
       if (event.key === 'ArrowDown') { event.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
-      else if (event.key === 'ArrowUp') { event.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); if (idx <= 0 && toolMenuSearch) toolMenuSearch.focus(); else items[(idx - 1 + items.length) % items.length]?.focus(); }
       else if (event.key === 'Home') { event.preventDefault(); items[0]?.focus(); }
       else if (event.key === 'End') { event.preventDefault(); items[items.length - 1]?.focus(); }
       else if (event.key === 'Escape') { event.preventDefault(); closeToolsMenu(true); }
@@ -473,6 +509,8 @@ window.addEventListener('DOMContentLoaded', () => {
     bindContextMenuA11y();
     document.addEventListener('click', event => {
       if (toolsMenuOpen() && !toolsWrap.contains(event.target)) closeToolsMenu(false);
+      const displayMenu = $('displayMenuWrap');
+      if (displayMenu?.open && !displayMenu.contains(event.target)) displayMenu.open = false;
     });
     if ($('scanEmulatorFolder')) $('scanEmulatorFolder').onclick = async () => {
       const folder = $('emulatorScanFolder').value.trim();
@@ -526,12 +564,19 @@ window.addEventListener('DOMContentLoaded', () => {
         event.preventDefault(); openHelp();
       }
       if (event.key === 'Escape') {
+        const displayMenu = $('displayMenuWrap');
         if (toolsMenuOpen()) closeToolsMenu(true);
+        else if (displayMenu?.open) { displayMenu.open = false; $('displayMenuButton')?.focus(); }
+        else if (!document.querySelector('dialog[open]') && ($('bigBox')?.hidden !== false) && !typingTarget(event.target) && AppState.selectedId !== null) {
+          AppState.selectedId = null;
+          render();
+        }
       }
     });
     $('closeSettings').onclick = $('cancelSettings').onclick = () => $('settingsDialog').close();
     bindLaunchBoxMigration();
     bindEsdeImport();
+    if ($('bigBoxExitButton')) $('bigBoxExitButton').onclick = closeBigBox;
     $('closeBigBoxMenu').onclick = closeBigBoxMenu;
     $('closeBigBoxPause').onclick = closeBigBoxPause;
     $('applyBigBoxMenu').onclick = applyBigBoxMenu;

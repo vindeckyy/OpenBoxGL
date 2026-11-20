@@ -128,9 +128,9 @@ function renderStepList() {
   if (!list) return;
   const visible = visibleSteps();
   const index = Math.max(1, visible.findIndex(step => step.id === state.step) + 1);
-  list.innerHTML = visible.map(step => `
+  list.innerHTML = visible.map((step, i) => `
     <li class="setup-step-item${step.id === state.step ? ' active' : ''}${step.id < state.step ? ' done' : ''}" data-setup-step="${step.id}">
-      <span class="setup-step-num">${step.id}</span>
+      <span class="setup-step-num">${i + 1}</span>
       <span class="setup-step-label">${escapeHtml(t(step.labelKey))}</span>
     </li>
   `).join('');
@@ -138,7 +138,10 @@ function renderStepList() {
     item.onclick = () => { state.step = Number(item.dataset.setupStep); renderPanel(); };
   });
   const help = $('setupHelp');
-  if (help) help.textContent = t(STEPS.find(s => s.id === state.step)?.helpKey || 'setup.help_sources');
+  if (help) {
+    help.hidden = state.step === 2 && state.sources.length === 0;
+    help.textContent = t(STEPS.find(s => s.id === state.step)?.helpKey || 'setup.help_sources');
+  }
   const progress = $('setupProgress');
   if (progress) {
     progress.setAttribute('aria-valuemax', String(visible.length));
@@ -616,7 +619,7 @@ function renderPanel() {
   const cont = $('setupContinue');
   if (back) back.disabled = visibleSteps().findIndex(step => step.id === state.step) <= 0 || state.busy;
   if (cont) {
-    cont.disabled = state.busy;
+    cont.disabled = state.busy || (state.step === 2 && state.sources.length === 0);
     cont.textContent = state.step >= 8 ? 'Done' : 'Continue';
   }
 }

@@ -204,6 +204,26 @@ function renderEmpty(sectionEl, message) {
   sectionEl.innerHTML = `<p class="description activity-empty">${escapeHtml(message)}</p>`;
 }
 
+const JOB_TYPE_LABELS = {
+  'setup.scan': 'Setup scan',
+  'setup.commit': 'Setup commit',
+  'setup.revalidate': 'Setup check',
+  'media.bulk_download': 'Media download',
+  'media.bulk': 'Media download',
+  'metadata.match_preview': 'Metadata match',
+  'metadata.sync': 'Metadata sync',
+  'storefront.auto_import': 'Storefront sync',
+  'emulator.install': 'Emulator install',
+};
+
+function humanizeJobType(type) {
+  const raw = String(type || '').trim();
+  if (!raw) return '';
+  if (JOB_TYPE_LABELS[raw]) return JOB_TYPE_LABELS[raw];
+  const spaced = raw.replace(/[._-]+/g, ' ').trim();
+  return spaced ? spaced[0].toUpperCase() + spaced.slice(1) : '';
+}
+
 function renderJobRow(job) {
   const progress = Number(job.total) > 0 ? `${job.current}/${job.total}` : '';
   const errorText = job.error?.message ? String(job.error.message) : '';
@@ -224,11 +244,14 @@ function renderJobRow(job) {
   const summaryHtml = showSummary ? `<p class="activity-row-summary" data-activity-summary="${escapeHtml(job.job_id)}">${escapeHtml(summary)}</p>` : '';
   const attrs = ROW_KEYS.map(key => `data-${key.replace(/_/g, '-')}="${escapeHtml(String(job[key] ?? ''))}"`).join(' ');
   const rootAttr = `data-root-job-id="${escapeHtml(String(job.root_job_id || job.job_id))}"`;
+  const typeLabel = humanizeJobType(job.type);
+  const titleLabel = String(job.title || typeLabel || job.job_id);
+  const showType = Boolean(typeLabel) && typeLabel.toLowerCase() !== titleLabel.toLowerCase();
   return `<article class="activity-row" ${attrs} ${rootAttr}>
     <div class="activity-row-head">
       <div class="activity-row-title">
-        <strong>${escapeHtml(job.title || job.type || job.job_id)}</strong>
-        <span class="activity-row-type">${escapeHtml(job.type || '')}</span>
+        <strong>${escapeHtml(titleLabel)}</strong>
+        ${showType ? `<span class="activity-row-type">${escapeHtml(typeLabel)}</span>` : ''}
       </div>
       <span class="activity-badge ${stateBadgeClass(job.state)}" data-activity-state-badge="${escapeHtml(job.state)}">${escapeHtml(stateBadgeLabel(job.state))}</span>
     </div>
@@ -255,14 +278,16 @@ function renderGroupedJobs(jobs) {
   const container = $('activityGroupedList');
   const section = $('activityGroupedSection');
   if (!container || !section) return;
-  if (grouped.size === 0) {
+  const multiRuns = [...grouped.entries()].filter(([, list]) => list.length > 1);
+  if (!multiRuns.length) {
     section.hidden = true;
+    container.innerHTML = '';
     return;
   }
   section.hidden = false;
-  const html = [...grouped.entries()].map(([root, list]) => `
+  const html = multiRuns.map(([root, list]) => `
     <div class="activity-group" data-root-job-id="${escapeHtml(root)}">
-      <h4 class="activity-group-title">Run ${escapeHtml(root.slice(0, 8))} — ${list.length} job${list.length > 1 ? 's' : ''}</h4>
+      <h4 class="activity-group-title">Run ${escapeHtml(root.slice(0, 8))} — ${list.length} jobs</h4>
       <div class="activity-group-jobs">${list.map(renderJobRow).join('')}</div>
     </div>
   `).join('');
@@ -332,6 +357,7 @@ function updateActivityCount() {
   const count = active.length + attention.length;
   countEl.textContent = String(count);
   countEl.hidden = count === 0;
+  countEl.classList.toggle('is-attention', attention.length > 0);
 }
 
 function mergeJobPatch(jobId, patch) {

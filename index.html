@@ -60,12 +60,16 @@
       <button class="menu-button activity-button" id="activityButton" aria-label="Activity" data-i18n-aria-label="nav.activity"><span class="activity-label" data-i18n="nav.activity">Activity</span><span class="activity-count" id="activityCount" aria-live="polite" hidden>0</span></button>
     </nav>
     <nav class="topbar-zone topbar-zone-tools" aria-label="Tools">
+      <button class="menu-button" id="topbarSettingsButton" data-i18n="tools.settings">Settings</button>
       <noscript><details class="topbar-tools"><summary class="menu-button">Tools</summary></details></noscript>
       <div class="topbar-tools" id="toolsWrap">
         <button class="menu-button" id="toolsButton" aria-haspopup="menu" aria-expanded="false" aria-controls="toolMenu" data-i18n="nav.tools">Tools</button>
         <div class="tool-menu" id="toolMenu" role="menu">
+          <div class="tool-menu-search-wrap">
+            <input type="search" id="toolMenuSearch" class="tool-menu-search" placeholder="Filter tools…" data-i18n-placeholder="tools.filter_placeholder" aria-label="Filter tools">
+          </div>
           <div role="group" aria-label="Start here" data-tool-group="start" data-i18n-aria-label="tools.group_start">
-            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1"><span data-i18n="tools.metadata">Artwork &amp; details</span><small class="menu-hint" data-i18n="tools.hint_metadata">Artwork and game details</small></button>
+            <button class="menu-button" id="metadataButton" role="menuitem" tabindex="-1"><span data-i18n="tools.metadata">Artwork &amp; details</span><small class="menu-hint" data-i18n="tools.hint_metadata">Match covers and descriptions</small></button>
             <button class="menu-button" id="mediaButton" role="menuitem" tabindex="-1"><span data-i18n="tools.media">Media files</span><small class="menu-hint" data-i18n="tools.hint_media">Images, video, and music</small></button>
             <button class="menu-button" id="healthButton" role="menuitem" tabindex="-1"><span data-i18n="tools.health">Library checkup</span><small class="menu-hint" data-i18n="tools.hint_health">Find and fix library problems</small></button>
             <button class="menu-button" id="emulatorsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.emulators">Emulators &amp; controllers</span><small class="menu-hint" data-i18n="tools.hint_emulators">Install and configure</small></button>
@@ -75,12 +79,12 @@
           </div>
           <div role="group" aria-label="Library" data-tool-group="library" data-i18n-aria-label="tools.group_library">
             <button class="menu-button" id="constellationButton" role="menuitem" tabindex="-1"><span data-i18n="tools.constellation">Game connections</span><small class="menu-hint" data-i18n="tools.hint_constellation">See how games connect</small></button>
-            <button class="menu-button" id="masteryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.mastery">Completion ranking</span><small class="menu-hint" data-i18n="tools.hint_mastery">Completion ranking</small></button>
+            <button class="menu-button" id="masteryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.mastery">Completion ranking</span><small class="menu-hint" data-i18n="tools.hint_mastery">Trophies and completion tiers</small></button>
             <button class="menu-button" id="bulkButton" role="menuitem" tabindex="-1" data-i18n="tools.bulk_edit">Bulk edit</button>
             <button class="menu-button" id="tagsButton" role="menuitem" tabindex="-1" data-i18n="tools.tags">Tags</button>
             <button class="menu-button" id="playlistsButton" role="menuitem" tabindex="-1" data-i18n="tools.playlists">Playlists</button>
             <button class="menu-button" id="backupButton" role="menuitem" tabindex="-1" data-i18n="tools.backup">Backup</button>
-            <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1" data-i18n="tools.history">History</button>
+            <button class="menu-button" id="historyButton" role="menuitem" tabindex="-1" data-i18n="tools.history">Play sessions</button>
             <button class="menu-button" id="timeMachineButton" role="menuitem" tabindex="-1"><span data-i18n="tools.time_machine">Library history</span><small class="menu-hint" data-i18n="tools.hint_time_machine">Review and undo changes</small></button>
             <button class="menu-button" id="achievementsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.achievements">RetroAchievements account</span><small class="menu-hint" data-i18n="tools.hint_achievements">Connect RetroAchievements</small></button>
             <button class="menu-button" id="saveFilterButton" role="menuitem" tabindex="-1"><span data-i18n="tools.save_filter">Save current search</span></button>
@@ -88,23 +92,23 @@
           </div>
           <div role="group" aria-label="Imports &amp; extras" data-tool-group="sources" data-i18n-aria-label="tools.group_sources">
             <button class="menu-button" id="storefrontButton" role="menuitem" tabindex="-1"><span data-i18n="tools.storefronts">Game stores</span><small class="menu-hint" data-i18n="tools.hint_storefronts">Steam, Heroic, Lutris, and more</small></button>
-            <button class="menu-button" id="steamButton" role="menuitem" tabindex="-1" data-i18n="tools.import_steam">Import Steam</button>
-            <button class="menu-button" id="heroicButton" role="menuitem" tabindex="-1" data-feature="heroic" data-i18n="tools.import_heroic">Import Heroic</button>
-            <button class="menu-button" id="lutrisButton" role="menuitem" tabindex="-1" data-feature="lutris" data-i18n="tools.import_lutris">Import Lutris</button>
-            <button class="menu-button" id="gogButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_gog">Import GOG</button>
-            <button class="menu-button" id="eaButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_ea">Import EA app</button>
-            <button class="menu-button" id="ubisoftButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_ubisoft">Import Ubisoft Connect</button>
-            <button class="menu-button" id="arcadeButton" role="menuitem" tabindex="-1" data-i18n="tools.import_arcade">Import Arcade</button>
-            <button class="menu-button" id="pico8Button" role="menuitem" tabindex="-1" data-i18n="tools.import_pico8">Import PICO-8</button>
-            <button class="menu-button" id="msu1Button" role="menuitem" tabindex="-1" data-i18n="tools.import_msu1">Import MSU-1</button>
-            <button class="menu-button" id="whdloadButton" role="menuitem" tabindex="-1" data-i18n="tools.import_whdload">Import WHDLoad</button>
+            <button class="menu-button tool-menu-compact" id="steamButton" role="menuitem" tabindex="-1" data-i18n="tools.import_steam">Import Steam</button>
+            <button class="menu-button tool-menu-compact" id="heroicButton" role="menuitem" tabindex="-1" data-feature="heroic" data-i18n="tools.import_heroic">Import Heroic</button>
+            <button class="menu-button tool-menu-compact" id="lutrisButton" role="menuitem" tabindex="-1" data-feature="lutris" data-i18n="tools.import_lutris">Import Lutris</button>
+            <button class="menu-button tool-menu-compact" id="gogButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_gog">Import GOG</button>
+            <button class="menu-button tool-menu-compact" id="eaButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_ea">Import EA app</button>
+            <button class="menu-button tool-menu-compact" id="ubisoftButton" role="menuitem" tabindex="-1" data-feature="native_storefronts" hidden data-i18n="tools.import_ubisoft">Import Ubisoft Connect</button>
+            <button class="menu-button tool-menu-compact" id="arcadeButton" role="menuitem" tabindex="-1" data-i18n="tools.import_arcade">Import Arcade</button>
+            <button class="menu-button tool-menu-compact" id="pico8Button" role="menuitem" tabindex="-1" data-i18n="tools.import_pico8">Import PICO-8</button>
+            <button class="menu-button tool-menu-compact" id="msu1Button" role="menuitem" tabindex="-1" data-i18n="tools.import_msu1">Import MSU-1</button>
+            <button class="menu-button tool-menu-compact" id="whdloadButton" role="menuitem" tabindex="-1" data-i18n="tools.import_whdload">Import WHDLoad</button>
             <button class="menu-button" id="arcadeRoomButton" role="menuitem" tabindex="-1"><span data-i18n="tools.arcade_room">3D arcade room</span><small class="menu-hint" data-i18n="tools.hint_arcade_room">Walk around a 3D arcade</small></button>
             <button class="menu-button" id="householdButton" role="menuitem" tabindex="-1"><span data-i18n="tools.household">Family sharing</span><small class="menu-hint" data-i18n="tools.hint_household">Share stats with family</small></button>
             <button class="menu-button" id="dealsButton" role="menuitem" tabindex="-1"><span data-i18n="deals.menu_title">Deal Radar</span><small class="menu-hint" data-i18n="deals.menu_hint">Opt-in Steam price watch</small></button>
             <button class="menu-button" id="itineraryButton" role="menuitem" tabindex="-1"><span data-i18n="itinerary.menu_title">Backlog Itinerary</span><small class="menu-hint" data-i18n="itinerary.menu_hint">Multi-week backlog schedule</small></button>
           </div>
           <div role="group" aria-label="More" data-tool-group="more" data-i18n-aria-label="tools.group_more">
-            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.discovery">Find something to play</span><small class="menu-hint" data-i18n="tools.hint_discovery">Find something to play</small></button>
+            <button class="menu-button" id="discoveryButton" role="menuitem" tabindex="-1"><span data-i18n="tools.discovery">Find something to play</span><small class="menu-hint" data-i18n="tools.hint_discovery">Curated picks and backlog radio</small></button>
             <button class="menu-button" id="netplayButton" role="menuitem" tabindex="-1"><span data-i18n="tools.netplay">Online play</span><small class="menu-hint" data-i18n="tools.hint_netplay">Play online with friends</small></button>
             <button class="menu-button" id="pluginsButton" role="menuitem" tabindex="-1"><span data-i18n="tools.plugins">Plugins</span><small class="menu-hint" data-i18n="tools.hint_plugins">Extend OpenBox</small></button>
             <button class="menu-button" id="whatsNewButton" role="menuitem" tabindex="-1" data-i18n="common.whats_new">What's New</button>
@@ -128,35 +132,47 @@
     <aside class="sidebar" aria-label="Library filters" data-i18n-aria-label="library.library_filters">
       <label class="field" data-sidebar-section="search"><span data-i18n="sidebar.search">Search</span><input id="sidebarSearch" type="search" aria-label="Search library" data-i18n-aria-label="sidebar.search"></label>
       <label class="field" data-sidebar-section="view"><span data-i18n="sidebar.view">View</span><select id="view"><option value="all" data-i18n="sidebar.all_games">All games</option><option value="favorites" data-i18n="sidebar.favorites">Favorites</option><option value="recent" data-i18n="sidebar.recently_played">Recently played</option><option value="never" data-i18n="sidebar.never_played">Never played</option><option value="playing" data-i18n="sidebar.in_progress">In progress</option><option value="completed" data-i18n="sidebar.completed">Completed</option><option value="unplayed" data-i18n="sidebar.unplayed">Unplayed</option><option value="installed" data-i18n="sidebar.installed_only">Installed only</option><option value="owned" data-i18n="sidebar.owned_not_installed">Owned / not installed</option><option value="saves" data-i18n="sidebar.has_saves">Has saves</option><option value="shelf" data-i18n="sidebar.shelf_entries">Shelf entries</option><option value="hidden" data-i18n="sidebar.hidden">Hidden</option><option value="missing" data-i18n="sidebar.missing_files">Missing files</option></select></label>
-      <label class="field" data-sidebar-section="filters"><span data-i18n="sidebar.esrb">ESRB</span><select id="esrbFilter"><option value="" data-i18n="sidebar.any_rating">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option data-i18n="sidebar.unrated">Unrated</option></select></label>
-      <div class="field" data-sidebar-section="filters"><span>Source</span><div class="extras"><select id="sourceFilter"><option value="">Any source</option></select><label class="check"><input type="checkbox" id="sourceExclude"> Exclude</label></div></div>
-      <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.categories">Categories</div>
-      <nav class="platforms" id="platformCategories" data-sidebar-section="filters"></nav>
       <div class="section-title" data-sidebar-section="platforms" data-i18n="sidebar.platforms">Platforms</div>
       <nav class="platforms" id="platforms" data-sidebar-section="platforms"></nav>
+      <div class="section-title" data-sidebar-section="platforms" data-i18n="sidebar.categories">Categories</div>
+      <nav class="platforms" id="platformCategories" data-sidebar-section="platforms"></nav>
       <div class="section-title" data-sidebar-section="playlists" data-i18n="sidebar.playlists">Playlists</div>
       <nav class="platforms" id="playlists" data-sidebar-section="playlists"></nav>
       <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.filter_presets">Filter presets</div>
       <nav class="platforms" id="filterPresets" data-sidebar-section="filters"></nav>
       <div class="section-title" data-sidebar-section="filters" data-i18n="sidebar.smart_collections">Collections</div>
       <nav class="platforms" id="smartCollections" data-sidebar-section="filters"></nav>
-      <div class="section-title" data-sidebar-section="explorer" data-i18n="sidebar.explorer">Explorer</div>
-      <nav class="platforms" id="explorerFacets" data-sidebar-section="explorer"></nav>
+      <details class="sidebar-advanced" id="sidebarMoreFilters" data-sidebar-section="explorer">
+        <summary data-i18n="sidebar.more_filters">More filters</summary>
+        <div class="sidebar-advanced-body">
+          <label class="field" data-sidebar-section="filters"><span data-i18n="sidebar.esrb">ESRB</span><select id="esrbFilter"><option value="" data-i18n="sidebar.any_rating">Any rating</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option data-i18n="sidebar.unrated">Unrated</option></select></label>
+          <div class="field" data-sidebar-section="filters"><span>Source</span><div class="extras"><select id="sourceFilter"><option value="">Any source</option></select><label class="check"><input type="checkbox" id="sourceExclude"> Exclude</label></div></div>
+          <div class="section-title" data-sidebar-section="explorer" data-i18n="sidebar.explorer">Explorer</div>
+          <nav class="platforms" id="explorerFacets" data-sidebar-section="explorer"></nav>
+        </div>
+      </details>
     </aside>
 
     <main class="library" aria-label="Game library" data-i18n-aria-label="library.game_library">
       <div class="library-head">
-        <div><h1 id="libraryTitle" data-i18n="library.all_games">All Games</h1><p id="libraryMeta" aria-live="polite">0 games</p></div>
+        <div class="library-head-title"><h1 id="libraryTitle" data-i18n="library.all_games">All Games</h1><p id="libraryMeta" aria-live="polite">0 games</p></div>
+        <div class="library-head-controls">
+          <select class="search" id="sort" aria-label="Sort games"><option value="title" data-i18n="library.sort_title">Title</option><option value="rating" data-i18n="library.sort_rating">Rating</option><option value="user_rating" data-i18n="library.sort_my_rating">My rating</option><option value="recent" data-i18n="library.sort_recent">Recently played</option><option value="recent_activity" data-i18n="library.sort_recent_activity">Recent activity</option><option value="playtime" data-i18n="library.sort_playtime">Play time</option><option value="added" data-i18n="library.sort_added">Date added</option><option value="platform" data-i18n="library.sort_platform">Platform</option><option value="genre" data-i18n="library.sort_genre">Genre</option></select>
+          <details class="display-menu" id="displayMenuWrap">
+            <summary class="icon-button" id="displayMenuButton" data-i18n="library.display">Display</summary>
+            <div class="display-menu-panel">
+              <label class="field"><span>Artwork</span><select class="search" id="imageGroup" aria-label="Image group"><option value="default" data-i18n="library.image_group_default">Use default</option><option value="cover" data-i18n="library.image_group_cover">Box fronts</option><option value="background" data-i18n="library.image_group_background">Backgrounds</option><option value="screenshot" data-i18n="library.image_group_screenshot">Screenshots</option><option value="clear_logo" data-i18n="library.image_group_clear_logo">Clear logos</option><option value="fanart" data-i18n="library.image_group_fanart">Fanart</option><option value="banner" data-i18n="library.image_group_banner">Banners</option><option value="box_back" data-i18n="library.image_group_box_back">Box backs</option><option value="box_spine" data-i18n="library.image_group_box_spine">Box spines</option><option value="box_3d" data-i18n="library.image_group_box_3d">3D boxes</option><option value="title_screen" data-i18n="library.image_group_title_screen">Title screens</option><option value="cart_front" data-i18n="library.image_group_cart_front">Cart fronts</option><option value="cart_back" data-i18n="library.image_group_cart_back">Cart backs</option><option value="disc" data-i18n="library.image_group_disc">Discs</option><option value="advertisement" data-i18n="library.image_group_advertisement">Ads / flyers</option><option value="manual" data-i18n="library.image_group_manual">Manuals</option></select></label>
+              <label class="field"><span>Layout</span><select class="search" id="grouping" aria-label="Group covers"><option value="shape" data-i18n="library.group_by_shape">Group by shape</option><option value="none" data-i18n="library.no_grouping">No grouping</option></select></label>
+            </div>
+          </details>
+          <button class="icon-button" id="filterDrawerButton" aria-haspopup="dialog" aria-controls="filterDrawer" data-i18n="library.filters">Filters</button>
+          <button class="icon-button" id="viewToggleButton" data-i18n="library.list_view">List view</button>
+          <button class="icon-button" id="surpriseButton" data-i18n="library.surprise_me">Surprise me</button>
+        </div>
         <div class="query-chips" id="queryChips" aria-label="Active filters" data-i18n-aria-label="library.active_filters"></div>
-        <select class="search" id="sort" aria-label="Sort games"><option value="title" data-i18n="library.sort_title">Title</option><option value="rating" data-i18n="library.sort_rating">Rating</option><option value="user_rating" data-i18n="library.sort_my_rating">My rating</option><option value="recent" data-i18n="library.sort_recent">Recently played</option><option value="recent_activity" data-i18n="library.sort_recent_activity">Recent activity</option><option value="playtime" data-i18n="library.sort_playtime">Play time</option><option value="added" data-i18n="library.sort_added">Date added</option><option value="platform" data-i18n="library.sort_platform">Platform</option><option value="genre" data-i18n="library.sort_genre">Genre</option></select>
-        <select class="search" id="imageGroup" aria-label="Image group"><option value="default" data-i18n="library.image_group_default">Use default</option><option value="cover" data-i18n="library.image_group_cover">Box fronts</option><option value="background" data-i18n="library.image_group_background">Backgrounds</option><option value="screenshot" data-i18n="library.image_group_screenshot">Screenshots</option><option value="clear_logo" data-i18n="library.image_group_clear_logo">Clear logos</option><option value="fanart" data-i18n="library.image_group_fanart">Fanart</option><option value="banner" data-i18n="library.image_group_banner">Banners</option><option value="box_back" data-i18n="library.image_group_box_back">Box backs</option><option value="box_spine" data-i18n="library.image_group_box_spine">Box spines</option><option value="box_3d" data-i18n="library.image_group_box_3d">3D boxes</option><option value="title_screen" data-i18n="library.image_group_title_screen">Title screens</option><option value="cart_front" data-i18n="library.image_group_cart_front">Cart fronts</option><option value="cart_back" data-i18n="library.image_group_cart_back">Cart backs</option><option value="disc" data-i18n="library.image_group_disc">Discs</option><option value="advertisement" data-i18n="library.image_group_advertisement">Ads / flyers</option><option value="manual" data-i18n="library.image_group_manual">Manuals</option></select>
-        <select class="search" id="grouping" aria-label="Group covers"><option value="shape" data-i18n="library.group_by_shape">Group by shape</option><option value="none" data-i18n="library.no_grouping">No grouping</option></select>
-        <button class="icon-button" id="filterDrawerButton" aria-haspopup="dialog" aria-controls="filterDrawer" data-i18n="library.filters">Filters</button>
-        <button class="icon-button" id="viewToggleButton" data-i18n="library.list_view">List view</button>
-        <button class="icon-button" id="surpriseButton" data-i18n="library.surprise_me">Surprise me</button>
       </div>
       <section id="homeHero" class="home-hero" hidden aria-label="Jump back in" data-i18n-aria-label="library.jump_back_in"></section>
-      <button type="button" class="drop-zone" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
+      <button type="button" class="drop-zone drop-zone-idle-hidden" id="dropZone" data-i18n="library.drop_zone">Drop ROM folders or game files here to import</button>
       <div class="arrange-wrap">
         <section class="grid" id="grid"><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div><div class="card-skeleton" aria-hidden="true"></div></section>
         <div class="arrange-bar" id="arrangeBar" hidden role="button" tabindex="0" aria-label="Jump through the current view" data-i18n-aria-label="library.jump_view"></div>
@@ -167,9 +183,10 @@
     <aside class="details" id="details" aria-label="Game details" data-i18n-aria-label="library.game_details" data-moments-host="detail"><div class="details-resize-handle" id="detailsResizeHandle" role="separator" aria-orientation="vertical" aria-label="Resize details pane" tabindex="0" data-i18n-aria-label="library.resize_details"></div><div class="detail-empty" id="detailEmptyInitial"><span data-i18n="library.select_game_prompt">Select a game to see its details.</span><span class="detail-empty-hint" data-i18n="library.select_game_hint">Use the arrow keys to browse and Enter to open.</span></div></aside>
   </div>
 
-  <dialog id="filterDrawer" aria-modal="true" aria-labelledby="filterDrawerTitle">
+  <dialog id="filterDrawer" class="filter-drawer-dialog" aria-modal="true" aria-labelledby="filterDrawerTitle">
     <div class="dialog-head"><h2 id="filterDrawerTitle">Filters</h2><button type="button" id="closeFilterDrawer" aria-label="Close filters">×</button></div>
     <div class="filter-drawer-body" id="filterDrawerBody"></div>
+    <div class="dialog-actions filter-drawer-actions"><button type="button" class="primary" id="applySmartFilters">Apply smart filters</button></div>
   </dialog>
 
   <dialog id="gameDialog" aria-modal="true" aria-labelledby="dialogTitle">
@@ -183,26 +200,26 @@
         <button type="button" class="game-editor-nav-item" data-game-section="advanced">Advanced</button>
       </nav>
       <div class="form-grid game-editor-sections">
-        <section class="wide game-editor-section" data-game-section="basics" aria-labelledby="gameSectionBasics">
+        <section class="wide game-editor-section game-editor-grid" data-game-section="basics" aria-labelledby="gameSectionBasics">
           <h3 id="gameSectionBasics">Basics</h3>
-        <label class="field wide"><span data-i18n="game.entry_type">Entry type</span><select name="entry_type" id="gameEntryType"><option value="playable" data-i18n="game.entry_playable">Playable game</option><option value="shelf" data-i18n="game.entry_shelf">Shelf entry (no local file)</option></select></label>
-        <p class="wide description" id="gameShelfHint" data-i18n="game.shelf_hint" hidden>A shelf entry stays in your collection without a local file. Use Set up launch from its details when you have a file to play.</p>
-        <label class="field"><span>Name</span><input name="name" required></label>
+        <label class="field wide"><span>Name</span><input name="name" required></label>
         <label class="field"><span>Platform</span><input name="platform"></label>
-        <label class="field"><span>Genre</span><input name="genre"></label>
         <label class="field"><span>Year</span><input name="year"></label>
+        <label class="field"><span>Genre</span><input name="genre"></label>
+        <label class="field"><span>ESRB</span><select name="esrb"><option value="">Not set</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>EC</option><option>Unrated</option></select></label>
         <label class="field"><span>Developer</span><input name="developer"></label>
         <label class="field"><span>Publisher</span><input name="publisher"></label>
+        <label class="field"><span>Progress</span><select name="progress"><option value="">Not set</option><option value="Unplayed">Unplayed</option><option>Playing</option><option>Paused</option><option>Beaten</option><option>Completed</option><option>Mastered</option><option>Abandoned</option></select></label>
+        <label class="field"><span>Rating, 0 to 5</span><input name="rating" type="number" min="0" max="5" step="0.5"></label>
         <label class="field"><span>Series</span><input name="series"></label>
         <label class="field"><span>Region</span><input name="region"></label>
         <label class="field"><span>Play mode</span><input name="play_mode"></label>
-        <label class="field"><span>Sort title</span><input name="sort_title"></label>
-        <label class="field"><span>Progress</span><select name="progress"><option value="">Not set</option><option value="Unplayed">Unplayed</option><option>Playing</option><option>Paused</option><option>Beaten</option><option>Completed</option><option>Mastered</option><option>Abandoned</option></select></label>
-        <label class="field"><span>ESRB</span><select name="esrb"><option value="">Not set</option><option>E</option><option>E10+</option><option>T</option><option>M</option><option>AO</option><option>RP</option><option>EC</option><option>Unrated</option></select></label>
-        <label class="field"><span>Rating, 0 to 5</span><input name="rating" type="number" min="0" max="5" step="0.5"></label>
+        <label class="field"><span>Max players</span><input name="max_players"></label>
         <label class="field"><span data-i18n="price.paid">Price paid</span><input name="price_paid" type="number" min="0" step="0.01"></label>
         <label class="field"><span data-i18n="price.currency">Currency</span><input name="price_currency" maxlength="3" placeholder="USD"></label>
-        <label class="field"><span>Max players</span><input name="max_players"></label>
+        <label class="field"><span>Sort title</span><input name="sort_title"></label>
+        <label class="field"><span data-i18n="game.entry_type">Entry type</span><select name="entry_type" id="gameEntryType"><option value="playable" data-i18n="game.entry_playable">Playable game</option><option value="shelf" data-i18n="game.entry_shelf">Shelf entry (no local file)</option></select></label>
+        <p class="wide description" id="gameShelfHint" data-i18n="game.shelf_hint" hidden>A shelf entry stays in your collection without a local file. Use Set up launch from its details when you have a file to play.</p>
         <label class="field"><span>Wikipedia URL</span><input name="wikipedia_url"></label>
         <label class="field"><span>Video URL</span><input name="video_url"></label>
         <label class="field wide"><span>Alternate names, semicolon separated</span><input name="alternate_names"></label>
@@ -608,6 +625,7 @@
           <button type="button" class="settings-nav-item" data-settings-category="about" data-i18n="settings.about">About</button>
         </nav>
       <div class="form-grid settings-panels">
+        <label class="field wide settings-field settings-search-sticky" data-settings-exempt="search" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span data-i18n="settings.search_settings">Search settings</span><input id="settingsSearch" class="settings-search" type="search" data-i18n-placeholder="settings.search_placeholder" placeholder="Type to filter settings"><span class="description" id="settingsSearchCount" aria-live="polite"></span></label>
         <p class="wide settings-category-help" id="settingsCategoryHelp" data-settings-exempt="true"></p>
         <div class="wide settings-field settings-panel detail-card" data-settings-panel="about" data-setting="about version platform data folder native window browser webview">
           <dl class="about-facts">
@@ -625,17 +643,16 @@
           <p class="description" data-i18n="settings.about_support">OpenBox is free and open source. If it saves you time, a coffee helps cover hosting and development.</p>
           <div class="extras"><button type="button" class="icon-button" id="aboutSupport" data-i18n="settings.about_support_button">Buy me a coffee</button></div>
         </div>
-        <label class="field wide settings-field" data-settings-exempt="search" data-setting="search watched folders cloud screensaver startup shutdown session history backup progress automation image group controller gamepad"><span data-i18n="settings.search_settings">Search settings</span><input id="settingsSearch" class="settings-search" type="search" data-i18n-placeholder="settings.search_placeholder" placeholder="Type to filter settings"><span class="description" id="settingsSearchCount" aria-live="polite"></span></label>
         <label class="field wide settings-field settings-panel" data-settings-panel="library imports" data-setting="watched folders import auto"><span data-i18n="settings.watched_folders">Automatically watched game folders, one absolute path per line</span><span class="path-input-row"><textarea id="watchFolders"></textarea><button type="button" class="path-browse" data-browse-for="watchFolders" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field settings-panel detail-card" data-settings-panel="library imports" data-setting="memories screenshots import steam retroarch dolphin folders auto">
           <label class="check"><input type="checkbox" id="memoriesImportEnabled"><span data-i18n="settings.memories_import_enabled">Import screenshots from Steam, RetroArch, and Dolphin folders</span></label>
           <label class="field wide"><span data-i18n="settings.memories_import_roots">Additional screenshot folders, one absolute path per line</span><textarea id="memoriesImportRoots"></textarea></label>
           <div class="extras"><button type="button" class="icon-button" id="memoriesImportNow" data-i18n="settings.memories_import_now">Scan for screenshots now</button><span class="description" id="memoriesImportStatus"></span></div>
         </div>
-        <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button" id="removeSteamGames" data-i18n="settings.remove_steam">Remove all imported Steam games</button><span class="description" data-i18n="settings.remove_steam_desc">Removes library entries only. Game files and media stay on disk.</span></div>
         <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library integrity check missing unreadable paths"><strong data-i18n="library_storage.integrity_title">Library integrity</strong> <span class="description" data-i18n="library_storage.integrity_help">Reads the library file and every game path. Nothing is changed.</span><div class="extras"><button type="button" class="icon-button" id="libraryIntegrityCheck" data-i18n="library_storage.integrity_check">Check integrity</button></div><div id="libraryIntegrityResult" class="description" hidden></div></div>
         <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="media manifest checksums integrity verify"><label class="check"><input type="checkbox" id="mediaManifestEnabled" checked><span data-i18n="library_storage.manifest_enabled">Record media checksums</span></label><span class="description" data-i18n="library_storage.manifest_help">Tracks the size, timestamp, and SHA-256 of downloaded and captured media so the integrity check can tell a changed file from an untouched one. Turning this off skips manifest writes and media hashing.</span></div>
         <div class="wide settings-field settings-panel" data-settings-panel="library" data-setting="library move folder portable paths relocate"><strong data-i18n="library_storage.move_title">Move library</strong> <span class="description" data-i18n="library_storage.move_help">Preview shows what a move changes. Apply runs exactly the previewed plan and refuses if the library changed since the preview. Games inside the new folder get portable paths.</span><label class="field"><span data-i18n="library_storage.move_folder">New library folder</span><span class="path-input-row"><input id="libraryMoveFolder" autocomplete="off"><button type="button" class="path-browse" id="libraryMoveBrowse" data-i18n="library_storage.move_browse">Browse</button></span></label><div class="extras"><button type="button" class="icon-button" id="libraryMovePreview" data-i18n="library_storage.move_preview">Preview move</button><button type="button" class="icon-button" id="libraryMoveApply" data-i18n="library_storage.move_apply" disabled>Apply move</button></div><div id="libraryMoveResult" class="description" aria-live="polite" hidden></div></div>
+        <div class="wide settings-field settings-panel settings-danger-zone" data-settings-panel="library imports" data-setting="library cleanup remove steam imports"><button type="button" class="icon-button danger-button" id="removeSteamGames" data-i18n="settings.remove_steam">Remove all imported Steam games</button><span class="description" data-i18n="settings.remove_steam_desc">Removes library entries only. Game files and media stay on disk.</span></div>
         <div class="wide settings-field settings-panel" data-settings-panel="advanced" data-setting="diagnostic support troubleshooting logs"><button type="button" class="icon-button" id="copyDiagnosticLog" data-i18n="settings.copy_diagnostic">Copy diagnostic log</button><span class="description" data-i18n="settings.copy_diagnostic_desc">Review it before sharing because it can include game names and local file paths.</span></div>
         <label class="field wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync syncthing dropbox nextcloud"><span data-i18n="settings.cloud_folder">Mounted Nextcloud, Syncthing, Dropbox, or other cloud folder for game-stat syncing</span><span class="path-input-row"><input id="cloudFolder"><button type="button" class="path-browse" data-browse-for="cloudFolder" data-browse-kind="folder">Browse</button></span></label>
         <div class="wide settings-field settings-panel" data-settings-panel="integrations" data-setting="cloud sync"><button type="button" class="icon-button" id="syncCloud" data-i18n="settings.sync_now">Sync statistics now</button><span class="description" id="cloudStatus"></span></div>
@@ -882,7 +899,7 @@
   <section class="bigbox" id="bigBox" role="dialog" aria-modal="true" aria-label="Big Box" hidden tabindex="0">
     <video class="bigbox-startup-video" id="bigBoxStartupVideo" muted playsinline hidden></video>
     <video class="bigbox-video-backdrop" id="bigBoxBackdrop" muted loop playsinline aria-hidden="true" hidden></video>
-    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><button type="button" class="dna-mode single" id="bigBoxDnaToggle" data-dna-mode="title" title="Smart search is 100% local" hidden>Title</button><span class="bigbox-status" id="bigBoxStatus"></span><span class="bigbox-battery" id="bigBoxBattery" hidden></span><span id="bigBoxCounter"></span></div>
+    <div class="bigbox-head"><strong>OpenBox</strong><input class="hybrid-search" id="bigBoxHybridSearch" type="search" placeholder="Search this platform" hidden><button type="button" class="dna-mode single" id="bigBoxDnaToggle" data-dna-mode="title" title="Smart search is 100% local" hidden>Title</button><span class="bigbox-status" id="bigBoxStatus"></span><span class="bigbox-battery" id="bigBoxBattery" hidden></span><span id="bigBoxCounter"></span><button type="button" class="icon-button bigbox-exit-btn" id="bigBoxExitButton" data-i18n="bigbox.exit">Exit</button></div>
     <div class="bigbox-stage" id="bigBoxStage"></div>
     <div class="bigbox-foot"><span>← → Browse</span><span>Enter / A Play</span><span>P Pause</span><span>M Filters</span><span>F / X Favorite</span><span>Esc / B Back</span></div>
     <div class="bigbox-menu" id="bigBoxMenu" role="dialog" aria-modal="true" aria-label="Big Box menu" hidden>
