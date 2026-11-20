@@ -5,8 +5,12 @@ Usage:
   cd scripts && npm ci    # once; requires Node.js 22.12+ and installs Puppeteer
   python3 scripts/capture_readme_screenshots.py
 
-Writes assets/openbox-screenshot.png, assets/openbox-game-detail.png,
-assets/openbox-bigbox.png, and assets/openbox-constellation.png (1920x1080).
+Writes all eight 1920x1080 showcase screenshots under assets/:
+  openbox-screenshot.png, openbox-game-detail.png, openbox-bigbox.png,
+  openbox-constellation.png, openbox-picker.png, openbox-wrapped.png,
+  openbox-mastery.png, and openbox-game-night.png.
+Prefers the native Rust openbox-server binary (OPENBOX_SERVER_BIN,
+target/release/openbox-server, or PATH) and falls back to web_app.py.
 Requires LaunchBox metadata under ~/.local/share/openbox-game-launcher/ (or network sync).
 """
 
@@ -50,6 +54,16 @@ GAMES = [
     ("Sonic the Hedgehog 2", "Sega Genesis", 108429, "Sonic2.bin", "covers/sonic_2_real.jpg", None),
     ("Mega Man X", "Super Nintendo Entertainment System", 143, "MegaManX.smc", "covers/mega_man_x_real.jpg", None),
     ("Final Fantasy VII", "Sony Playstation", 525, "FinalFantasyVII.bin", "covers/final_fantasy_vii_cover.jpg", None),
+    ("Portal 2", "Windows", 914, "Portal2.exe", "covers/portal_2_cover.jpg", "steam/portal_2_bg.jpg"),
+    ("Hades", "Windows", 167721, "Hades.exe", "covers/hades_cover.jpg", "steam/hades_bg.jpg"),
+    ("Super Mario Odyssey", "Nintendo Switch", 136132, "SuperMarioOdyssey.nsz", "covers/super_mario_odyssey_cover.jpg", None),
+    ("Metroid Dread", "Nintendo Switch", 202670, "MetroidDread.nsz", "covers/metroid_dread_cover.jpg", None),
+    ("Mario Kart 64", "Nintendo 64", 266, "MarioKart64.z64", "covers/mario_kart_64_cover.jpg", None),
+    ("Banjo-Kazooie", "Nintendo 64", 162, "BanjoKazooie.z64", "covers/banjo_kazooie_cover.jpg", None),
+    ("Super Smash Bros. Melee", "Nintendo GameCube", 5654, "SuperSmashBrosMelee.iso", "covers/smash_melee_cover.jpg", None),
+    ("Streets of Rage 2", "Sega Genesis", 694, "StreetsOfRage2.bin", "covers/streets_of_rage_2_cover.jpg", None),
+    ("Castlevania: Symphony of the Night", "Sony Playstation", 511, "CastlevaniaSOTN.bin", "covers/castlevania_sotn_cover.jpg", None),
+    ("Metal Gear Solid", "Sony Playstation", 196, "MetalGearSolid.bin", "covers/metal_gear_solid_cover.jpg", None),
 ]
 
 DISC_PLATFORMS = {
@@ -238,11 +252,19 @@ def build_library() -> None:
             "platform": platform,
             "path": str(rom_path),
             "launch": str(rom_path),
-            "source": "Screenshot fixture",
+            "source": "Steam" if platform == "Windows" else "Local ROMs",
             "cover": cover,
             "background": background or "",
-            "progress": "Playing" if index % 3 == 0 else "Completed" if index % 3 == 1 else "On Hold",
-            "favorite": index in {0, 4, 7},
+            "progress": (
+                "Mastered"
+                if index in {3, 13}
+                else "Playing"
+                if index % 3 == 0
+                else "Completed"
+                if index % 3 == 1
+                else "On Hold"
+            ),
+            "favorite": index in {0, 4, 7, 12, 13, 20},
             "play_count": play_count,
             "rating": 4 + (index % 2),
             "genre": {
@@ -270,60 +292,101 @@ def build_library() -> None:
 
     # Stable ids are recomputed from identity on load; derive them with the
     # same function so seeded history entries reference the surviving ids.
-    from state_store import _stable_game_id
+    from state_store import _stable_game_id, default_state
 
     history: list[dict] = []
     for index, game in enumerate(games):
         game["game_id"] = _stable_game_id(game)
-        if index % 3 == 0:
-            game["added_at"] = f"2026-0{1 + index % 7}-1{index % 9}T12:00:00"
+        if index == 1:
+            game["added_at"] = "2026-03-14T12:00:00"
+        else:
+            game["added_at"] = f"2025-0{1 + index % 9}-1{index % 9}T12:00:00"
         session_count = 4 + (index % 5)
         for session in range(session_count):
             month = 2 + (index + session) % 7
             day = 1 + ((index * 5 + session * 9) % 27)
             hour = 17 + (index + session) % 5
             started = datetime(2026, month, day, hour, 12, 0).isoformat()
-            history.append({
+            entry_item: dict[str, object] = {
                 "game_id": game["game_id"],
                 "title": game["name"],
                 "started": started,
                 "seconds": 1800 + ((index * 977 + session * 613) % 12600),
                 "exit_code": 0,
-            })
+            }
+            if session == session_count - 1:
+                if index in {1, 4, 14}:
+                    entry_item["note"] = "Completed main story"
+                elif index in {7, 10, 18, 20}:
+                    entry_item["note"] = "Beaten"
+                elif index in {3, 13}:
+                    entry_item["note"] = "Mastered 100%"
+            history.append(entry_item)
 
-    state = {
-        "games": games,
-        "profiles": {},
-        "history": history,
-        "playlists": [],
-        "settings": {
-            "welcome_completed": True,
-            "theme": "",
-            "library_view": "grid",
-            "image_group": "cover",
-            "bigbox_mode": "stage",
-            "screensaver_seconds": 90,
-            "show_insights": False,
-            "controller_map": {
-                "play": 0,
-                "back": 1,
-                "favorite": 2,
-                "random": 3,
-                "page_left": 4,
-                "page_right": 5,
-                "pause": 8,
-                "menu": 9,
-            },
+    state = default_state()
+    state["games"] = games
+    state["profiles"] = {}
+    state["history"] = history
+    state["playlists"] = [
+        {
+            "name": "Weekend Classics",
+            "type": "manual",
+            "members": [games[i]["game_id"] for i in (0, 2, 3, 7)],
         },
-    }
+    ]
+    state["settings"].update({
+        "welcome_completed": True,
+        "theme": "",
+        "library_view": "grid",
+        "image_group": "cover",
+        "cover_grouping": "none",
+        "bigbox_mode": "stage",
+        "screensaver_seconds": 90,
+        "show_insights": False,
+        "controller_map": {
+            "play": 0,
+            "back": 1,
+            "favorite": 2,
+            "random": 3,
+            "page_left": 4,
+            "page_right": 5,
+            "pause": 8,
+            "menu": 9,
+        },
+    })
+    for stale_name in ("operations.json", "library.json.bak", "sessions.json"):
+        (DATA_DIR / stale_name).unlink(missing_ok=True)
     (DATA_DIR / "library.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def resolve_server_command() -> list[str]:
+    override = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
+    if override:
+        return [override, "--no-browser"]
+    for candidate in (
+        ROOT / "target" / "release" / "openbox-server",
+        ROOT / "target" / "debug" / "openbox-server",
+    ):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return [str(candidate), "--no-browser"]
+    installed = shutil.which("openbox-server")
+    if installed:
+        return [installed, "--no-browser"]
+    return [sys.executable, str(ROOT / "web_app.py"), "--no-browser"]
 
 
 def start_server() -> tuple[subprocess.Popen[str], str, str]:
     env = os.environ.copy()
     env["OPENBOX_DATA_DIR"] = str(DATA_DIR)
+    env["OPENBOX_ROOT"] = str(ROOT)
+    token_file = DATA_DIR / "server.token"
+    port_file = DATA_DIR / "server.port"
+    token_file.unlink(missing_ok=True)
+    port_file.unlink(missing_ok=True)
+    cmd = resolve_server_command()
+    print(f"Starting OpenBox server: {' '.join(cmd)}")
     process = subprocess.Popen(
-        [sys.executable, str(ROOT / "web_app.py"), "--no-browser"],
+        cmd,
         cwd=str(ROOT),
         env=env,
         stdout=subprocess.PIPE,
@@ -331,21 +394,31 @@ def start_server() -> tuple[subprocess.Popen[str], str, str]:
         text=True,
     )
     url = ""
+    output_lines: list[str] = []
     deadline = time.time() + 20
     while time.time() < deadline:
         line = process.stdout.readline() if process.stdout else ""
+        if line:
+            output_lines.append(line.rstrip())
         if "http://127.0.0.1:" in line:
-            url = line.strip().split()[-1]
-            break
+            for token_part in line.strip().split():
+                if token_part.startswith("http://127.0.0.1:"):
+                    url = token_part.rstrip("/") + "/"
+                    break
+            if url:
+                break
         if process.poll() is not None:
-            raise SystemExit("OpenBox server exited before publishing a URL.")
+            details = "\n".join(output_lines[-20:])
+            raise SystemExit(f"OpenBox server exited before publishing a URL.\n{details}")
     if not url:
         process.kill()
-        raise SystemExit("Timed out waiting for OpenBox server URL.")
-    # web_app.py no longer prints the token-bearing URL; the token lives in
-    # <data_dir>/server.token (0600), which the server writes before printing
-    # the port URL on stdout.
-    token_file = DATA_DIR / "server.token"
+        details = "\n".join(output_lines[-20:])
+        raise SystemExit(f"Timed out waiting for OpenBox server URL.\n{details}")
+    # The server never prints the token-bearing URL; the token lives in
+    # <data_dir>/server.token (0600), written before printing the port URL.
+    token_deadline = time.time() + 5
+    while not token_file.is_file() and time.time() < token_deadline:
+        time.sleep(0.05)
     if not token_file.is_file():
         process.kill()
         raise SystemExit("Timed out waiting for OpenBox server.token.")

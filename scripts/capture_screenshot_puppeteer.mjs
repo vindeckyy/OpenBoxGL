@@ -14,7 +14,7 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.goto(appUrl, { waitUntil: "domcontentloaded", timeout: 120000 });
 await page.waitForFunction(
-  () => document.querySelectorAll("#grid [data-game]").length >= 12,
+  () => document.querySelectorAll("#grid [data-game]").length >= 22,
   { timeout: 60000 },
 );
 
@@ -79,28 +79,47 @@ await waitForStableGrid();
 await forceSynchronousDecode();
 
 if (mode === "bigbox") {
-  // Navigate to Big Box via the deeplink, then wait for the overlay-in
-  // animation (.22s fill-mode both) to finish and the cover art to be
-  // decoded before capturing, so the screenshot is never a mid-fade frame.
+  // Navigate to Big Box via the deeplink, wait for the overlay-in animation to
+  // finish, then step to a portrait-cover showcase title so Stage 3D box art
+  // fills the portrait frame cleanly without side cropping.
   await page.goto(`${appUrl}&deeplink=bigbox`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.waitForFunction(
     () => {
       const bigBox = document.querySelector("#bigBox");
       if (!bigBox || bigBox.hidden) return false;
-      // overlay-in .22s still running -> opacity < 1
       if (getComputedStyle(bigBox).opacity !== "1") return false;
-      const img = document.querySelector("#bigBox .bigbox-cover img");
-      const coverReady = !img || (img.complete && img.naturalWidth > 32);
       const copy = document.querySelector("#bigBox .bigbox-copy h2");
-      return coverReady && copy && copy.textContent.trim().length > 0;
+      return Boolean(copy && copy.textContent.trim().length > 0);
     },
     { timeout: 60000 },
   );
-  // One extra frame for the compositor after the animation end.
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  // Step left from index 0 (Chrono Trigger, landscape SNES) to wrap onto
+  // The Legend of Zelda: Breath of the Wild (vibrant vertical Switch cover).
+  await page.evaluate(() => {
+    const bigBox = document.querySelector("#bigBox");
+    bigBox?.focus();
+    bigBox?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => {
+      const copy = document.querySelector("#bigBox .bigbox-copy h2");
+      if (!copy || !copy.textContent.includes("Breath of the Wild")) return false;
+      const imgs = [...document.querySelectorAll("#bigBox .bigbox-cover img")];
+      return imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 32);
+    },
+    { timeout: 60000 },
+  );
+  await page.evaluate(async () => {
+    const imgs = [...document.querySelectorAll("#bigBox .bigbox-cover img")];
+    await Promise.all(imgs.map((img) => img.decode().catch(() => {})));
+    // Blur #bigBox so the fullscreen focus-visible ring does not frame the capture.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  // Allow Mood Match border transition and compositor frame to settle.
+  await new Promise((resolve) => setTimeout(resolve, 600));
 } else if (mode === "constellation") {
-  // Open the Library Constellation graph, then let the spring-electric
-  // layout settle so nodes rest before capturing.
+  // Open the Library Constellation graph, let the spring-electric layout
+  // settle, then zoom gently so the connected cluster fills the canvas.
   await page.evaluate(() => import('/static/constellation.js').then((m) => m.openConstellation()));
   await page.waitForFunction(
     () => {
@@ -111,14 +130,41 @@ if (mode === "bigbox") {
     },
     { timeout: 60000 },
   );
-  await new Promise((resolve) => setTimeout(resolve, 6000));
+  await new Promise((resolve) => setTimeout(resolve, 5500));
+  // Gentle zoom for the 22-node graph so every node and edge stays comfortably
+  // inside the canvas without clipping.
+  await page.evaluate(() => {
+    const canvas = document.querySelector('#constellationCanvas');
+    if (canvas) {
+      canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -450, bubbles: true, cancelable: true }));
+    }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 400));
 } else if (mode === "picker") {
   await page.evaluate(async () => { (await import("/static/picker.js")).openPicker(); });
   await page.waitForFunction(
     () => document.querySelector("#pickerDialog")?.open === true,
     { timeout: 30000 },
   );
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  // Trigger a live pick with full cover projection and wait for cover decode.
+  await page.evaluate(() => document.querySelector("#pickerRandom")?.click());
+  await page.waitForFunction(
+    () => {
+      const img = document.querySelector("#pickerResultCard img");
+      if (!img) return false;
+      img.loading = "eager";
+      img.decoding = "sync";
+      return img.complete && img.naturalWidth > 32;
+    },
+    { timeout: 30000 },
+  );
+  await page.evaluate(async () => {
+    const img = document.querySelector("#pickerResultCard img");
+    if (img) await img.decode().catch(() => {});
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 400));
 } else if (mode === "wrapped") {
   await page.evaluate(async () => { (await import("/static/wrapped.js")).openWrapped(); });
   await page.waitForFunction(
@@ -130,23 +176,35 @@ if (mode === "bigbox") {
     },
     { timeout: 30000 },
   );
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
 } else if (mode === "mastery") {
   await page.evaluate(async () => { (await import("/static/mastery.js")).openMastery(); });
   await page.waitForFunction(
     () => document.querySelector("#masteryDialog")?.open === true,
     { timeout: 30000 },
   );
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
 } else if (mode === "party") {
   // Game Night lives inside Big Box: #partyOverlay is nested in #bigBox, so
-  // it only lays out once Big Box is open. Enter Big Box first, then open
-  // the party overlay on top of the stage.
+  // it only lays out once Big Box is open. Enter Big Box first, step to a
+  // portrait cover for a clean dimmed backdrop, then open the party overlay.
   await page.evaluate(async () => { (await import("/static/bigbox.js")).openBigBox?.(); });
   await page.waitForFunction(() => {
     const bigBox = document.querySelector("#bigBox");
     return bigBox && !bigBox.hidden && getComputedStyle(bigBox).opacity === "1";
   }, { timeout: 30000 });
+  await page.evaluate(() => {
+    const bigBox = document.querySelector("#bigBox");
+    bigBox?.focus();
+    bigBox?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
   await page.evaluate(async () => { (await import("/static/party.js")).openParty(); });
   await page.waitForFunction(
     () => {
@@ -158,12 +216,31 @@ if (mode === "bigbox") {
     },
     { timeout: 30000 },
   );
-  // Build the queue so the capture shows the wheel, not just the setup panel.
-  await page.evaluate(() => document.querySelector("#partyBuild")?.click());
+  // Filter to 4-player Windows titles so the wheel builds a balanced 2-slice
+  // (90°/270°) draw where every title label and portrait cover renders cleanly.
+  await page.evaluate(() => {
+    document.querySelector("#partyMore")?.click();
+    document.querySelector("#partyMore")?.click();
+    const queryInput = document.querySelector("#partyQuery");
+    if (queryInput) {
+      queryInput.value = "platform:Windows";
+      queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    document.querySelector("#partyBuild")?.click();
+  });
   await page.waitForFunction(
     () => Boolean(document.querySelector("#partyWheel")?.children.length),
     { timeout: 30000 },
   );
+  await page.evaluate(async () => {
+    const imgs = [...document.querySelectorAll("#partyOverlay img")];
+    for (const img of imgs) {
+      img.loading = "eager";
+      img.decoding = "sync";
+    }
+    await Promise.all(imgs.map((img) => img.decode().catch(() => {})));
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
   await new Promise((resolve) => setTimeout(resolve, 600));
 } else if (mode === "detail" || detailGameId !== "") {
   const gameId = detailGameId || mode;
@@ -178,6 +255,8 @@ if (mode === "bigbox") {
       if (!hero) return false;
       // surface-in .24s still running -> opacity < 1
       if (getComputedStyle(hero).opacity !== "1") return false;
+      const detailImgs = [...document.querySelectorAll("#details img")];
+      if (!detailImgs.every((img) => img.complete && img.naturalWidth > 32)) return false;
       const inlineBg = hero.style.backgroundImage; // only set when has_background
       if (!inlineBg || inlineBg === "none") return true; // gradient-only hero
       const url = inlineBg.replace(/^url\(["']?/, "").replace(/["']?\)$/, "");
@@ -192,6 +271,16 @@ if (mode === "bigbox") {
   // settle and decode so no cover is a placeholder in the detail capture.
   await waitForStableGrid();
   await forceSynchronousDecode();
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+} else {
+  // Default library grid capture: blur initial focus so no stray focus ring or
+  // star-rating hover pill obscures the first card's cover art.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
 }
 
 await page.screenshot({ path: outputPath, type: "png" });
