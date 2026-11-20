@@ -6,11 +6,13 @@ use std::path::Path;
 use std::process::Command;
 
 use openbox_core::ApiError;
-use openbox_platform::{IS_LINUX, expand_user, flatpak_app_installed, which};
+use openbox_platform::{
+    IS_LINUX, IS_MACOS, expand_user, flatpak_app_installed, resolve_native_executable, which,
+};
 use serde_json::{Map, Value, json};
 
 use crate::defs::{
-    Adapter, apply_core_override, detect_adapter_for_platform, detect_adapter_prefix, find_adapter,
+    Adapter, adapter_executable, apply_core_override, detect_adapter_for_platform, find_adapter,
     flatpak_core_path, resolve_launch, resolved_startup_args,
 };
 use crate::tokens::find_invalid_tokens;
@@ -148,14 +150,31 @@ pub fn run_preflight_checks(
     }
 
     if path_str.is_empty() {
+        if game
+            .get("manual_entry")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            checks.push(make_check(
+                "SHELF_ENTRY",
+                "info",
+                "This shelf entry has no local launch path yet.",
+                Some(json!({
+                    "kind": "reveal_bios_path",
+                    "label": "Show BIOS folder",
+                    "payload": {"path": "", "name": ""},
+                })),
+            ));
+            return (checks, resolved);
+        }
         checks.push(make_check(
             "PATH_MISSING",
             "error",
-            "This game has no launch path configured.",
+            "Game path is missing.",
             Some(json!({
-                "kind": "set_path",
-                "label": "Set game path",
-                "payload": {},
+                "kind": "reveal_bios_path",
+                "label": "Show BIOS folder",
+                "payload": {"path": "", "name": ""},
             })),
         ));
         return (checks, resolved);
@@ -164,18 +183,29 @@ pub fn run_preflight_checks(
     let rom_path = expand_user(Path::new(path_str));
     if !rom_path.exists() {
         checks.push(make_check(
-            "PATH_NOT_FOUND",
+            "PATH_MISSING",
             "error",
-            format!(
-                "Game file does not exist: {}",
-                rom_path.file_name().unwrap_or_default().to_string_lossy()
-            ),
+            "Game path does not exist.",
             Some(json!({
-                "kind": "set_path",
-                "label": "Update game path",
-                "payload": {"path": path_str},
+                "kind": "reveal_bios_path",
+                "label": "Show BIOS folder",
+                "payload": {"path": path_str, "name": ""},
             })),
         ));
+        return (checks, resolved);
+    }
+    if !rom_path.is_file() {
+        checks.push(make_check(
+            "PATH_WRONG_TYPE",
+            "error",
+            "Game path is not a file.",
+            Some(json!({
+                "kind": "reveal_bios_path",
+                "label": "Show BIOS folder",
+                "payload": {"path": path_str, "name": ""},
+            })),
+        ));
+        return (checks, resolved);
     }
 
     let aid = game
@@ -195,29 +225,57 @@ pub fn run_preflight_checks(
         resolved["emulator_id"] = Value::String(eff.emulator_id.clone());
         resolved["adapter_id"] = Value::String(eff.adapter_id.clone());
 
-        let prefix = detect_adapter_prefix(&eff);
-        if prefix.is_empty() && game_launch.is_empty() && !profiles.contains_key(platform) {
-            let fp_id = eff.flatpak_app_id.as_deref().unwrap_or("");
-            let code = if IS_LINUX && !fp_id.is_empty() && !flatpak_app_installed(fp_id) {
+        let native_exe = adapter_executable(&eff);
+        let resolved_native = if native_exe.is_empty() {
+            None
+        } else {
+            resolve_native_executable(&native_exe)
+        };
+        let macos_build_missing = IS_MACOS && eff.native_exe_macos.as_deref() == Some("");
+        let fp_id = if IS_LINUX {
+            eff.flatpak_app_id.as_deref().unwrap_or("")
+        } else {
+            ""
+        };
+        let mut install_mode = "";
+        if resolved_native.is_some() {
+            install_mode = "native";
+        } else if !fp_id.is_empty() && flatpak_app_installed(fp_id) {
+            install_mode = "flatpak";
+        } else if macos_build_missing {
+            checks.push(make_check(
+                "NATIVE_EXE_MISSING",
+                "error",
+                "This emulator has no macOS build.",
+                Some(json!({
+                    "kind": "pick_core",
+                    "label": "Choose emulator / core",
+                    "payload": {"platforms": if platform.is_empty() { vec![] } else { vec![platform] }},
+                })),
+            ));
+        } else if !native_exe.is_empty() || !fp_id.is_empty() {
+            let code = if !fp_id.is_empty() && native_exe.is_empty() {
                 "FLATPAK_NOT_INSTALLED"
             } else {
-                "EMULATOR_MISSING"
+                "NATIVE_EXE_MISSING"
             };
             checks.push(make_check(
                 code,
                 "error",
-                format!("{} is not installed.", eff.label),
+                "Emulator is not installed.",
                 Some(json!({
                     "kind": "flatpak_install",
-                    "label": "Install emulator",
+                    "label": "Install Flatpak emulator",
                     "payload": {
                         "app_id": fp_id,
-                        "native_exe": eff.native_exe.as_deref().unwrap_or(""),
+                        "native_exe": native_exe,
                     },
                 })),
             ));
-        } else if prefix.first().map(String::as_str) == Some("flatpak")
-            && let Some(fp_id) = eff.flatpak_app_id.as_deref()
+        }
+
+        if install_mode == "flatpak"
+            && !fp_id.is_empty()
             && rom_path.exists()
             && !flatpak_fs_allowed(fp_id, &rom_path)
         {
@@ -228,7 +286,7 @@ pub fn run_preflight_checks(
             checks.push(make_check(
                 "FLATPAK_FS_DENIED",
                 "error",
-                format!("Flatpak {fp_id} does not have read access to the ROM folder."),
+                "Flatpak emulator cannot access the game path.",
                 Some(json!({
                     "kind": "flatpak_grant",
                     "label": "Grant Flatpak access to this folder",
@@ -238,27 +296,28 @@ pub fn run_preflight_checks(
         }
 
         // Check RetroArch core presence when adapter specifies -L <core>
+        let core_prefix: Vec<String> = if install_mode == "flatpak" {
+            vec!["flatpak".to_owned()]
+        } else {
+            Vec::new()
+        };
         let startup = resolved_startup_args(&eff);
         for idx in 0..startup.len().saturating_sub(1) {
             if startup[idx] == "-L" {
-                let core = flatpak_core_path(&startup[idx + 1], &prefix);
+                let raw_core = &startup[idx + 1];
+                let core = flatpak_core_path(raw_core, &core_prefix);
                 if core.starts_with('/') && !Path::new(&core).is_file() {
                     checks.push(make_check(
-                        "CORE_MISSING",
-                        "warning",
-                        format!(
-                            "RetroArch core not found: {}",
-                            Path::new(&core)
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
-                        ),
+                        "RETROARCH_CORE_MISSING",
+                        "error",
+                        "RetroArch core is missing.",
                         Some(json!({
                             "kind": "pick_core",
                             "label": "Choose emulator / core",
-                            "payload": {"adapter_id": eff.adapter_id, "core": core},
+                            "payload": {"adapter_id": eff.adapter_id, "core": raw_core},
                         })),
                     ));
+                    break;
                 }
             }
         }
@@ -293,6 +352,46 @@ pub fn run_preflight_checks(
                 ));
             }
         }
+    }
+
+    // Warning gaps (mirrors parity_launch_doctor._warning_gaps)
+    let has_save_paths = game
+        .get("save_paths")
+        .is_some_and(|v| v.as_array().is_some_and(|a| !a.is_empty()));
+    if !has_save_paths {
+        checks.push(make_check(
+            "SAVE_GAP",
+            "warning",
+            "No save paths configured.",
+            None,
+        ));
+    }
+    let has_media = game
+        .get("cover")
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.trim().is_empty())
+        || game
+            .get("screenshots")
+            .and_then(Value::as_array)
+            .is_some_and(|a| !a.is_empty());
+    if !has_media {
+        checks.push(make_check(
+            "MEDIA_GAP",
+            "warning",
+            "No cover art or screenshots configured.",
+            None,
+        ));
+    }
+    let has_documents = game
+        .get("documents")
+        .is_some_and(|v| v.as_array().is_some_and(|a| !a.is_empty()));
+    if !has_documents {
+        checks.push(make_check(
+            "DOCUMENT_GAP",
+            "warning",
+            "No documents configured.",
+            None,
+        ));
     }
 
     if rom_path.exists()
