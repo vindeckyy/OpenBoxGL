@@ -2,6 +2,21 @@
 
 Measured by `scripts/perf_bench.py` against a synthetic library served by the real server (loopback, gzip enabled). Reference machine: this workstation.
 
+## 3.0 release: 50k on Rust (`openbox-server`, 2026-11-19)
+
+Machine: Linux 7.3.0 x86_64, AMD Ryzen 5 4600H, 16 GiB RAM, `rustc 1.99.1`. The Rust side is `target/release/openbox-server` (standalone binary, zero Python runtime); the Python side is the same machine's CPython 3.14.8 `web_app.py`. Command: `OPENBOX_SERVER_BIN=target/release/openbox-server python3 -B scripts/perf_bench.py --sizes 10000,20000,50000 --runs 3 --no-gate --memory`. This is three measured passes, not a soak (ADR 0116).
+
+| Metric (p95) | Rust 3.0 | Python 3.0 (same machine) | Budget (ADR 0098) |
+|---|---:|---:|---|
+| Favorite mutation p95 | **560.4 ms** | 2950.6 ms | write p95 ≤ 1500 ms: met |
+| Bulk mutation p95 | **345.9 ms** | 2903.3 ms | write p95 ≤ 1500 ms: met |
+| Server RSS after warm-up | 633.8 MB | 1094.8 MB | |
+| Server RSS after the benchmark | **468.8 MB** | 1281.9 MB | 1500 MB: met (31.3% of budget) |
+
+Read-path highlights at 50,000 games: Explorer facets p95 21.1 ms (142.1x faster than Python), delta search p95 0.5 ms (82.6x), media p95 0.4 ms (5,867x), and paginated library p95 1.5 ms (8.27x).
+
+The 10k/20k blocking gates on the same run: 10k write p95 110.6 ms (gate 500 ms), picker p95 14.6 ms (gate 200 ms), constellation p95 13.8 ms (gate 1500 ms), end RSS 113.4 MB; 20k write p95 220.7 ms (gate 1000 ms), picker p95 27.1 ms, constellation p95 19.6 ms, end RSS 204.1 MB. The formal scale graduates to 50,000 games on this backend (ADR 0116).
+
 ## 3.0 candidate: 50k on this machine (2026-11-13)
 
 Machine: Apple M4, macOS 27.2 (arm64), Python 3.15.2, 16 GiB. Working tree based on `e63e3b2`. Command: `python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate --memory --out build/perf-3.0-50k.json`. This is three measured passes, not a soak. The artifact is under `build/` and is not committed.
@@ -13,7 +28,7 @@ Machine: Apple M4, macOS 27.2 (arm64), Python 3.15.2, 16 GiB. Working tree based
 | Server RSS after warm-up | 1190.0 MB | |
 | Server RSS after the benchmark | **2163.3 MB** | 1500 MB: **missed** |
 
-The write budget is met. The RSS budget is not. The formal scale stays 20,000 games, and 3.0.0 is not tagged on this run. `scripts/perf_bench.py` was not retuned. The same process also ran the script's built-in write-path checks: 10k write p95 219.3 ms (gate 500 ms) and 20k write p95 470.0 ms (gate 1000 ms), both inside the code gates on this host.
+The write budget is met. The RSS budget is not. The formal scale stays 20,000 games, and 3.0.0 is not tagged on this run (superseded by the Rust run above; formal scale 50,000 per ADR 0116). `scripts/perf_bench.py` was not retuned. The same process also ran the script's built-in write-path checks: 10k write p95 219.3 ms (gate 500 ms) and 20k write p95 470.0 ms (gate 1000 ms), both inside the code gates on this host.
 
 The October M4 write numbers and the November Ryzen RSS number remain the split-host evidence that allowed the attempt. They are not this result.
 
@@ -262,8 +277,8 @@ multiplier.
 
 The full JSON evidence was captured in `/tmp/openbox-perf-final.json` during the
 release execution and is intentionally treated as a disposable measurement.
-The formal release gates remain the thresholds below; performance above 20,000
-games is exploratory even when the SQLite read model is enabled.
+The formal release gates remain the thresholds below; 10k/20k remain the blocking
+CI gates and the 50,000-game run is the release verification run (ADR 0116).
 
 ## Historical baseline (2026-08-20, v1.5.1 - dirty-field writes + cached projections)
 

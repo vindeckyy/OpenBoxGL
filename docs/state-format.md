@@ -15,7 +15,7 @@
 
 Every other top-level field (games, profiles, playlists, and any field this build does not know) is kept as written.
 
-### Additive 2.2 top-level keys (schema stays v7)
+### Additive 3.0 top-level keys (schema stays v7)
 
 - `deals` (`{"watchlist": [...], "prices": {...}, "last_poll_at": ""}`): bounded opt-in Deal Radar watchlist (`<= 200` items) and per-item retained price history (`<= 50` points per item); warn-and-repair prunes orphaned `prices` keys and malformed items on load.
 - `time_capsules` (`[...]`): Player's Log notes/questions unlocked once via durable `opened_at`. (`game_id` is display metadata, not a foreign key — deleting a game preserves its capsules.)

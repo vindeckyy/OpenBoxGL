@@ -1,7 +1,7 @@
 # Native host contract
 
 The native host renders the same `index.html`, `app.js`, and `app.css` as the
-web UI, served by `web_app.py` over loopback. This document is the contract
+web UI, served by `openbox-server` over loopback. This document is the contract
 between the page and the host. Both directions must keep working when the host
 is absent, so the web UI remains usable in a plain browser for development.
 
@@ -17,7 +17,7 @@ host uses the equivalent Windows mechanism:
 | Clause | Linux (WebKitGTK) | Windows (WebView2) | macOS (WKWebView) |
 |---|---|---|---|
 | Single instance | `AF_UNIX` socket in the data directory | named pipe opened with `FILE_FLAG_FIRST_PIPE_INSTANCE` (the atomic guard), same `focus`/`deeplink` forwarding | `AF_UNIX` socket in the data directory, with the 104-byte `sun_path` limit checked before it binds |
-| Graceful stop of the Python child | `SIGTERM` to the child process group | `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP` child | `SIGTERM` to the child process group (the child is started with `posix_spawn` and `POSIX_SPAWN_SETPGROUP`) |
+| Graceful stop of the server child | `SIGTERM` to the child process group | `CTRL_BREAK` to the `CREATE_NEW_PROCESS_GROUP` child | `SIGTERM` to the child process group (the child is started with `posix_spawn` and `POSIX_SPAWN_SETPGROUP`) |
 | Force-kill backstop | `SIGKILL` to the process group | job object (`TerminateJobObject`), which also kills children | `SIGKILL` to the process group |
 | Geometry persistence | `window-geometry`, `"<w> <h> <maximized>"` | same file, same format | same file, same format |
 | Tray flags | `native-host-flags` | same file | same file |
@@ -26,13 +26,14 @@ host uses the equivalent Windows mechanism:
 | `gamepad` capability | `"webkit"` (fixed; the page always uses the Web Gamepad API) | same | same |
 
 The bridge object, the HTTP native surface, the capability shapes, and the
-browser fallbacks are identical on both hosts; `handlers/native.py` produces the
+browser fallbacks are identical on both hosts; `crates/openbox-http/src/handlers/native.rs` produces the
 capabilities either way.
 
 ## Host entry
 
-The host spawns `web_app.py --no-browser` as a child, reads `server.port` and
-`server.token` from the data directory, then loads:
+The host spawns `openbox-server --no-browser` as a child (or
+`python3 web_app.py --no-browser` when `OPENBOX_BACKEND=python`), reads
+`server.port` and `server.token` from the data directory, then loads:
 
 ```
 http://127.0.0.1:<port>/?token=<token>
@@ -98,7 +99,7 @@ All native routes are authenticated like every other route: unauthenticated call
   "gamepad": "webkit",
   "fullscreen": true,
   "clipboard": true,
-  "version": "2.1.0",
+  "version": "3.0.0",
   "platform": "linux",
   "data_dir": "/home/user/.local/share/openbox-game-launcher",
   "features": {
@@ -117,14 +118,15 @@ All native routes are authenticated like every other route: unauthenticated call
 }
 ```
 
-`version` is the running OpenBox version, `platform` is `sys.platform`, and
+`version` is the running OpenBox version, `platform` is the platform key
+(`linux`, `win32`, or `darwin`), and
 `data_dir` is the application directory; Settings > About reads all three.
 `webview`, `dialogs`, `tray`, and `single_instance` are true only when the
-Python child was started by a native host (`OPENBOX_NATIVE_HOST`). `fullscreen`
+server child was started by a native host (`OPENBOX_NATIVE_HOST`). `fullscreen`
 and `clipboard` are always true.
 
 `features` is the platform capability contract (ADR 0086). The server computes
-it from the platform flags in `pkg/platform_compat.py`; the frontend shows each
+it from the platform flags in `crates/openbox-platform/src/features.rs`; the frontend shows each
 platform-specific control only when its key is `true`. A missing `features`
 object (an older server, or a failed fetch) means every key is false and every
 gated control stays hidden. Feature keys and the controls they gate are listed
@@ -211,19 +213,19 @@ through the capability resolver with a browser fallback.
 | `navigator.getBattery` | `GET /api/v2/native/battery` (Linux sysfs, macOS `pmset`, Windows `GetSystemPowerStatus`); hide status when `present` is false |
 | `navigator.getGamepads` | Web Gamepad API always (host `onGamepad` is a no-op stub; capabilities report `"webkit"`) |
 | `location.search` (token, deeplink) | unchanged; the host loads the same URL |
-| `beforeunload` (shutdown) | page requests `/api/v2/shutdown` when tracked games remain; the native host signals the Python child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
+| `beforeunload` (shutdown) | page requests `/api/v2/shutdown` when tracked games remain; the native host signals the server child on window close — `SIGTERM` on Linux, `CTRL_BREAK` on Windows (see Server lifecycle) |
 
 ## Server lifecycle
 
-- The host is the parent; it owns the Python child.
+- The host is the parent; it owns the server child.
 - On window close, the page requests `POST /api/v2/shutdown` when tracked games
-  remain, while the native host signals the Python child as the lifecycle
+  remain, while the native host signals the server child as the lifecycle
   owner: on Linux and macOS it sends `SIGTERM` to the child process group; on
   Windows (`native_host_win.c`) it sends `CTRL_BREAK` to the
   `CREATE_NEW_PROCESS_GROUP` child.
-- `web_app.py` performs graceful teardown by stopping tracked sessions, waiting
+- `openbox-server` performs graceful teardown by stopping tracked sessions, waiting
   up to two seconds, force-killing known game process groups (or their PIDs),
-  persisting final cleanup, and draining webhooks. The native host also waits
+  persisting final cleanup, and emitting the `app_shutdown` plugin event. The native host also waits
   for the child and, on Linux and macOS, sends `SIGKILL` to its process group
   if it remains alive; on Windows (`native_host_win.c`) the backstop is
   `TerminateJobObject` on the child's job object, which also kills children.
@@ -236,10 +238,10 @@ Window geometry lives in a flat `window-geometry` file in the data directory
 (`native_host.c` `load_geometry`/`save_geometry`), not in `ui_state` and not in
 `settings`. The file holds size plus maximized state only (`"<w> <h> <maximized>"`);
 there is no x/y — on Wayland absolute window position is WM-controlled and never
-persisted. `state_store.py` owns the `ui_state` schema default (`{}`), which carries
+persisted. `crates/openbox-store/src/json_store.rs` owns the `ui_state` schema default (`{}`), which carries
 UI prefs such as the last session (`view`, `selected_id`, `platform`, `playlist`),
 never the native window frame. `single_instance` is a capability reported by
-`GET /api/v2/native/capabilities` (`handlers/native.py`), not stored state.
+`GET /api/v2/native/capabilities` (`crates/openbox-http/src/handlers/native.rs`), not stored state.
 
 Two more host-owned files sit beside the geometry file:
 
@@ -248,7 +250,7 @@ Two more host-owned files sit beside the geometry file:
   paint it as the window background before the page loads so a light theme
   does not flash dark.
 - `native-host-recent` holds at most eight lines of `display name<TAB>game id`,
-  most recent first. `web_app.py` writes it at boot from play history, with the
+  most recent first. `openbox-server` writes it at boot from play history, with the
   most recently played games first and `last_played` filling any remaining
   slots. The Linux tray and the Windows tray menu both read it and launch a
   listed game through `?deeplink=launch&id=<id>`. The file is owner-only; names

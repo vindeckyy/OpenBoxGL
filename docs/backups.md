@@ -7,7 +7,7 @@ OpenBox writes a ZIP archive with a manifest. ADR 0093 defines the format; `scri
 | Format | Written by | Read by | Manifest |
 |---|---|---|---|
 | 2 (default) | 2.0.0 and later | 2.0.0 and later | `format: 2`, `app_version`, `state_schema`, `library_id`, `created_by`, `encryption: "none"`, `items`, `created`, and `files` with each member's `name`, `size`, `mode`, and SHA-256 |
-| 1 | 1.x, and the 1.19-compatible export in 2.0.x | 1.x and 2.x | No `format` field and no hashes |
+| 1 | 1.x, and the 1.19-compatible export in 2.0.x | 1.x, 2.x, and 3.0 | No `format` field and no hashes |
 
 A format above 2 is refused with `BACKUP_FORMAT_UNSUPPORTED`. Nothing is written.
 
@@ -32,11 +32,11 @@ archives written by 1.19 and by the 2.0.x export.
 
 ## What restores where
 
-| Archive | 2.1 | 1.19 |
-|---|---|---|
-| Format 2 | Restores, every member hash-checked | Refused (`format` above 1) |
-| Format 1 (1.19 writer) | Restores, no hash check | Restores |
-| Format 1 (1.19-compatible export from 2.0.x) | Restores, no hash check | Restores (checked on 1.19.1) |
+| Archive | 3.0 | 2.1 | 1.19 |
+|---|---|---|---|
+| Format 2 | Restores, every member hash-checked | Restores, every member hash-checked | Refused (`format` above 1) |
+| Format 1 (1.19 writer) | Restores, no hash check | Restores, no hash check | Restores |
+| Format 1 (1.19-compatible export from 2.0.x) | Restores, no hash check | Restores, no hash check | Restores (checked on 1.19.1) |
 
 ## What is not in a backup
 

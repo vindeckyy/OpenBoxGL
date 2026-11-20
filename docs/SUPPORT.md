@@ -2,12 +2,12 @@
 
 ## Scale and architecture
 
-- **Formal library scale:** 20,000 games. The 2026-11-13 50,000-game run met its write budget and missed its 1500 MB RSS budget (2163.3 MB), so the scale does not rise (ADR 0108). Blocking performance gates still cover 10k and 20k. The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets while JSON remains canonical.
+- **Formal library scale:** 50,000 games on the Rust backend. The 2026-11-19 50,000-game run finished at 468.8 MB RSS after the benchmark, 560.4 ms favorite p95, and 345.9 ms bulk p95, all inside the ADR 0098 budgets (ADR 0116). Blocking performance gates still cover 10k and 20k. The optional SQLite read model (`OPENBOX_ENABLE_SQLITE_READ=1`) provides indexed search and facets while JSON remains canonical.
 - **CPU architecture:** OpenBox 3.0.0 publishes signed **x86_64 and aarch64 AppImages**, signed **x86_64 and arm64 Windows portable zips**, and a signed **universal macOS app bundle** (arm64 and x86_64 in one archive). The Flatpak bundle is **x86_64 only**. The in-app updater and the release installers select the artifact that matches the running architecture and refuse a mismatched or unsigned artifact.
 
   The Windows native host is built per architecture against the WebView2 SDK pinned in `scripts/build_native_host_windows.ps1`: after downloading the SDK NuGet package the script verifies its SHA-256 against a committed hash (`$WEBVIEW2_SDK_SHA256`, overridable with the `WEBVIEW2_SDK_SHA256` environment variable when trying a new SDK version) and refuses to build when the hash does not match. To rotate the SDK, bump the script's default version, download the new package, and replace the pinned hash with the new package's SHA-256.
 
-  The macOS bundle carries a pinned CPython build (python-build-standalone). `scripts/build_macos_app.sh` verifies the SHA-256 of every download, merges the arm64 and x86_64 interpreters into one universal tree, signs the bundle ad-hoc, and refuses to package it when the signature does not verify.
+  The macOS bundle carries the universal Rust `openbox-server` binary and the WKWebView host with zero bundled CPython. `scripts/build_macos_app.sh` builds both for arm64 and x86_64, signs the bundle ad-hoc (or with a Developer ID when configured), and refuses to package it when the signature does not verify.
 - **Interface language:** English, Spanish, German, French, and Portuguese (v1.7.2+).
 
 ## Supported platforms
@@ -29,10 +29,10 @@ The aarch64 runner and emulated tests prove the build and packaged paths, not ba
 
 ## Supported runtimes
 
-- Python 3.11 or newer (CI runs 3.11 and 3.12). Python 3.12 is recommended and is what the AppImage and the macOS bundle ship.
+- Python 3.11 or newer, only for the source launch and Python v2 plugins (CI runs 3.11 and 3.12). Packaged builds ship the Rust `openbox-server` with zero bundled CPython.
 - Linux: the native window needs WebKitGTK 4.1; `--web` and `python3 web_app.py` need no host library
 - Windows: the native window needs the WebView2 runtime (shipped with Windows 11 and most Windows 10 systems); `openbox --web` and `python web_app.py` work without it
-- macOS: the app bundle carries its own Python, so nothing has to be installed. A source checkout needs Python 3.11 or newer; the system `python3` is older than that. The native window is WKWebView, which ships with macOS.
+- macOS: the app bundle carries the universal `openbox-server`, so nothing has to be installed. A source checkout needs Python 3.11 or newer; the system `python3` is older than that. The native window is WKWebView, which ships with macOS.
 - Chromium-family browsers get the chrome-less app window; Firefox opens a separate window; no compatible browser falls back to the default browser
 
 ## Removing OpenBox
@@ -65,6 +65,6 @@ See `docs/reliability.md` for the full edge case catalog. Highlights:
 
 - Graceful shutdown stops tracked sessions, persists cleanup, and drains shutdown work. If a tracked game remains alive after the two-second grace window, OpenBox force-kills its process tree (on Linux and macOS the process group, falling back to the PID; on Windows the tree via job object / `TerminateProcess`); the native hosts also force-kill their server process tree if the server does not exit in time.
 - OpenBox data lives in `~/.local/share/openbox-game-launcher/` on Linux, `%LOCALAPPDATA%\openbox-game-launcher\` on Windows, and `~/Library/Application Support/openbox-game-launcher/` on macOS (override with `OPENBOX_DATA_DIR` in the process environment before launch, read at import time per `openbox.py:19-21`); deleting `library.json` resets the library while media files stay.
-- The loopback server writes per-launch `server.token` and `server.port` into the data directory (`web_app.py:858-859`) and deletes both on exit (`web_app.py:1001-1002`); prefer the `X-OpenBox-Token` header over a `token` query parameter.
+- The loopback server writes per-launch `server.token` and `server.port` into the data directory (`crates/openbox-http/src/server.rs`), rewritten on every launch; prefer the `X-OpenBox-Token` header over a `token` query parameter.
 - Optional `.env` discovery checks an explicit `OPENBOX_ENV_FILE` first, then the data directory and its parent, `~/.env`, and `~/.config/openbox-game-launcher/.env` (`env_config.py:118-143`). The data-directory choice itself must be exported before launch — a discovered `.env` is read too late for it.
 - The web UI is local-only. Sharing the token in the URL with another machine is equivalent to handing over control of the instance.

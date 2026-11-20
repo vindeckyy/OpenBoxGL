@@ -1,6 +1,6 @@
 # OpenBox Parity Matrix
 
-OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v3.0.0**, keeping the library in JSON without migration on open, removing plugin API v1, `openbox --rollback-library`, and Python 3.10 while adding Save Vault snapshots, offline Achievement Trail analytics, opt-in Steam Deal Radar tracking, Player's Log Time Capsules and PNG Milestone Cards, and multi-week Backlog Itinerary planning. The formal scale stays 20,000 games because the 50,000-game RSS budget was missed. The previous line was **v2.1.0** ("the 2.0 contracts made permanent"), **v2.0.0** ("Stable contracts"), 1.19.1 was "Platform parity", 1.19.0 was "Now on macOS", 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
+OpenBox tracks LaunchBox feature parity for Linux, Windows, and macOS environments. For contribution and release workflow, see [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The latest release is **v3.0.0**, keeping the library in JSON without migration on open, removing plugin API v1, `openbox --rollback-library`, and Python 3.10 while adding Save Vault snapshots, offline Achievement Trail analytics, opt-in Steam Deal Radar tracking, Player's Log Time Capsules and PNG Milestone Cards, and multi-week Backlog Itinerary planning. The formal scale graduates to 50,000 games on the Rust backend (ADR 0116). The previous line was **v2.1.0** ("the 2.0 contracts made permanent"), **v2.0.0** ("Stable contracts"), 1.19.1 was "Platform parity", 1.19.0 was "Now on macOS", 1.18.0 was "Clearer, deeper library", 1.17.0 was "Every Launcher", and 1.16.0/1.16.1 were "Make it true" and its fix release.
 
 > **Legal disclaimer:** OpenBox is an independent open-source project and is NOT affiliated, associated, authorized, endorsed by, or in any way officially connected with LaunchBox or Unbroken Software, LLC. Reference to LaunchBox features is solely for software compatibility tracking and open-source parity comparison.
 
@@ -27,6 +27,14 @@ they change what a user can do on every platform, not because LaunchBox has them
 | macOS notarization | n/a | n/a | conditional | A notarized bundle ships when the Developer ID secrets are available; otherwise the bundle stays ad-hoc (ADR 0094) |
 | Windows ARM64 artifact | n/a | done | n/a | The `windows-11-arm` release lane publishes `OpenBox-arm64-windows.zip` and `OpenBox-arm64-windows-native-host.exe`, signed and attested like x86_64; the installer and updater select the artifact by CPU (ADR 0095) |
 | Flatpak submission | conditional | n/a | n/a | Submission-ready; the submission itself is a maintainer decision (ADR 0013) |
+
+## 3.0 platform changes
+
+These are the capabilities 3.0 adds on top of the matrix below.
+
+| Capability | Linux | Windows | macOS | Notes |
+|---|---|---|---|---|
+| Native Rust backend and 50,000-game scale | done | done | done | `openbox-server` ships in every package with zero bundled CPython; the formal scale is 50,000 games (ADR 0115, ADR 0116) |
 
 ## Capability matrix
 
@@ -72,7 +80,7 @@ they change what a user can do on every platform, not because LaunchBox has them
 | Durable background operations | done | Activity drawer with SSE progress, cancellation, retry/resume, and `operations.json` persistence |
 | Launch readiness preflight | done | Launch Doctor validates paths, adapters, Flatpak/native executables, BIOS/firmware, and tokenized arguments before launch. BIOS SHA1 drift detection reports `BIOS_SHA1_DRIFT` when a BIOS file exists but its hash doesn't match the expected value (1.7.2) |
 | Play Insights local analytics | done | Local 366-day playtime heatmap (levels 0–4), streaks, momentum, top platforms/genres with zero telemetry |
-| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; the read model also self-enables at 5,000+ games unless explicitly opted out (1.12.0, ADR 0047). JSON remains source of truth. The formal release gates cover 10k/20k libraries, so performance above 20k is exploratory rather than release-gated (ADR 0032) |
+| Optional SQLite read model | done | `OPENBOX_ENABLE_SQLITE_READ=1` enables FTS5 search, indexed queries, and GROUP BY facets for libraries beyond the JSON path; the read model also self-enables at 5,000+ games unless explicitly opted out (1.12.0, ADR 0047). JSON remains source of truth. 10k/20k remain blocking CI gates and the 50,000-game run is the release verification run (ADR 0116) |
 | Visual chip builder for collections | done | Filter presets render as visual chips via `rules_to_chips`/`chips_to_rules` round-trip conversion (1.7.2) |
 | Searchable settings pages | done | Settings dialog filters fields by name and related terms |
 | Session history toggle and viewer | done | Play sessions can be disabled and are browsable from the History menu |
@@ -255,14 +263,14 @@ specifically; the matrix above is Linux behavior.
 | Capability | Status | Acceptance check |
 |---|---|---|
 | Native window | done | `native_host_mac.m` (WKWebView) renders the same UI in a real window, with remembered geometry, `NSStatusItem` tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via an `AF_UNIX` socket with the 104-byte `sun_path` limit checked before binding (1.19.0) |
-| Universal install and verified update | done | `OpenBox-macos.zip` carries arm64 and x86_64 hosts and one merged interpreter; `scripts/install-macos.sh` verifies the release key anchor, SHA-256 sidecar, and Ed25519 signature before installing `OpenBox.app`; the in-app updater swaps the bundle after the server exits and keeps `OpenBox.app.previous` (1.19.0) |
-| No-install app | done | The bundle ships a pinned universal CPython 3.12 and the CA bundle, so the app runs without Python or WebKit installed. `scripts/install-macos.sh` still runs the release verifier with `python3`, and a source checkout needs Python 3.11+ (1.19.0) |
+| Universal install and verified update | done | `OpenBox-macos.zip` carries arm64 and x86_64 hosts and the universal `openbox-server`; `scripts/install-macos.sh` verifies the release key anchor, SHA-256 sidecar, and Ed25519 signature before installing `OpenBox.app`; the in-app updater swaps the bundle after the server exits and keeps `OpenBox.app.previous` (1.19.0) |
+| No-install app | done | The 3.0 bundle ships the universal Rust `openbox-server` and the WKWebView host with zero bundled CPython, so the app runs without Python installed. `scripts/install-macos.sh` needs `python3` 3.11+ to verify the release (1.19.0; zero-CPython bundle ADR 0115) |
 | Emulator detection and launch | done | Every bundled definition carries `native_exe_macos`; an app bundle resolves through `Contents/Info.plist`, and an explicit empty value means "no verified macOS build" and is reported as not installed (1.19.0) |
 | Library data location | done | `~/Library/Application Support/openbox-game-launcher`; `OPENBOX_DATA_DIR` overrides everything, and stored references keep POSIX separators so a library moves between platforms (1.19.0) |
 | macOS saves | done | Save discovery covers Steam Cloud plus the documented macOS folders for PPSSPP, RPCS3, Dolphin, and RetroArch (1.19.0) |
 | Notarization | missing | The bundle is ad-hoc signed in 2.0; the first launch needs System Settings > Privacy & Security > Open Anyway. Notarization ships when Developer ID secrets are available; the machinery (entitlements, `notarytool`, stapling) is in the tree (1.19.0, ADR 0085; decision ADR 0094). The release signature is verified by the installer and updater |
 | AppImage / Flatpak packaging | not applicable | Linux-only channels; the macOS artifact is the signed universal zip (ADR 0013) |
-| gamescope / Steam Game Mode presets | not applicable | Linux-only; the preset, MangoHud, and handheld-performance controls are hidden on macOS and `web_app.py --game-mode` exits with a clear message (1.19.0, capability-gated by ADR 0086) |
+| gamescope / Steam Game Mode presets | not applicable | Linux-only; the preset, MangoHud, and handheld-performance controls are hidden on macOS and `openbox-server --game-mode` exits with a clear message (1.19.0, capability-gated by ADR 0086) |
 | Wine/Proton prefix manager | not applicable | Wine management is a Linux surface; the panel is hidden on macOS and `/api/v2/wine/*` reports `available: false` (1.19.1, ADR 0086) |
 | Flathub emulator management | not applicable | Flathub is a Linux store; macOS emulators are installed by the user, and the install and folder-grant controls are hidden (1.19.1, ADR 0086) |
 | Plugin sandbox | not applicable | macOS has no bubblewrap; the documented no-bwrap rule applies |
