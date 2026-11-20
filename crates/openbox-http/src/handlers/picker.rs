@@ -7,7 +7,7 @@ use axum::response::Response;
 use openbox_core::ApiError;
 use openbox_discovery::dna::parse_dna_query;
 use openbox_discovery::picker::{
-    PickerCriteria, VALID_FAMILIARITIES, VALID_MOODS, VALID_SCOPES, pick_games,
+    PickerCriteria, VALID_FAMILIARITIES, VALID_MOODS, VALID_SCOPES, pick_games, pick_games_refs,
 };
 use serde_json::{Map, Value, json};
 
@@ -155,14 +155,15 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
         .map(Vec::as_slice)
         .unwrap_or(&[]);
 
-    let games: Vec<Value> = if scope == "platform" {
-        raw_games
-            .iter()
-            .filter(|g| {
-                g.is_object() && g.get("platform").and_then(Value::as_str) == Some(scope_name)
-            })
-            .cloned()
-            .collect()
+    let scoped_refs: Option<Vec<&Value>> = if scope == "platform" {
+        Some(
+            raw_games
+                .iter()
+                .filter(|g| {
+                    g.is_object() && g.get("platform").and_then(Value::as_str) == Some(scope_name)
+                })
+                .collect(),
+        )
     } else if scope == "playlist" {
         let playlist = state
             .get("playlists")
@@ -191,30 +192,27 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
                     .collect()
             })
             .unwrap_or_default();
-        raw_games
-            .iter()
-            .filter(|g| {
-                g.is_object()
-                    && (g
-                        .get("id")
-                        .map(|v| {
-                            v.as_str()
-                                .map(str::to_owned)
-                                .unwrap_or_else(|| v.to_string())
-                        })
-                        .is_some_and(|s| members.contains(&s))
-                        || g.get("game_id")
-                            .and_then(Value::as_str)
-                            .is_some_and(|s| members.contains(s)))
-            })
-            .cloned()
-            .collect()
+        Some(
+            raw_games
+                .iter()
+                .filter(|g| {
+                    g.is_object()
+                        && (g
+                            .get("id")
+                            .map(|v| {
+                                v.as_str()
+                                    .map(str::to_owned)
+                                    .unwrap_or_else(|| v.to_string())
+                            })
+                            .is_some_and(|s| members.contains(&s))
+                            || g.get("game_id")
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| members.contains(s)))
+                })
+                .collect(),
+        )
     } else {
-        raw_games
-            .iter()
-            .filter(|g| g.is_object())
-            .cloned()
-            .collect()
+        None
     };
 
     let history = state
@@ -229,7 +227,10 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
         players,
         limit: 3,
     };
-    let mut picks = pick_games(&games, history, &criteria);
+    let mut picks = match &scoped_refs {
+        Some(refs) => pick_games_refs(refs, history, &criteria),
+        None => pick_games(raw_games, history, &criteria),
+    };
     if !seed_query.is_empty() && dna_boost > 0.0 {
         let locale: String = state
             .get("settings")
@@ -241,7 +242,15 @@ pub fn handle_post(ctx: &RequestCtx<'_>, payload: &Map<String, Value>) -> Option
             .collect();
         let (index_opt, _, _) = dna_index_for_search(&ctx.app, &state);
         if let Some(index) = index_opt {
-            let outcome = parse_dna_query(seed_query, &games, &index, &locale, 100);
+            let owned_scoped: Vec<Value>;
+            let dna_games: &[Value] = match &scoped_refs {
+                Some(refs) => {
+                    owned_scoped = refs.iter().map(|g| (*g).clone()).collect();
+                    &owned_scoped
+                }
+                None => raw_games,
+            };
+            let outcome = parse_dna_query(seed_query, dna_games, &index, &locale, 100);
             let dna_scores: HashMap<String, f64> = outcome
                 .get("results")
                 .and_then(Value::as_array)

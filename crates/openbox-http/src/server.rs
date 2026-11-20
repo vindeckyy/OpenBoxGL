@@ -69,19 +69,58 @@ pub async fn serve(server: RunningServer) -> Result<(), String> {
     let strangler = server.http_state.strangler.clone();
     let router = build_router(server.http_state);
     let shutdown = Arc::clone(&app.shutdown_notify);
+    let listener = server.listener;
 
-    let result = axum::serve(
-        server.listener,
-        router.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(async move {
-        shutdown.notified().await;
-    })
-    .await
-    .map_err(|e| format!("HTTP server error: {e}"));
+    loop {
+        tokio::select! {
+            _ = shutdown.notified() => break,
+            accepted = listener.accept() => {
+                let (stream, peer_addr) = match accepted {
+                    Ok(pair) => pair,
+                    Err(err) => {
+                        tracing::warn!("HTTP accept error: {err}");
+                        continue;
+                    }
+                };
+                let _ = stream.set_nodelay(true);
+                let svc_router = router.clone();
+                let conn_shutdown = Arc::clone(&shutdown);
+                tokio::spawn(tokio::task::coop::unconstrained(async move {
+                    let io = hyper_util::rt::TokioIo::new(stream);
+                    let service = hyper::service::service_fn(
+                        move |req: hyper::Request<hyper::body::Incoming>| {
+                            let mut svc = svc_router.clone();
+                            async move {
+                                let mut axum_req = req.map(axum::body::Body::new);
+                                axum_req
+                                    .extensions_mut()
+                                    .insert(axum::extract::ConnectInfo(peer_addr));
+                                tower::ServiceExt::oneshot(&mut svc, axum_req).await
+                            }
+                        },
+                    );
+                    let conn = hyper::server::conn::http1::Builder::new()
+                        .writev(true)
+                        .serve_connection(io, service);
+                    tokio::pin!(conn);
+                    tokio::select! {
+                        res = conn.as_mut() => {
+                            if let Err(err) = res {
+                                tracing::debug!("HTTP connection ended: {err}");
+                            }
+                        }
+                        _ = conn_shutdown.notified() => {
+                            conn.as_mut().graceful_shutdown();
+                            let _ = conn.await;
+                        }
+                    }
+                }));
+            }
+        }
+    }
 
     if let Some(proxy) = strangler {
         proxy.shutdown();
     }
-    result
+    Ok(())
 }

@@ -66,11 +66,15 @@ pub fn metadata_db_path(app: &AppState) -> PathBuf {
 
 fn game_from_query<'a>(ctx: &RequestCtx<'_>, state: &'a Value) -> Result<&'a Value, ApiError> {
     let mut payload = Map::new();
-    if let Some(gid) = ctx.query_first("game_id") {
+    if let Some(gid) = ctx.query_first("game_id").filter(|s| !s.is_empty()) {
         payload.insert("game_id".into(), Value::String(gid));
     }
-    if let Some(idx) = ctx.query_first("index") {
-        payload.insert("index".into(), Value::String(idx));
+    if let Some(id_val) = ctx
+        .query_first("id")
+        .or_else(|| ctx.query_first("index"))
+        .filter(|s| !s.is_empty())
+    {
+        payload.insert("id".into(), Value::String(id_val));
     }
     let idx = find_game_index(state, &payload)?;
     state

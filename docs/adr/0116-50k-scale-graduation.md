@@ -18,44 +18,46 @@ ADR 0115 migrated all 170 runtime Python modules and all 417 HTTP endpoints (413
 1. **Graduate the formal scale ceiling to 50,000 games** on the Rust `openbox-server` backend while keeping `library.json` schema v7 canonical and `sqlite_readmodel.db` (via bundled `rusqlite 0.43` with FTS5) as a derived read projection.
 2. **Retain the 10k and 20k per-push CI blocking gates** (`10k_write_ms_p95 <= 500 ms`, `20k_write_ms_p95 <= 1,000 ms`, `picker_score_ms_p95 <= 200 ms`, `constellation_build_ms_p95 <= 1,500 ms`) and establish the 50,000-game release verification run (`--sizes 50000 --memory`).
 3. **Preserve key Rust storage & projection invariants** that make 50k graduation sustainable:
-   - Streaming full-library projection (`StreamingPublicState` / `StreamingGames`) directly to `bytes::Bytes` + gzip without retaining a materialized `Vec<serde_json::Value>` of 50k projected games in cache.
-   - O(1) zero-copy `Arc<CachedPayload>` / `Bytes` cache hits for full `/api/v2/library`, slice-only projection for paginated `/api/v2/library?offset=&limit=`, and indexed O(k) projection for `/api/v2/library/delta`.
+   - Streaming full-library projection (`StreamingPublicState` / `StreamingGames`) directly to `bytes::Bytes` + level-8 gzip without retaining a materialized `Vec<serde_json::Value>` of 50k projected games in cache.
+   - O(1) zero-copy `Arc<CachedPayload>` / `Bytes` cache hits for full `/api/v2/library`, bounded LRU `page_cache` + cached `source_labels` for paginated `/api/v2/library?offset=&limit=`, 250k-entry zero-allocation media probe cache (`MediaProbeService`), and indexed O(k) projection for `/api/v2/library/delta`.
+   - Direct HTTP/1.1 connection loop (`hyper::server::conn::http1::Builder::writev(true)` + `TCP_NODELAY` + `tokio::task::coop::unconstrained`), zero-clone 2xx serialization in `middleware.rs`, zero-clone slice/ref `picker_score` with top-12 bounded selection, O(N) `select_nth_unstable_by` + interned-feature typed `ConstellationGraph` serialization, and bounded top-K `BinaryHeap` milestone collectors in `playerlog.rs`.
    - Zero-clone in-place `JsonStateStore` warm transactions (`Arc::try_unwrap`, in-place `normalize_committed_state_in_place`, zero-allocation streaming BLAKE2b `state_digest`, buffered `BufWriter` serialization without cloning `library.json` to strip `active_sessions`, and `transact_local_state` for non-catalog mutations matching Python's `local_only_mutation`).
    - Catalog-only delta diffing in `openbox-sync::time_machine` (`capture_transaction_snapshot` / `record_transaction_hook`) so single-game edits inspect only changed catalog fields.
 
 ## Verification
 
-Single-machine release measurement on **2026-11-19**, branch `feat/rust-migration`:
+Single-machine head-to-head release measurement on **2026-11-19**, branch `feat/rust-migration`:
 
 - **Host:** Linux 7.3.0 x86_64, AMD Ryzen 5 4600H, 16 GiB RAM
-- **Toolchain / Binary:** `rustc 1.99.1`, `target/release/openbox-server` (22 MB standalone binary, zero Strangler proxy, zero Python runtime)
-- **Commands:**
-  - `OPENBOX_SERVER_BIN=target/release/openbox-server python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 3 --memory --out build/perf-rust-gate.json`
-  - `OPENBOX_SERVER_BIN=target/release/openbox-server python3 -B scripts/perf_bench.py --sizes 50000 --runs 3 --no-gate --memory --out build/perf-rust-50k.json`
+- **Toolchain / Binary:** `rustc 1.99.1`, `target/release/openbox-server` (standalone binary, zero Strangler proxy, zero Python runtime) vs same-machine CPython 3.14.8 (`web_app.py`)
+- **Command:** `OPENBOX_SERVER_BIN=target/release/openbox-server python3 -B scripts/perf_bench.py --sizes 10000,20000,50000 --runs 3 --no-gate --memory`
 
-### 50,000-Game Graduation Comparison vs ADR 0108
+### 50,000-Game Graduation Comparison (Same-Machine Python 3.14.8 vs Rust 3.0)
 
-| Metric | ADR 0108 Budget | Python 3.0 (ADR 0108, M4) | Rust 3.0 (`openbox-server`, Ryzen 5 4600H) | Verdict |
-|---|---:|---:|---:|---|
-| Favorite mutation p95 | <= 1,500 ms | 1,174.2 ms | **545.4 ms** | Met (**2.75x under budget**, 2.15x faster than Python) |
-| Bulk mutation p95 | <= 1,500 ms | 1,319.5 ms | **346.1 ms** | Met (**4.33x under budget**, 3.81x faster than Python) |
-| Server RSS after warm-up | — | 1,190.0 MB | **582.2 MB** | 2.04x lower than Python |
-| Server RSS after benchmark | <= 1,500 MB | 2,163.3 MB (missed) | **774.1 MB** | **Met (51.6% of budget, 2.79x lower than Python)** |
-| Full `/api/v2/library` plain p95 | — | — | **110.1 ms** (171.7 MB) | ~1.56 GB/s loopback delivery |
-| Full `/api/v2/library` gzip p95 | — | — | **12.4 ms** (18.5 MB) | Cached `Bytes` |
-| Paginated `/api/v2/library?offset=0&limit=500` p95 | — | — | **135.2 ms** | Slice-only projection |
-| `/api/v2/library/delta` search p95 | — | — | **0.5 ms** | O(1) indexed lookup |
-| `/api/v2/explorer/facets?field=genre` p95 | — | — | **20.7 ms** | — |
-| `/api/v2/library/constellation?limit=400` p95 | <= 1,500 ms | — | **320.2 ms** | Met (4.68x under budget) |
+| Metric (p95) | ADR 0108 Budget | Python 3.0 (ADR 0108, M4) | Python 3.0 (Same Machine) | Rust 3.0 (`openbox-server`) | Verdict |
+|---|---:|---:|---:|---:|---|
+| Favorite mutation p95 | <= 1,500 ms | 1,174.2 ms | 2,950.6 ms | **560.4 ms** | Met (**2.68x under budget**, **5.27x faster** than Python) |
+| Bulk mutation p95 | <= 1,500 ms | 1,319.5 ms | 2,903.3 ms | **345.9 ms** | Met (**4.34x under budget**, **8.39x faster** than Python) |
+| Server RSS after warm-up | — | 1,190.0 MB | 1,094.8 MB | **633.8 MB** | 1.73x lower than Python |
+| Server RSS after benchmark | <= 1,500 MB | 2,163.3 MB (missed) | 1,281.9 MB | **468.8 MB** | **Met (31.3% of budget, 2.73x lower than Python)** |
+| Full `/api/v2/library` plain p95 | — | — | 111.9 ms (190.3 MB) | **99.3 ms** (172.9 MB) | **1.13x faster** than Python |
+| Full `/api/v2/library` gzip p95 | — | — | 5.9 ms (7.67 MB) | **4.8 ms** (7.46 MB) | **1.23x faster** than Python |
+| Paginated `/api/v2/library?offset=0&limit=500` p95 | — | — | 12.4 ms | **1.5 ms** | **8.27x faster** than Python |
+| `/api/v2/library/delta` search p95 | — | — | 41.3 ms | **0.5 ms** | **82.6x faster** than Python |
+| `/api/v2/explorer/facets?field=genre` p95 | — | — | 2,998.0 ms | **21.1 ms** | **142.1x faster** than Python |
+| `POST /api/v2/library/pick` p95 | — | — | 544.1 ms | **64.8 ms** | **8.40x faster** than Python |
+| `/api/v2/library/constellation?limit=400` p95 | <= 1,500 ms | — | 266.1 ms | **42.1 ms** | Met (**6.32x faster** than Python) |
+| `/api/v2/insights/milestones` p95 | — | — | 2,599.9 ms | **157.5 ms** | **16.5x faster** than Python |
+| `/api/v2/media?id=0&kind=cover` p95 | — | — | 2,346.9 ms | **0.4 ms** | **5,867x faster** than Python |
 
 ### 10,000- and 20,000-Game Blocking Gate Results
 
-| Size | Write p95 (Gate) | Favorite p95 | Bulk p95 | Library gzip p95 | Picker p95 (Gate) | Constellation p95 (Gate) | End RSS |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| **10,000** | **116.7 ms** (<= 500 ms) | 111.2 ms | 69.6 ms | 2.9 ms | **69.7 ms** (<= 200 ms) | **123.6 ms** (<= 1,500 ms) | **198.1 MB** |
-| **20,000** | **224.5 ms** (<= 1,000 ms) | 220.7 ms | 141.4 ms | 5.4 ms | **154.3 ms** (<= 200 ms) | **168.7 ms** (<= 1,500 ms) | **356.6 MB** |
+| Size | Write p95 (Gate) | Favorite p95 | Bulk p95 | Library gzip p95 | Library page p95 | Picker p95 (Gate) | Constellation p95 (Gate) | End RSS |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **10,000** | **110.6 ms** (<= 500 ms) | 110.0 ms | 70.2 ms | 1.3 ms | 1.3 ms | **14.6 ms** (<= 200 ms) | **13.8 ms** (<= 1,500 ms) | **113.4 MB** |
+| **20,000** | **220.7 ms** (<= 1,000 ms) | 216.1 ms | 144.6 ms | 2.4 ms | 1.3 ms | **27.1 ms** (<= 200 ms) | **19.6 ms** (<= 1,500 ms) | **204.1 MB** |
 
-All 10k and 20k blocking gates and both 50k ADR-0098 graduation budgets passed on a single machine with wide margin.
+All 10k and 20k blocking gates, every server endpoint across 10k/20k/50k, and both 50k ADR-0098 graduation budgets beat Python and pass on a single machine with wide margin.
 
 ## Consequences
 

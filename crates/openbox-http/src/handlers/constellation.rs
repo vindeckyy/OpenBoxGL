@@ -5,11 +5,11 @@ use std::collections::HashSet;
 use axum::http::StatusCode;
 use axum::response::Response;
 use openbox_core::ApiError;
-use openbox_discovery::constellation::{KINDS, build_graph};
+use openbox_discovery::constellation::{KINDS, build_graph_typed};
 use serde_json::Value;
 
 use crate::handlers::shared::RequestCtx;
-use crate::middleware::{api_error_response, json_response, state_error_response};
+use crate::middleware::{api_error_response, serialized_json_response, state_error_response};
 
 pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
     if ctx.path != "/api/v2/library/constellation" {
@@ -80,6 +80,6 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or(&[]);
-    let result = build_graph(games, history, kinds.as_ref(), limit);
-    Some(json_response(StatusCode::OK, &result, ctx.instance))
+    let result = build_graph_typed(games, history, kinds.as_ref(), limit);
+    Some(serialized_json_response(StatusCode::OK, &result))
 }

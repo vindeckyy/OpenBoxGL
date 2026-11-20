@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 pub const GZIP_THRESHOLD: usize = 1024;
 pub const FACET_CACHE_MAX: usize = 64;
+pub const PAGE_CACHE_MAX: usize = 8;
 pub const FACET_BUDGET_MS: f64 = 50.0;
 pub const FACET_DEGRADED: &str = "DEGRADED";
 
@@ -248,11 +249,23 @@ pub struct CachedPayload {
     pub etag: String,
 }
 
+type PageCacheKey = (Option<FileSignature>, u64, u64, usize, usize);
+
+#[derive(Default)]
+struct PageCacheInner {
+    order: VecDeque<PageCacheKey>,
+    map: HashMap<PageCacheKey, Bytes>,
+}
+
+type SourceLabelsEntry = (Option<FileSignature>, Arc<serde_json::Map<String, Value>>);
+
 pub struct CacheCoordinator {
     media_epoch: AtomicU64,
     plugin_epoch: AtomicU64,
     public_state_cache: Mutex<Option<Arc<CachedPayload>>>,
     public_settings_cache: Mutex<Option<(Option<FileSignature>, Value)>>,
+    source_labels_cache: Mutex<Option<SourceLabelsEntry>>,
+    page_cache: Mutex<PageCacheInner>,
     pub facets: FacetCache,
 }
 
@@ -269,6 +282,8 @@ impl CacheCoordinator {
             plugin_epoch: AtomicU64::new(0),
             public_state_cache: Mutex::new(None),
             public_settings_cache: Mutex::new(None),
+            source_labels_cache: Mutex::new(None),
+            page_cache: Mutex::new(PageCacheInner::default()),
             facets: FacetCache::default(),
         }
     }
@@ -294,7 +309,67 @@ impl CacheCoordinator {
     pub fn invalidate_all(&self) {
         *self.public_state_cache.lock() = None;
         *self.public_settings_cache.lock() = None;
+        *self.source_labels_cache.lock() = None;
+        {
+            let mut pages = self.page_cache.lock();
+            pages.order.clear();
+            pages.map.clear();
+        }
         self.facets.clear();
+    }
+
+    pub fn get_cached_page(
+        &self,
+        sig: Option<FileSignature>,
+        offset: usize,
+        limit: usize,
+    ) -> Option<Bytes> {
+        let key = (sig, self.media_epoch(), self.plugin_epoch(), offset, limit);
+        let guard = self.page_cache.lock();
+        guard.map.get(&key).cloned()
+    }
+
+    pub fn set_cached_page(
+        &self,
+        sig: Option<FileSignature>,
+        offset: usize,
+        limit: usize,
+        raw_json: Vec<u8>,
+    ) -> Bytes {
+        let key = (sig, self.media_epoch(), self.plugin_epoch(), offset, limit);
+        let bytes = Bytes::from(raw_json);
+        let mut guard = self.page_cache.lock();
+        if !guard.map.contains_key(&key) {
+            guard.order.push_back(key);
+        }
+        guard.map.insert(key, bytes.clone());
+        while guard.order.len() > PAGE_CACHE_MAX {
+            if let Some(old) = guard.order.pop_front() {
+                guard.map.remove(&old);
+            }
+        }
+        bytes
+    }
+
+    pub fn get_cached_source_labels(
+        &self,
+        sig: Option<FileSignature>,
+    ) -> Option<Arc<serde_json::Map<String, Value>>> {
+        let guard = self.source_labels_cache.lock();
+        guard
+            .as_ref()
+            .filter(|(s, _)| *s == sig)
+            .map(|(_, labels)| Arc::clone(labels))
+    }
+
+    pub fn set_cached_source_labels(
+        &self,
+        sig: Option<FileSignature>,
+        labels: serde_json::Map<String, Value>,
+    ) -> Arc<serde_json::Map<String, Value>> {
+        let arc = Arc::new(labels);
+        *self.source_labels_cache.lock() = Some((sig, Arc::clone(&arc)));
+        arc
     }
 
     pub fn get_cached_state(&self, sig: Option<FileSignature>) -> Option<Arc<CachedPayload>> {
@@ -312,7 +387,7 @@ impl CacheCoordinator {
         raw_json_vec: Vec<u8>,
     ) -> Arc<CachedPayload> {
         let raw_gzip = if raw_json_vec.len() >= GZIP_THRESHOLD {
-            let mut enc = GzEncoder::new(Vec::new(), Compression::fast());
+            let mut enc = GzEncoder::new(Vec::new(), Compression::new(8));
             if enc.write_all(&raw_json_vec).is_ok() {
                 enc.finish().ok().map(Bytes::from)
             } else {

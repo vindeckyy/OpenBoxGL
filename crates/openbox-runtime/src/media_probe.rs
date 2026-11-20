@@ -12,8 +12,8 @@ use serde_json::Value;
 
 pub const MEDIA_ROOTS_ENV: &str = "OPENBOX_MEDIA_ROOTS";
 pub const FILE_PROBE_TTL: Duration = Duration::from_secs(120);
-pub const FILE_PROBE_MAX: usize = 20_000;
-pub const SANITIZE_MEDIA_PATH_MAX: usize = 50_000;
+pub const FILE_PROBE_MAX: usize = 250_000;
+pub const SANITIZE_MEDIA_PATH_MAX: usize = 250_000;
 
 pub const FIELDS: &[&str] = &[
     "name",
@@ -155,7 +155,8 @@ pub const MUSIC_MEDIA_TYPES: &[&str] = &["music"];
 
 pub struct MediaProbeService {
     data_dir: PathBuf,
-    probe_cache: Mutex<HashMap<(String, bool), (Instant, bool)>>,
+    probe_cache_file: Mutex<HashMap<String, (Instant, bool)>>,
+    probe_cache_any: Mutex<HashMap<String, (Instant, bool)>>,
     sanitize_cache: Mutex<HashMap<String, String>>,
 }
 
@@ -163,13 +164,15 @@ impl MediaProbeService {
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
         Self {
             data_dir: data_dir.into(),
-            probe_cache: Mutex::new(HashMap::new()),
+            probe_cache_file: Mutex::new(HashMap::new()),
+            probe_cache_any: Mutex::new(HashMap::new()),
             sanitize_cache: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn clear_caches(&self) {
-        self.probe_cache.lock().clear();
+        self.probe_cache_file.lock().clear();
+        self.probe_cache_any.lock().clear();
         self.sanitize_cache.lock().clear();
     }
 
@@ -178,25 +181,29 @@ impl MediaProbeService {
             return false;
         }
         let now = Instant::now();
-        let key = (path.to_owned(), file_only);
+        let cache_mutex = if file_only {
+            &self.probe_cache_file
+        } else {
+            &self.probe_cache_any
+        };
         {
-            let mut cache = self.probe_cache.lock();
-            if let Some(&(ts, result)) = cache.get(&key) {
+            let mut cache = cache_mutex.lock();
+            if let Some(&(ts, result)) = cache.get(path) {
                 if now.duration_since(ts) < FILE_PROBE_TTL {
                     return result;
                 }
-                cache.remove(&key);
+                cache.remove(path);
             }
         }
         let result = match fs::metadata(path) {
             Ok(meta) => !file_only || meta.is_file(),
             Err(_) => false,
         };
-        let mut cache = self.probe_cache.lock();
+        let mut cache = cache_mutex.lock();
         if cache.len() >= FILE_PROBE_MAX {
             cache.clear();
         }
-        cache.insert(key, (now, result));
+        cache.insert(path.to_owned(), (now, result));
         result
     }
 
@@ -205,23 +212,27 @@ impl MediaProbeService {
         let mut unique = Vec::new();
         let mut seen = HashSet::new();
         for p in paths {
-            if !p.is_empty() && seen.insert(p.clone()) {
-                unique.push(p.clone());
+            if !p.is_empty() && seen.insert(p.as_str()) {
+                unique.push(p.as_str());
             }
         }
         let mut results = HashMap::with_capacity(unique.len());
         let mut misses = Vec::new();
+        let cache_mutex = if file_only {
+            &self.probe_cache_file
+        } else {
+            &self.probe_cache_any
+        };
         {
-            let cache = self.probe_cache.lock();
-            for value in &unique {
-                let key = (value.clone(), file_only);
-                if let Some(&(ts, res)) = cache.get(&key)
+            let cache = cache_mutex.lock();
+            for &value in &unique {
+                if let Some(&(ts, res)) = cache.get(value)
                     && now.duration_since(ts) < FILE_PROBE_TTL
                 {
-                    results.insert(value.clone(), res);
+                    results.insert(value.to_owned(), res);
                     continue;
                 }
-                misses.push(value.clone());
+                misses.push(value.to_owned());
             }
         }
         for value in misses {
@@ -230,11 +241,11 @@ impl MediaProbeService {
                 Err(_) => false,
             };
             results.insert(value.clone(), result);
-            let mut cache = self.probe_cache.lock();
+            let mut cache = cache_mutex.lock();
             if cache.len() >= FILE_PROBE_MAX {
                 cache.clear();
             }
-            cache.insert((value, file_only), (now, result));
+            cache.insert(value, (now, result));
         }
         results
     }

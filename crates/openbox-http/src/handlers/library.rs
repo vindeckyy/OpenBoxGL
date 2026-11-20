@@ -8,7 +8,7 @@ use std::sync::{Arc, LazyLock};
 
 use axum::body::Body;
 use axum::http::StatusCode;
-use axum::http::header::{CONTENT_ENCODING, ETAG, HeaderValue, VARY};
+use axum::http::header::{CONTENT_ENCODING, CONTENT_LENGTH, ETAG, HeaderValue, VARY};
 use axum::response::Response;
 use openbox_core::{ApiError, stable_game_id};
 use openbox_discovery::discovery::{discovery_lists, related_with_reasons};
@@ -41,8 +41,8 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::handlers::projection::{
-    clean_extras, find_game_index, public_library_delta, public_library_page, public_settings,
-    public_state_cached, public_state_etag,
+    clean_extras, find_game_index, public_library_delta, public_library_page_bytes,
+    public_settings, public_state_cached, public_state_etag,
 };
 use crate::handlers::shared::{RequestCtx, bool_field, str_field};
 use crate::middleware::{
@@ -470,9 +470,24 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
                     ));
                 }
                 return Some(
-                    match public_library_page(&ctx.app, offset as usize, limit as usize) {
-                        Ok(resp_payload) => {
-                            json_response(StatusCode::OK, &resp_payload, ctx.instance)
+                    match public_library_page_bytes(&ctx.app, offset as usize, limit as usize) {
+                        Ok(body_bytes) => {
+                            let len = body_bytes.len();
+                            let mut resp = Response::builder()
+                                .status(StatusCode::OK)
+                                .body(Body::from(body_bytes))
+                                .unwrap();
+                            let h = resp.headers_mut();
+                            if let Ok(lv) = HeaderValue::from_str(&len.to_string()) {
+                                h.insert(CONTENT_LENGTH, lv);
+                            }
+                            apply_security_headers(
+                                h,
+                                "application/json; charset=utf-8",
+                                "no-store",
+                                false,
+                            );
+                            resp
                         }
                         Err(err) => state_error_response(&err, ctx.request_id, ctx.instance),
                     },
@@ -496,11 +511,15 @@ pub fn handle_get(ctx: &RequestCtx<'_>) -> Option<Response> {
             } else {
                 (cached.raw_json.clone(), false)
             };
+            let content_len = body_bytes.len();
             let mut resp = Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::from(body_bytes))
                 .unwrap();
             let h = resp.headers_mut();
+            if let Ok(lv) = HeaderValue::from_str(&content_len.to_string()) {
+                h.insert(CONTENT_LENGTH, lv);
+            }
             if let Ok(ev) = HeaderValue::from_str(&etag) {
                 h.insert(ETAG, ev);
             }

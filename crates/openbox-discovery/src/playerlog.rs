@@ -1,6 +1,7 @@
 //! Player's Log — Time Capsules & Deterministic Milestone Cards (`pkg/parity/parity_playerlog.py`, ADR 0112).
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::cmp::{Ordering, Reverse};
+use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -30,8 +31,6 @@ pub const COLLECTION_MILESTONES: &[i64] = &[10, 25, 50, 100];
 
 static STRICT_DATE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap());
-static DATE_PREFIX_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d{4}-\d{2}-\d{2})").unwrap());
 
 fn today_date(today: Option<Date>) -> Date {
     today.unwrap_or_else(|| {
@@ -83,10 +82,28 @@ fn parse_unlock_date(raw: Option<&Value>) -> Result<Date, ApiError> {
         .map_err(|_| ApiError::capsule_invalid_date("unlock_at is not a valid calendar date."))
 }
 
+#[inline]
+fn parse_ascii_2(b: &[u8]) -> Option<i8> {
+    let d0 = b[0].wrapping_sub(b'0');
+    let d1 = b[1].wrapping_sub(b'0');
+    if d0 < 10 && d1 < 10 {
+        Some((d0 * 10 + d1) as i8)
+    } else {
+        None
+    }
+}
+
 fn parse_date_prefix(raw: Option<&Value>) -> Option<Date> {
     let text = raw.and_then(Value::as_str)?.trim();
-    let cap = DATE_PREFIX_RE.captures(text)?;
-    cap.get(1)?.as_str().parse::<Date>().ok()
+    let b = text.as_bytes();
+    if b.len() < 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let y_hi = parse_ascii_2(&b[0..2])? as i16;
+    let y_lo = parse_ascii_2(&b[2..4])? as i16;
+    let m = parse_ascii_2(&b[5..7])?;
+    let d = parse_ascii_2(&b[8..10])?;
+    Date::new(y_hi * 100 + y_lo, m, d).ok()
 }
 
 fn is_leap(year: i16) -> bool {
@@ -541,10 +558,10 @@ pub fn unlock_due_capsules(
 fn binary_search_crossing(
     events: &[(Date, i64)],
     threshold: i64,
-    fallback_date: &str,
-) -> (String, bool) {
+    fallback_date: Date,
+) -> (Date, bool) {
     if events.is_empty() || threshold <= 0 {
-        return (fallback_date.to_owned(), true);
+        return (fallback_date, true);
     }
     let mut ordered = events.to_vec();
     ordered.sort_by_key(|(d, _)| *d);
@@ -561,10 +578,10 @@ fn binary_search_crossing(
         prefix.push(running);
     }
     if prefix.last().is_none_or(|&last| last < threshold) {
-        return (fallback_date.to_owned(), true);
+        return (fallback_date, true);
     }
     let idx = prefix.partition_point(|&v| v < threshold);
-    (dates[idx].to_string(), false)
+    (dates[idx], false)
 }
 
 struct RaEntry {
@@ -610,19 +627,19 @@ fn load_ra_cache_entries(data_dir: Option<&Path>) -> Vec<RaEntry> {
     out
 }
 
-fn fallback_date_for_game(game: &Value, today_str: &str) -> String {
+fn fallback_date_for_game(game: &Value, today_val: Date) -> Date {
     for field in ["completed_at", "last_played", "added_at"] {
         if let Some(d) = parse_date_prefix(game.get(field)) {
-            return d.to_string();
+            return d;
         }
     }
-    today_str.to_owned()
+    today_val
 }
 
 fn compute_full_history_streak(
     all_counts: &[(Date, i64)],
     today_val: Date,
-) -> (i64, HashMap<i64, String>) {
+) -> (i64, HashMap<i64, Date>) {
     if all_counts.is_empty() {
         return (0, HashMap::new());
     }
@@ -636,7 +653,7 @@ fn compute_full_history_streak(
     let span = start_day.until(end_day).map(|s| s.get_days()).unwrap_or(0) + 1;
     let mut rows: Vec<Value> = Vec::with_capacity(span.max(0) as usize);
     let mut running = 0i64;
-    let mut crossed: HashMap<i64, String> = HashMap::new();
+    let mut crossed: HashMap<i64, Date> = HashMap::new();
     for offset in 0..span {
         let cur = start_day.checked_add(offset.days()).unwrap_or(end_day);
         let cnt = by_day.get(&cur).copied().unwrap_or(0);
@@ -646,7 +663,7 @@ fn compute_full_history_streak(
             running += 1;
             for &target in STREAK_MILESTONES {
                 if running >= target && !crossed.contains_key(&target) {
-                    crossed.insert(target, iso.clone());
+                    crossed.insert(target, cur);
                 }
             }
         } else {
@@ -661,193 +678,120 @@ fn compute_full_history_streak(
     (longest, crossed)
 }
 
-#[allow(clippy::too_many_lines)]
-pub fn compute_milestones(
-    state: &Value,
-    data_dir: Option<&Path>,
-    today: Option<Date>,
+struct UnlockedItem {
+    date: Date,
+    kind: &'static str,
+    id: String,
+    value: Value,
+}
+
+impl PartialEq for UnlockedItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.date == other.date && self.kind == other.kind && self.id == other.id
+    }
+}
+
+impl Eq for UnlockedItem {}
+
+impl PartialOrd for UnlockedItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for UnlockedItem {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.date
+            .cmp(&other.date)
+            .then_with(|| self.kind.cmp(other.kind))
+            .then_with(|| self.id.cmp(&other.id))
+    }
+}
+
+struct UnlockedPool<'a> {
     limit: Option<usize>,
-) -> Value {
-    let today_val = today_date(today);
-    let today_str = today_val.to_string();
-    let trashed = trashed_game_ids(state);
-    let games: Vec<&Value> = state
-        .get("games")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter(|g| {
-                    g.is_object()
-                        && !g.get("hidden").and_then(Value::as_bool).unwrap_or(false)
-                        && !trashed.contains(g.get("game_id").and_then(Value::as_str).unwrap_or(""))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let game_by_id: HashMap<String, &Value> = games
-        .iter()
-        .filter_map(|&g| {
-            let gid = g.get("game_id").and_then(Value::as_str)?;
-            if gid.is_empty() {
-                None
-            } else {
-                Some((gid.to_owned(), g))
-            }
-        })
-        .collect();
-    let seen_ids: HashSet<String> = state
-        .get("ui_state")
-        .and_then(|u| u.get("milestones_seen"))
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default();
+    seen_ids: &'a HashSet<String>,
+    total_unlocked: usize,
+    new_count: usize,
+    by_kind: HashMap<&'static str, u64>,
+    heap: BinaryHeap<Reverse<UnlockedItem>>,
+    all: Vec<UnlockedItem>,
+}
 
-    // Collect session events
-    let eligible_ids: HashSet<&str> = games
-        .iter()
-        .filter_map(|g| {
-            g.get("game_id")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-        })
-        .collect();
-    let name_to_gid: HashMap<&str, &str> = games
-        .iter()
-        .filter_map(|g| {
-            let gid = g
-                .get("game_id")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())?;
-            let name = g
-                .get("name")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())?;
-            Some((name, gid))
-        })
-        .collect();
-
-    let mut per_game_events: HashMap<String, Vec<(Date, i64)>> = HashMap::new();
-    let mut all_seconds: Vec<(Date, i64)> = Vec::new();
-    let mut all_counts: Vec<(Date, i64)> = Vec::new();
-
-    if let Some(history) = state.get("history").and_then(Value::as_array) {
-        for entry in history {
-            if !entry.is_object() {
-                continue;
-            }
-            let mut gid = entry
-                .get("game_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .unwrap_or("")
-                .to_owned();
-            if gid.is_empty()
-                && let Some(gname) = entry.get("game").and_then(Value::as_str)
-                && let Some(&mapped) = name_to_gid.get(gname)
-            {
-                gid = mapped.to_owned();
-            }
-            let Some(day) = parse_date_prefix(
-                entry
-                    .get("started")
-                    .or_else(|| entry.get("ended"))
-                    .or_else(|| entry.get("date")),
-            ) else {
-                continue;
-            };
-            let secs = entry
-                .get("seconds")
-                .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)))
-                .unwrap_or(0)
-                .max(0);
-            all_counts.push((day, 1));
-            if eligible_ids.is_empty() || eligible_ids.contains(gid.as_str()) {
-                all_seconds.push((day, secs));
-                if !gid.is_empty() {
-                    per_game_events.entry(gid).or_default().push((day, secs));
-                }
-            }
+impl<'a> UnlockedPool<'a> {
+    fn new(limit: Option<usize>, seen_ids: &'a HashSet<String>) -> Self {
+        Self {
+            limit,
+            seen_ids,
+            total_unlocked: 0,
+            new_count: 0,
+            by_kind: HashMap::new(),
+            heap: BinaryHeap::with_capacity(limit.unwrap_or(0).min(1024)),
+            all: Vec::new(),
         }
     }
-    for &game in &games {
-        let gid = game
-            .get("game_id")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or("");
-        if let Some(ms_arr) = game.get("manual_sessions").and_then(Value::as_array) {
-            for ms in ms_arr {
-                if !ms.is_object() {
-                    continue;
-                }
-                let Some(day) = parse_date_prefix(ms.get("date")) else {
-                    continue;
-                };
-                let secs = ms
-                    .get("seconds")
-                    .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)))
-                    .unwrap_or(0)
-                    .max(0);
-                all_counts.push((day, 1));
-                all_seconds.push((day, secs));
-                if !gid.is_empty() {
-                    per_game_events
-                        .entry(gid.to_owned())
-                        .or_default()
-                        .push((day, secs));
-                }
-            }
-        }
-    }
-
-    let ra_entries = load_ra_cache_entries(data_dir);
-    let ra_by_gid: HashMap<&str, &Value> = ra_entries
-        .iter()
-        .map(|e| (e.game_id.as_str(), &e.data))
-        .collect();
-
-    let mut latest_candidates: Vec<Date> = all_seconds.iter().map(|(d, _)| *d).collect();
-    for &g in &games {
-        for field in ["last_played", "completed_at", "added_at"] {
-            if let Some(d) = parse_date_prefix(g.get(field)) {
-                latest_candidates.push(d);
-            }
-        }
-    }
-    let latest_date = latest_candidates
-        .into_iter()
-        .max()
-        .map(|d| d.to_string())
-        .unwrap_or_else(|| today_str.clone());
-
-    let mut unlocked: Vec<Value> = Vec::new();
-    let mut upcoming: Vec<Value> = Vec::new();
 
     #[allow(clippy::too_many_arguments)]
-    let mut add_unlocked = |mid: String,
-                            kind: &str,
-                            title: String,
-                            subtitle: String,
-                            value: i64,
-                            threshold: i64,
-                            unlocked_at: String,
-                            approximate: bool,
-                            game: Option<&Value>| {
-        let is_new = !seen_ids.contains(&mid);
+    fn push_lazy<FId, FTitle, FSub>(
+        &mut self,
+        date: Date,
+        kind: &'static str,
+        make_id: FId,
+        make_title: FTitle,
+        make_subtitle: FSub,
+        value: i64,
+        threshold: i64,
+        approximate: bool,
+        game: Option<&Value>,
+    ) where
+        FId: FnOnce() -> String,
+        FTitle: FnOnce() -> String,
+        FSub: FnOnce() -> String,
+    {
+        self.total_unlocked += 1;
+        *self.by_kind.entry(kind).or_insert(0) += 1;
+
+        let seen_empty = self.seen_ids.is_empty();
+        if let Some(lim) = self.limit {
+            if lim == 0 {
+                if seen_empty || !self.seen_ids.contains(&make_id()) {
+                    self.new_count += 1;
+                }
+                return;
+            }
+            if self.heap.len() == lim
+                && let Some(Reverse(worst)) = self.heap.peek()
+                && (date, kind) < (worst.date, worst.kind)
+            {
+                if seen_empty || !self.seen_ids.contains(&make_id()) {
+                    self.new_count += 1;
+                }
+                return;
+            }
+        }
+
+        let mid = make_id();
+        let is_new = seen_empty || !self.seen_ids.contains(&mid);
+        if is_new {
+            self.new_count += 1;
+        }
+
+        if let Some(lim) = self.limit
+            && self.heap.len() == lim
+            && let Some(Reverse(worst)) = self.heap.peek()
+            && (date, kind, mid.as_str()) <= (worst.date, worst.kind, worst.id.as_str())
+        {
+            return;
+        }
+
         let mut obj = Map::new();
-        obj.insert("id".into(), Value::String(mid));
+        obj.insert("id".into(), Value::String(mid.clone()));
         obj.insert("kind".into(), Value::String(kind.to_owned()));
-        obj.insert("title".into(), Value::String(title));
-        obj.insert("subtitle".into(), Value::String(subtitle));
+        obj.insert("title".into(), Value::String(make_title()));
+        obj.insert("subtitle".into(), Value::String(make_subtitle()));
         obj.insert("value".into(), json!(value));
         obj.insert("threshold".into(), json!(threshold));
-        obj.insert("unlocked_at".into(), Value::String(unlocked_at));
+        obj.insert("unlocked_at".into(), Value::String(date.to_string()));
         obj.insert("approximate".into(), Value::Bool(approximate));
         obj.insert("is_new".into(), Value::Bool(is_new));
         if let Some(g) = game {
@@ -870,10 +814,310 @@ pub fn compute_milestones(
                 ),
             );
         }
-        unlocked.push(Value::Object(obj));
-    };
+        let item = UnlockedItem {
+            date,
+            kind,
+            id: mid,
+            value: Value::Object(obj),
+        };
+        if let Some(lim) = self.limit {
+            self.heap.push(Reverse(item));
+            if self.heap.len() > lim {
+                self.heap.pop();
+            }
+        } else {
+            self.all.push(item);
+        }
+    }
+
+    fn into_sorted(self) -> (Vec<Value>, usize, usize, Map<String, Value>) {
+        let mut items: Vec<UnlockedItem> = if self.limit.is_some() {
+            self.heap.into_iter().map(|Reverse(x)| x).collect()
+        } else {
+            self.all
+        };
+        items.sort_by(|a, b| b.cmp(a));
+        let values = items.into_iter().map(|x| x.value).collect();
+        let mut by_kind_map = Map::new();
+        for (k, v) in self.by_kind {
+            by_kind_map.insert(k.to_owned(), json!(v));
+        }
+        (values, self.total_unlocked, self.new_count, by_kind_map)
+    }
+}
+
+struct UpcomingItem {
+    progress_pct: i64,
+    kind: &'static str,
+    id: String,
+    value: Value,
+}
+
+impl PartialEq for UpcomingItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.progress_pct == other.progress_pct && self.kind == other.kind && self.id == other.id
+    }
+}
+
+impl Eq for UpcomingItem {}
+
+impl PartialOrd for UpcomingItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for UpcomingItem {
+    /// Worse items sort GREATER so `BinaryHeap::peek()` exposes the worst item in the top-8.
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .progress_pct
+            .cmp(&self.progress_pct)
+            .then_with(|| self.kind.cmp(other.kind))
+            .then_with(|| self.id.cmp(&other.id))
+    }
+}
+
+struct UpcomingPool {
+    heap: BinaryHeap<UpcomingItem>,
+}
+
+impl UpcomingPool {
+    const CAP: usize = 8;
+
+    fn new() -> Self {
+        Self {
+            heap: BinaryHeap::with_capacity(Self::CAP + 1),
+        }
+    }
+
+    fn push_lazy<FId, FVal>(
+        &mut self,
+        progress_pct: i64,
+        kind: &'static str,
+        make_id: FId,
+        make_val: FVal,
+    ) where
+        FId: FnOnce() -> String,
+        FVal: FnOnce(&str) -> Value,
+    {
+        if self.heap.len() == Self::CAP
+            && let Some(worst) = self.heap.peek()
+            && (progress_pct < worst.progress_pct
+                || (progress_pct == worst.progress_pct && kind > worst.kind))
+        {
+            return;
+        }
+        let id = make_id();
+        if self.heap.len() == Self::CAP
+            && let Some(worst) = self.heap.peek()
+            && progress_pct == worst.progress_pct
+            && kind == worst.kind
+            && id >= worst.id
+        {
+            return;
+        }
+        let value = make_val(&id);
+        self.heap.push(UpcomingItem {
+            progress_pct,
+            kind,
+            id,
+            value,
+        });
+        if self.heap.len() > Self::CAP {
+            self.heap.pop();
+        }
+    }
+
+    fn into_sorted(self) -> Vec<Value> {
+        let mut items: Vec<UpcomingItem> = self.heap.into_iter().collect();
+        // Best first (smallest according to UpcomingItem's worse-is-greater Ord)
+        items.sort();
+        items.into_iter().map(|x| x.value).collect()
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+pub fn compute_milestones(
+    state: &Value,
+    data_dir: Option<&Path>,
+    today: Option<Date>,
+    limit: Option<usize>,
+) -> Value {
+    let today_val = today_date(today);
+    let trashed = trashed_game_ids(state);
+    let games: Vec<&Value> = state
+        .get("games")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter(|g| {
+                    g.is_object()
+                        && !g.get("hidden").and_then(Value::as_bool).unwrap_or(false)
+                        && (trashed.is_empty()
+                            || !trashed
+                                .contains(g.get("game_id").and_then(Value::as_str).unwrap_or("")))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let seen_ids: HashSet<String> = state
+        .get("ui_state")
+        .and_then(|u| u.get("milestones_seen"))
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Collect session events (build eligible_ids / name_to_gid lazily only when history is non-empty)
+    let mut per_game_events: HashMap<&str, Vec<(Date, i64)>> = HashMap::new();
+    let mut all_seconds: Vec<(Date, i64)> = Vec::new();
+    let mut all_counts: Vec<(Date, i64)> = Vec::new();
+    let mut history_total = 0i64;
+
+    if let Some(history) = state
+        .get("history")
+        .and_then(Value::as_array)
+        .filter(|h| !h.is_empty())
+    {
+        let eligible_ids: HashSet<&str> = games
+            .iter()
+            .filter_map(|g| {
+                g.get("game_id")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+            })
+            .collect();
+        let mut name_to_gid: Option<HashMap<&str, &str>> = None;
+        for entry in history {
+            if !entry.is_object() {
+                continue;
+            }
+            history_total += 1;
+            let mut gid = entry
+                .get("game_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or("");
+            if gid.is_empty()
+                && let Some(gname) = entry.get("game").and_then(Value::as_str)
+            {
+                let map = name_to_gid.get_or_insert_with(|| {
+                    games
+                        .iter()
+                        .filter_map(|g| {
+                            let id = g
+                                .get("game_id")
+                                .and_then(Value::as_str)
+                                .filter(|s| !s.is_empty())?;
+                            let name = g
+                                .get("name")
+                                .and_then(Value::as_str)
+                                .filter(|s| !s.is_empty())?;
+                            Some((name, id))
+                        })
+                        .collect()
+                });
+                if let Some(&mapped) = map.get(gname) {
+                    gid = mapped;
+                }
+            }
+            let Some(day) = parse_date_prefix(
+                entry
+                    .get("started")
+                    .or_else(|| entry.get("ended"))
+                    .or_else(|| entry.get("date")),
+            ) else {
+                continue;
+            };
+            let secs = entry
+                .get("seconds")
+                .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)))
+                .unwrap_or(0)
+                .max(0);
+            all_counts.push((day, 1));
+            if eligible_ids.is_empty() || eligible_ids.contains(gid) {
+                all_seconds.push((day, secs));
+                if !gid.is_empty() {
+                    per_game_events.entry(gid).or_default().push((day, secs));
+                }
+            }
+        }
+    }
+
+    let mut manual_total = 0i64;
+    let mut latest_opt: Option<Date> = all_seconds.iter().map(|(d, _)| *d).max();
+    let mut total_secs = 0i64;
+    let mut added_dates: Vec<Date> = Vec::with_capacity(games.len());
+
+    for &game in &games {
+        if let Some(ms_arr) = game.get("manual_sessions").and_then(Value::as_array) {
+            manual_total += ms_arr.len() as i64;
+            if !ms_arr.is_empty() {
+                let gid = game
+                    .get("game_id")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .unwrap_or("");
+                for ms in ms_arr {
+                    if !ms.is_object() {
+                        continue;
+                    }
+                    let Some(day) = parse_date_prefix(ms.get("date")) else {
+                        continue;
+                    };
+                    let secs = ms
+                        .get("seconds")
+                        .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)))
+                        .unwrap_or(0)
+                        .max(0);
+                    all_counts.push((day, 1));
+                    all_seconds.push((day, secs));
+                    if latest_opt.is_none_or(|cur| day > cur) {
+                        latest_opt = Some(day);
+                    }
+                    if !gid.is_empty() {
+                        per_game_events.entry(gid).or_default().push((day, secs));
+                    }
+                }
+            }
+        }
+        total_secs += total_playtime_seconds(game).max(0);
+        if let Some(d) = parse_date_prefix(game.get("last_played"))
+            && latest_opt.is_none_or(|cur| d > cur)
+        {
+            latest_opt = Some(d);
+        }
+        if let Some(d) = parse_date_prefix(game.get("completed_at"))
+            && latest_opt.is_none_or(|cur| d > cur)
+        {
+            latest_opt = Some(d);
+        }
+        if let Some(d) = parse_date_prefix(game.get("added_at")) {
+            if latest_opt.is_none_or(|cur| d > cur) {
+                latest_opt = Some(d);
+            }
+            added_dates.push(d);
+        }
+    }
+
+    let ra_entries = load_ra_cache_entries(data_dir);
+    let ra_by_gid: HashMap<&str, &Value> = ra_entries
+        .iter()
+        .map(|e| (e.game_id.as_str(), &e.data))
+        .collect();
+    let latest_date = latest_opt.unwrap_or(today_val);
+
+    let mut unlocked_pool = UnlockedPool::new(limit, &seen_ids);
+    let mut upcoming_pool = UpcomingPool::new();
 
     // 1. playtime_game
+    let has_per_game_events = !per_game_events.is_empty();
     for &game in &games {
         let gid = game
             .get("game_id")
@@ -889,24 +1133,28 @@ pub fn compute_milestones(
         }
         let hours = secs as f64 / 3600.0;
         let gname = game.get("name").and_then(Value::as_str).unwrap_or("Game");
-        let events = per_game_events.get(gid).map(Vec::as_slice).unwrap_or(&[]);
-        let fallback = if secs >= GAME_PLAYTIME_HOURS[0] * 3600 {
-            fallback_date_for_game(game, &today_str)
+        let events: &[(Date, i64)] = if has_per_game_events {
+            per_game_events.get(gid).map(Vec::as_slice).unwrap_or(&[])
         } else {
-            String::new()
+            &[]
+        };
+        let fallback = if secs >= GAME_PLAYTIME_HOURS[0] * 3600 {
+            fallback_date_for_game(game, today_val)
+        } else {
+            today_val
         };
         let mut next_target: Option<i64> = None;
         for &h in GAME_PLAYTIME_HOURS {
             if secs >= h * 3600 {
-                let (u_at, approx) = binary_search_crossing(events, h * 3600, &fallback);
-                add_unlocked(
-                    format!("m:playtime_game:{gid}:{h}h"),
+                let (u_at, approx) = binary_search_crossing(events, h * 3600, fallback);
+                unlocked_pool.push_lazy(
+                    u_at,
                     "playtime_game",
-                    format!("{h}h in {gname}"),
-                    format!("{:.1} hours played", (hours * 10.0).round() / 10.0),
+                    || format!("m:playtime_game:{gid}:{h}h"),
+                    || format!("{h}h in {gname}"),
+                    || format!("{:.1} hours played", (hours * 10.0).round() / 10.0),
                     hours as i64,
                     h,
-                    u_at,
                     approx,
                     Some(game),
                 );
@@ -915,36 +1163,45 @@ pub fn compute_milestones(
             }
         }
         if let Some(nt) = next_target {
-            upcoming.push(json!({
-                "id": format!("m:playtime_game:{gid}:{nt}h"),
-                "kind": "playtime_game",
-                "title": format!("{nt}h in {gname}"),
-                "game_id": gid,
-                "current": (hours * 10.0).round() / 10.0,
-                "target": nt,
-                "progress_pct": ((hours / nt as f64 * 100.0).round() as i64).min(99),
-            }));
+            let pct = ((hours / nt as f64 * 100.0).round() as i64).min(99);
+            upcoming_pool.push_lazy(
+                pct,
+                "playtime_game",
+                || format!("m:playtime_game:{gid}:{nt}h"),
+                |id| {
+                    json!({
+                        "id": id,
+                        "kind": "playtime_game",
+                        "title": format!("{nt}h in {gname}"),
+                        "game_id": gid,
+                        "current": (hours * 10.0).round() / 10.0,
+                        "target": nt,
+                        "progress_pct": pct,
+                    })
+                },
+            );
         }
     }
 
     // 2. playtime_total
-    let total_secs: i64 = games.iter().map(|g| total_playtime_seconds(g).max(0)).sum();
     let total_hours = total_secs as f64 / 3600.0;
     let mut next_total: Option<i64> = None;
     for &h in TOTAL_PLAYTIME_HOURS {
         if total_secs >= h * 3600 {
-            let (u_at, approx) = binary_search_crossing(&all_seconds, h * 3600, &latest_date);
-            add_unlocked(
-                format!("m:playtime_total:{h}h"),
+            let (u_at, approx) = binary_search_crossing(&all_seconds, h * 3600, latest_date);
+            unlocked_pool.push_lazy(
+                u_at,
                 "playtime_total",
-                format!("{} Library Hours", fmt_commas(h)),
-                format!(
-                    "{:.1} total hours across your collection",
-                    (total_hours * 10.0).round() / 10.0
-                ),
+                || format!("m:playtime_total:{h}h"),
+                || format!("{} Library Hours", fmt_commas(h)),
+                || {
+                    format!(
+                        "{:.1} total hours across your collection",
+                        (total_hours * 10.0).round() / 10.0
+                    )
+                },
                 total_hours as i64,
                 h,
-                u_at,
                 approx,
                 None,
             );
@@ -953,17 +1210,26 @@ pub fn compute_milestones(
         }
     }
     if let Some(nt) = next_total {
-        upcoming.push(json!({
-            "id": format!("m:playtime_total:{nt}h"),
-            "kind": "playtime_total",
-            "title": format!("{} Library Hours", fmt_commas(nt)),
-            "current": (total_hours * 10.0).round() / 10.0,
-            "target": nt,
-            "progress_pct": ((total_hours / nt as f64 * 100.0).round() as i64).min(99),
-        }));
+        let pct = ((total_hours / nt as f64 * 100.0).round() as i64).min(99);
+        upcoming_pool.push_lazy(
+            pct,
+            "playtime_total",
+            || format!("m:playtime_total:{nt}h"),
+            |id| {
+                json!({
+                    "id": id,
+                    "kind": "playtime_total",
+                    "title": format!("{} Library Hours", fmt_commas(nt)),
+                    "current": (total_hours * 10.0).round() / 10.0,
+                    "target": nt,
+                    "progress_pct": pct,
+                })
+            },
+        );
     }
 
     // 3. first_clear
+    let has_ra = !ra_by_gid.is_empty();
     for &game in &games {
         let gid = game
             .get("game_id")
@@ -973,70 +1239,58 @@ pub fn compute_milestones(
         if gid.is_empty() {
             continue;
         }
-        let ra = ra_by_gid.get(gid).copied();
         let cleared = is_completed(game)
-            || ra.is_some_and(|r| {
-                r.get("mastered").and_then(Value::as_bool).unwrap_or(false)
-                    || r.get("beaten").and_then(Value::as_i64).unwrap_or(0) > 0
-            });
+            || (has_ra
+                && ra_by_gid.get(gid).copied().is_some_and(|r| {
+                    r.get("mastered").and_then(Value::as_bool).unwrap_or(false)
+                        || r.get("beaten").and_then(Value::as_i64).unwrap_or(0) > 0
+                }));
         if !cleared {
             continue;
         }
         let (u_at, approx) = if let Some(exp) = parse_date_prefix(game.get("completed_at")) {
-            (exp.to_string(), false)
-        } else if let Some(ev) = per_game_events.get(gid)
+            (exp, false)
+        } else if has_per_game_events
+            && let Some(ev) = per_game_events.get(gid)
             && let Some(max_d) = ev.iter().map(|(d, _)| *d).max()
         {
-            (max_d.to_string(), true)
+            (max_d, true)
         } else {
-            (fallback_date_for_game(game, &today_str), true)
+            (fallback_date_for_game(game, today_val), true)
         };
         let gname = game.get("name").and_then(Value::as_str).unwrap_or("Game");
-        let subtitle = game
+        let progress_str = game
             .get("progress")
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
-            .unwrap_or("Completed")
-            .to_owned();
-        add_unlocked(
-            format!("m:first_clear:{gid}"),
-            "first_clear",
-            format!("Cleared {gname}"),
-            subtitle,
-            1,
-            1,
+            .unwrap_or("Completed");
+        unlocked_pool.push_lazy(
             u_at,
+            "first_clear",
+            || format!("m:first_clear:{gid}"),
+            || format!("Cleared {gname}"),
+            || progress_str.to_owned(),
+            1,
+            1,
             approx,
             Some(game),
         );
     }
 
     // 4. sessions
-    let manual_total: i64 = games
-        .iter()
-        .map(|g| {
-            g.get("manual_sessions")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len) as i64
-        })
-        .sum();
-    let history_total = state
-        .get("history")
-        .and_then(Value::as_array)
-        .map_or(0, |a| a.iter().filter(|e| e.is_object()).count()) as i64;
     let total_sessions = history_total + manual_total;
     let mut next_sessions: Option<i64> = None;
     for &count in SESSION_MILESTONES {
         if total_sessions >= count {
-            let (u_at, approx) = binary_search_crossing(&all_counts, count, &latest_date);
-            add_unlocked(
-                format!("m:sessions:{count}"),
+            let (u_at, approx) = binary_search_crossing(&all_counts, count, latest_date);
+            unlocked_pool.push_lazy(
+                u_at,
                 "sessions",
-                format!("{} Play Sessions", fmt_commas(count)),
-                format!("{} logged sessions", fmt_commas(total_sessions)),
+                || format!("m:sessions:{count}"),
+                || format!("{} Play Sessions", fmt_commas(count)),
+                || format!("{} logged sessions", fmt_commas(total_sessions)),
                 total_sessions,
                 count,
-                u_at,
                 approx,
                 None,
             );
@@ -1045,14 +1299,22 @@ pub fn compute_milestones(
         }
     }
     if let Some(ns) = next_sessions {
-        upcoming.push(json!({
-            "id": format!("m:sessions:{ns}"),
-            "kind": "sessions",
-            "title": format!("{} Play Sessions", fmt_commas(ns)),
-            "current": total_sessions,
-            "target": ns,
-            "progress_pct": ((total_sessions as f64 / ns as f64 * 100.0).round() as i64).min(99),
-        }));
+        let pct = ((total_sessions as f64 / ns as f64 * 100.0).round() as i64).min(99);
+        upcoming_pool.push_lazy(
+            pct,
+            "sessions",
+            || format!("m:sessions:{ns}"),
+            |id| {
+                json!({
+                    "id": id,
+                    "kind": "sessions",
+                    "title": format!("{} Play Sessions", fmt_commas(ns)),
+                    "current": total_sessions,
+                    "target": ns,
+                    "progress_pct": pct,
+                })
+            },
+        );
     }
 
     // 5 & 6. ra_points & ra_complete
@@ -1060,89 +1322,99 @@ pub fn compute_milestones(
     let mut ra_events: Vec<(Date, i64)> = Vec::new();
     let mut total_ra_pts = 0i64;
     let mut latest_ra_mtime: Option<Date> = None;
-    for entry in &ra_entries {
-        let file_date = std::fs::metadata(&entry.path)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|st| Timestamp::try_from(st).ok())
-            .map(|ts| jiff::tz::TimeZone::UTC.to_datetime(ts).date())
-            .unwrap_or(today_val);
-        if latest_ra_mtime.is_none_or(|cur| file_date > cur) {
-            latest_ra_mtime = Some(file_date);
-        }
-        let mut earned_dates: Vec<Date> = Vec::new();
-        if let Some(achs) = entry.data.get("achievements").and_then(Value::as_array) {
-            for ach in achs {
-                if !ach.is_object() || !ach.get("earned").and_then(Value::as_bool).unwrap_or(false)
-                {
-                    continue;
-                }
-                let pts = ach
-                    .get("points")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0)
-                    .max(0);
-                total_ra_pts += pts;
-                if let Some(ed) = parse_date_prefix(
-                    ach.get("date_earned_hardcore")
-                        .or_else(|| ach.get("date_earned")),
-                ) {
-                    earned_dates.push(ed);
-                    ra_events.push((ed, pts));
+    if ra_available {
+        let game_by_id: HashMap<&str, &Value> = games
+            .iter()
+            .filter_map(|&g| {
+                let gid = g.get("game_id").and_then(Value::as_str)?;
+                if gid.is_empty() { None } else { Some((gid, g)) }
+            })
+            .collect();
+        for entry in &ra_entries {
+            let file_date = std::fs::metadata(&entry.path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|st| Timestamp::try_from(st).ok())
+                .map(|ts| jiff::tz::TimeZone::UTC.to_datetime(ts).date())
+                .unwrap_or(today_val);
+            if latest_ra_mtime.is_none_or(|cur| file_date > cur) {
+                latest_ra_mtime = Some(file_date);
+            }
+            let mut earned_dates: Vec<Date> = Vec::new();
+            if let Some(achs) = entry.data.get("achievements").and_then(Value::as_array) {
+                for ach in achs {
+                    if !ach.is_object()
+                        || !ach.get("earned").and_then(Value::as_bool).unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    let pts = ach
+                        .get("points")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0)
+                        .max(0);
+                    total_ra_pts += pts;
+                    if let Some(ed) = parse_date_prefix(
+                        ach.get("date_earned_hardcore")
+                            .or_else(|| ach.get("date_earned")),
+                    ) {
+                        earned_dates.push(ed);
+                        ra_events.push((ed, pts));
+                    }
                 }
             }
-        }
-        let total_ach = entry.data.get("total").and_then(Value::as_i64).unwrap_or(0);
-        let earned_ach = entry
-            .data
-            .get("earned")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
-        if total_ach > 0
-            && (entry
+            let total_ach = entry.data.get("total").and_then(Value::as_i64).unwrap_or(0);
+            let earned_ach = entry
                 .data
-                .get("mastered")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-                || earned_ach >= total_ach)
-        {
-            let game = game_by_id.get(&entry.game_id).copied();
-            let gname = game
-                .and_then(|g| g.get("name").and_then(Value::as_str))
-                .filter(|s| !s.is_empty())
-                .unwrap_or(&entry.game_id);
-            let (u_at, approx) = if let Some(max_ed) = earned_dates.into_iter().max() {
-                (max_ed.to_string(), false)
-            } else {
-                (file_date.to_string(), true)
-            };
-            add_unlocked(
-                format!("m:ra_complete:{}", entry.game_id),
-                "ra_complete",
-                format!("Mastered {gname}"),
-                format!("{earned_ach}/{total_ach} RetroAchievements"),
-                earned_ach,
-                total_ach,
-                u_at,
-                approx,
-                game,
-            );
+                .get("earned")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            if total_ach > 0
+                && (entry
+                    .data
+                    .get("mastered")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                    || earned_ach >= total_ach)
+            {
+                let game = game_by_id.get(entry.game_id.as_str()).copied();
+                let gname = game
+                    .and_then(|g| g.get("name").and_then(Value::as_str))
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(&entry.game_id);
+                let (u_at, approx) = if let Some(max_ed) = earned_dates.into_iter().max() {
+                    (max_ed, false)
+                } else {
+                    (file_date, true)
+                };
+                unlocked_pool.push_lazy(
+                    u_at,
+                    "ra_complete",
+                    || format!("m:ra_complete:{}", entry.game_id),
+                    || format!("Mastered {gname}"),
+                    || format!("{earned_ach}/{total_ach} RetroAchievements"),
+                    earned_ach,
+                    total_ach,
+                    approx,
+                    game,
+                );
+            }
         }
     }
     if ra_available && total_ra_pts > 0 {
-        let fallback_ra = latest_ra_mtime.unwrap_or(today_val).to_string();
+        let fallback_ra = latest_ra_mtime.unwrap_or(today_val);
         let mut next_pts: Option<i64> = None;
         for &pts_target in RA_POINTS_MILESTONES {
             if total_ra_pts >= pts_target {
-                let (u_at, approx) = binary_search_crossing(&ra_events, pts_target, &fallback_ra);
-                add_unlocked(
-                    format!("m:ra_points:{pts_target}"),
+                let (u_at, approx) = binary_search_crossing(&ra_events, pts_target, fallback_ra);
+                unlocked_pool.push_lazy(
+                    u_at,
                     "ra_points",
-                    format!("{} RetroAchievements Points", fmt_commas(pts_target)),
-                    format!("{} total points earned", fmt_commas(total_ra_pts)),
+                    || format!("m:ra_points:{pts_target}"),
+                    || format!("{} RetroAchievements Points", fmt_commas(pts_target)),
+                    || format!("{} total points earned", fmt_commas(total_ra_pts)),
                     total_ra_pts,
                     pts_target,
-                    u_at,
                     approx,
                     None,
                 );
@@ -1151,14 +1423,22 @@ pub fn compute_milestones(
             }
         }
         if let Some(np) = next_pts {
-            upcoming.push(json!({
-                "id": format!("m:ra_points:{np}"),
-                "kind": "ra_points",
-                "title": format!("{} RetroAchievements Points", fmt_commas(np)),
-                "current": total_ra_pts,
-                "target": np,
-                "progress_pct": ((total_ra_pts as f64 / np as f64 * 100.0).round() as i64).min(99),
-            }));
+            let pct = ((total_ra_pts as f64 / np as f64 * 100.0).round() as i64).min(99);
+            upcoming_pool.push_lazy(
+                pct,
+                "ra_points",
+                || format!("m:ra_points:{np}"),
+                |id| {
+                    json!({
+                        "id": id,
+                        "kind": "ra_points",
+                        "title": format!("{} RetroAchievements Points", fmt_commas(np)),
+                        "current": total_ra_pts,
+                        "target": np,
+                        "progress_pct": pct,
+                    })
+                },
+            );
         }
     }
 
@@ -1167,16 +1447,16 @@ pub fn compute_milestones(
     let mut next_streak: Option<i64> = None;
     for &days_target in STREAK_MILESTONES {
         if longest_streak >= days_target
-            && let Some(dt_str) = streak_crossed.get(&days_target)
+            && let Some(&dt_val) = streak_crossed.get(&days_target)
         {
-            add_unlocked(
-                format!("m:streak:{days_target}d"),
+            unlocked_pool.push_lazy(
+                dt_val,
                 "streak",
-                format!("{days_target}-Day Play Streak"),
-                format!("Longest streak: {longest_streak} consecutive days"),
+                || format!("m:streak:{days_target}d"),
+                || format!("{days_target}-Day Play Streak"),
+                || format!("Longest streak: {longest_streak} consecutive days"),
                 longest_streak,
                 days_target,
-                dt_str.clone(),
                 false,
                 None,
             );
@@ -1185,21 +1465,25 @@ pub fn compute_milestones(
         }
     }
     if let Some(ns) = next_streak {
-        upcoming.push(json!({
-            "id": format!("m:streak:{ns}d"),
-            "kind": "streak",
-            "title": format!("{ns}-Day Play Streak"),
-            "current": longest_streak,
-            "target": ns,
-            "progress_pct": ((longest_streak as f64 / ns as f64 * 100.0).round() as i64).min(99),
-        }));
+        let pct = ((longest_streak as f64 / ns as f64 * 100.0).round() as i64).min(99);
+        upcoming_pool.push_lazy(
+            pct,
+            "streak",
+            || format!("m:streak:{ns}d"),
+            |id| {
+                json!({
+                    "id": id,
+                    "kind": "streak",
+                    "title": format!("{ns}-Day Play Streak"),
+                    "current": longest_streak,
+                    "target": ns,
+                    "progress_pct": pct,
+                })
+            },
+        );
     }
 
     // 8. library_age
-    let mut added_dates: Vec<Date> = games
-        .iter()
-        .filter_map(|g| parse_date_prefix(g.get("added_at")))
-        .collect();
     let anchor_date = added_dates
         .iter()
         .copied()
@@ -1210,14 +1494,14 @@ pub fn compute_milestones(
         for &years_target in LIBRARY_AGE_YEARS {
             let ann = add_years(anchor, years_target);
             if ann <= today_val {
-                add_unlocked(
-                    format!("m:library_age:{years_target}y"),
+                unlocked_pool.push_lazy(
+                    ann,
                     "library_age",
-                    format!("{years_target}-Year Library Anniversary"),
-                    format!("Collecting since {anchor}"),
+                    || format!("m:library_age:{years_target}y"),
+                    || format!("{years_target}-Year Library Anniversary"),
+                    || format!("Collecting since {anchor}"),
                     years_target,
                     years_target,
-                    ann.to_string(),
                     false,
                     None,
                 );
@@ -1232,42 +1516,44 @@ pub fn compute_milestones(
                 .unwrap_or(0)
                 .max(0);
             let target_days = na * 365;
-            upcoming.push(json!({
-                "id": format!("m:library_age:{na}y"),
-                "kind": "library_age",
-                "title": format!("{na}-Year Library Anniversary"),
-                "current": elapsed_days,
-                "target": target_days,
-                "progress_pct": ((elapsed_days as f64 / target_days as f64 * 100.0).round() as i64).min(99),
-            }));
+            let pct = ((elapsed_days as f64 / target_days as f64 * 100.0).round() as i64).min(99);
+            upcoming_pool.push_lazy(
+                pct,
+                "library_age",
+                || format!("m:library_age:{na}y"),
+                |id| {
+                    json!({
+                        "id": id,
+                        "kind": "library_age",
+                        "title": format!("{na}-Year Library Anniversary"),
+                        "current": elapsed_days,
+                        "target": target_days,
+                        "progress_pct": pct,
+                    })
+                },
+            );
         }
     }
 
     // 9. collection
     let collection_count = games.len() as i64;
-    added_dates.sort();
+    added_dates.sort_unstable();
     let mut next_coll: Option<i64> = None;
     for &size_target in COLLECTION_MILESTONES {
         if collection_count >= size_target {
             let (u_at, approx) = if added_dates.len() >= size_target as usize {
-                (added_dates[size_target as usize - 1].to_string(), false)
+                (added_dates[size_target as usize - 1], false)
             } else {
-                (
-                    added_dates
-                        .last()
-                        .map(|d| d.to_string())
-                        .unwrap_or_else(|| latest_date.clone()),
-                    true,
-                )
+                (added_dates.last().copied().unwrap_or(latest_date), true)
             };
-            add_unlocked(
-                format!("m:collection:{size_target}"),
+            unlocked_pool.push_lazy(
+                u_at,
                 "collection",
-                format!("{size_target} Games Collected"),
-                format!("{collection_count} active games in library"),
+                || format!("m:collection:{size_target}"),
+                || format!("{size_target} Games Collected"),
+                || format!("{collection_count} active games in library"),
                 collection_count,
                 size_target,
-                u_at,
                 approx,
                 None,
             );
@@ -1276,56 +1562,26 @@ pub fn compute_milestones(
         }
     }
     if let Some(nc) = next_coll {
-        upcoming.push(json!({
-            "id": format!("m:collection:{nc}"),
-            "kind": "collection",
-            "title": format!("{nc} Games Collected"),
-            "current": collection_count,
-            "target": nc,
-            "progress_pct": ((collection_count as f64 / nc as f64 * 100.0).round() as i64).min(99),
-        }));
+        let pct = ((collection_count as f64 / nc as f64 * 100.0).round() as i64).min(99);
+        upcoming_pool.push_lazy(
+            pct,
+            "collection",
+            || format!("m:collection:{nc}"),
+            |id| {
+                json!({
+                    "id": id,
+                    "kind": "collection",
+                    "title": format!("{nc} Games Collected"),
+                    "current": collection_count,
+                    "target": nc,
+                    "progress_pct": pct,
+                })
+            },
+        );
     }
 
-    unlocked.sort_by(|a, b| {
-        let ka = (
-            a.get("unlocked_at").and_then(Value::as_str).unwrap_or(""),
-            a.get("kind").and_then(Value::as_str).unwrap_or(""),
-            a.get("id").and_then(Value::as_str).unwrap_or(""),
-        );
-        let kb = (
-            b.get("unlocked_at").and_then(Value::as_str).unwrap_or(""),
-            b.get("kind").and_then(Value::as_str).unwrap_or(""),
-            b.get("id").and_then(Value::as_str).unwrap_or(""),
-        );
-        kb.cmp(&ka)
-    });
-    upcoming.sort_by(|a, b| {
-        let pa = a.get("progress_pct").and_then(Value::as_i64).unwrap_or(0);
-        let pb = b.get("progress_pct").and_then(Value::as_i64).unwrap_or(0);
-        let ka = a.get("kind").and_then(Value::as_str).unwrap_or("");
-        let kb = b.get("kind").and_then(Value::as_str).unwrap_or("");
-        let ia = a.get("id").and_then(Value::as_str).unwrap_or("");
-        let ib = b.get("id").and_then(Value::as_str).unwrap_or("");
-        pb.cmp(&pa)
-            .then_with(|| ka.cmp(kb))
-            .then_with(|| ia.cmp(ib))
-    });
-
-    let mut by_kind: Map<String, Value> = Map::new();
-    for item in &unlocked {
-        let k = item.get("kind").and_then(Value::as_str).unwrap_or("");
-        let next = by_kind.get(k).and_then(Value::as_u64).unwrap_or(0) + 1;
-        by_kind.insert(k.to_owned(), json!(next));
-    }
-    let total_unlocked = unlocked.len();
-    let new_count = unlocked
-        .iter()
-        .filter(|i| i.get("is_new").and_then(Value::as_bool).unwrap_or(false))
-        .count();
-    if let Some(lim) = limit {
-        unlocked.truncate(lim);
-    }
-    upcoming.truncate(8);
+    let (unlocked, total_unlocked, new_count, by_kind) = unlocked_pool.into_sorted();
+    let upcoming = upcoming_pool.into_sorted();
 
     json!({
         "unlocked": unlocked,

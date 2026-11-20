@@ -36,15 +36,21 @@ fn mood_keywords(mood: &str) -> &'static [&'static str] {
     }
 }
 
-fn norm_text(v: Option<&Value>) -> String {
-    match v {
-        None | Some(Value::Null) => String::new(),
-        Some(Value::String(s)) => s.to_lowercase(),
-        Some(other) => other.to_string().to_lowercase(),
+#[inline]
+fn contains_ascii_icase(haystack: &str, needle_lower: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle_lower.as_bytes();
+    if n.is_empty() {
+        return true;
     }
+    if n.len() > h.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
 }
 
-fn clean_user_rating(game: &Value) -> i64 {
+#[inline]
+fn clean_user_rating(game: &Map<String, Value>) -> i64 {
     let raw = game
         .get("user_rating")
         .and_then(|v| {
@@ -69,32 +75,96 @@ fn median(values: &[f64]) -> f64 {
     }
 }
 
-pub fn estimated_minutes_for_genre(genre_lower: &str) -> f64 {
+pub fn estimated_minutes_for_genre(genre: &str) -> f64 {
+    if genre.is_empty() {
+        return 45.0;
+    }
     if ["rpg", "strategy", "simulation"]
         .iter()
-        .any(|k| genre_lower.contains(k))
+        .any(|k| contains_ascii_icase(genre, k))
     {
         return 120.0;
     }
     if ["adventure", "action", "shooter", "platform", "fighting"]
         .iter()
-        .any(|k| genre_lower.contains(k))
+        .any(|k| contains_ascii_icase(genre, k))
     {
         return 60.0;
     }
     if ["puzzle", "card", "board"]
         .iter()
-        .any(|k| genre_lower.contains(k))
+        .any(|k| contains_ascii_icase(genre, k))
     {
         return 30.0;
     }
     45.0
 }
 
+#[inline]
+fn parse_u32_digits(bytes: &[u8]) -> Option<i64> {
+    let mut v = 0i64;
+    for &b in bytes {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        v = v * 10 + i64::from(b - b'0');
+    }
+    Some(v)
+}
+
+/// Howard Hinnant's civil-from-ymd days since 1970-01-01 (O(1) integer math).
+#[inline]
+fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let y = y - i64::from(m <= 2);
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// Zero-allocation fast ISO-8601 UTC timestamp parser with `jiff` fallback for timezone offsets.
 fn parse_utc_secs(v: Option<&Value>) -> Option<i64> {
     let raw = v.and_then(Value::as_str)?.trim();
-    if raw.is_empty() {
+    if raw.len() < 10 {
         return None;
+    }
+    let b = raw.as_bytes();
+    if b[4] == b'-' && b[7] == b'-' {
+        let y = parse_u32_digits(&b[0..4]);
+        let m = parse_u32_digits(&b[5..7]);
+        let d = parse_u32_digits(&b[8..10]);
+        if let (Some(y), Some(m), Some(d)) = (y, m, d)
+            && let Some(days) = days_from_civil(y, m, d)
+        {
+            if b.len() == 10 {
+                return Some(days * 86_400);
+            }
+            if b.len() >= 19
+                && (b[10] == b'T' || b[10] == b't' || b[10] == b' ')
+                && b[13] == b':'
+                && b[16] == b':'
+            {
+                let rest = &b[19..];
+                // Check for explicit non-UTC offset (`+HH:MM` or `-HH:MM`); delegate those to jiff.
+                let has_offset = rest.iter().any(|&c| c == b'+' || c == b'-');
+                if !has_offset
+                    && let (Some(hh), Some(mm), Some(ss)) = (
+                        parse_u32_digits(&b[11..13]),
+                        parse_u32_digits(&b[14..16]),
+                        parse_u32_digits(&b[17..19]),
+                    )
+                    && hh < 24
+                    && mm < 60
+                    && ss <= 60
+                {
+                    return Some(days * 86_400 + hh * 3600 + mm * 60 + ss);
+                }
+            }
+        }
     }
     if let Ok(ts) = raw.parse::<Timestamp>() {
         return Some(ts.as_second());
@@ -122,17 +192,36 @@ fn key_str(v: &Value) -> Option<String> {
     }
 }
 
-fn history_value<'a, T>(map: &'a HashMap<String, T>, game: &Value) -> Option<&'a T> {
+#[inline]
+fn history_value<'a, T>(
+    str_map: &'a HashMap<&'a str, T>,
+    num_map: &'a HashMap<i64, T>,
+    game: &Map<String, Value>,
+) -> Option<&'a T> {
+    if str_map.is_empty() && num_map.is_empty() {
+        return None;
+    }
     for k in ["game_id", "id"] {
-        if let Some(key) = game.get(k).and_then(key_str)
-            && let Some(val) = map.get(&key)
-        {
-            return Some(val);
+        match game.get(k) {
+            Some(Value::String(s)) if !s.is_empty() => {
+                if let Some(val) = str_map.get(s.as_str()) {
+                    return Some(val);
+                }
+            }
+            Some(Value::Number(n)) => {
+                if let Some(i) = n.as_i64()
+                    && let Some(val) = num_map.get(&i)
+                {
+                    return Some(val);
+                }
+            }
+            _ => {}
         }
     }
     None
 }
 
+#[inline]
 fn int_val(v: Option<&Value>, default: i64) -> i64 {
     match v {
         Some(Value::Number(n)) => n
@@ -144,6 +233,7 @@ fn int_val(v: Option<&Value>, default: i64) -> i64 {
     }
 }
 
+#[inline]
 fn float_val(v: Option<&Value>, default: f64) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(default),
@@ -152,13 +242,17 @@ fn float_val(v: Option<&Value>, default: f64) -> f64 {
     }
 }
 
-fn mood_matches(genre_lower: &str, mood: &str) -> bool {
+#[inline]
+fn mood_matches(genre: &str, mood: &str) -> bool {
     if matches!(mood, "any" | "retro" | "party") {
         return mood == "any";
     }
+    if genre.is_empty() {
+        return false;
+    }
     mood_keywords(mood)
         .iter()
-        .any(|kw| genre_lower.contains(kw))
+        .any(|kw| contains_ascii_icase(genre, kw))
 }
 
 #[derive(Debug, Clone)]
@@ -182,78 +276,128 @@ impl Default for PickerCriteria {
     }
 }
 
+struct Eligible<'a> {
+    game: &'a Value,
+    game_id_num: i64,
+    score: f64,
+    reason_key: Option<&'static str>,
+    days: Option<i64>,
+    mood_match: bool,
+    fits_minutes: bool,
+    play_count: i64,
+    rating: f64,
+    user_rating: i64,
+    unplayed_progress: bool,
+    genre: &'a str,
+}
+
+#[inline]
+fn eligible_cmp(a: &Eligible<'_>, b: &Eligible<'_>) -> std::cmp::Ordering {
+    b.score
+        .partial_cmp(&a.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| a.game_id_num.cmp(&b.game_id_num))
+}
+
 pub fn pick_games(games: &[Value], history: &[Value], criteria: &PickerCriteria) -> Vec<Value> {
+    pick_games_iter(games.iter(), history, criteria)
+}
+
+pub fn pick_games_refs(
+    games: &[&Value],
+    history: &[Value],
+    criteria: &PickerCriteria,
+) -> Vec<Value> {
+    pick_games_iter(games.iter().copied(), history, criteria)
+}
+
+fn pick_games_iter<'a, I>(games: I, history: &[Value], criteria: &PickerCriteria) -> Vec<Value>
+where
+    I: IntoIterator<Item = &'a Value>,
+{
     let now_secs = Timestamp::now().as_second();
-    let mut history_sessions: HashMap<String, Vec<f64>> = HashMap::new();
-    let mut history_recent: HashMap<String, i64> = HashMap::new();
+    let mut hist_sessions_str: HashMap<&str, Vec<f64>> = HashMap::new();
+    let mut hist_sessions_num: HashMap<i64, Vec<f64>> = HashMap::new();
+    let mut hist_recent_str: HashMap<&str, i64> = HashMap::new();
+    let mut hist_recent_num: HashMap<i64, i64> = HashMap::new();
 
     for entry in history {
         let Some(obj) = entry.as_object() else {
             continue;
         };
-        let Some(gid) = obj.get("game_id").and_then(key_str) else {
-            continue;
-        };
         let secs = float_val(obj.get("seconds"), 0.0);
-        if secs > 0.0 {
-            history_sessions.entry(gid.clone()).or_default().push(secs);
-        }
-        if let Some(ts) = parse_utc_secs(obj.get("started")) {
-            let slot = history_recent.entry(gid).or_insert(ts);
-            if ts > *slot {
-                *slot = ts;
+        let ts_opt = parse_utc_secs(obj.get("started"));
+        match obj.get("game_id") {
+            Some(Value::String(gid)) if !gid.is_empty() => {
+                let s = gid.as_str();
+                if secs > 0.0 {
+                    hist_sessions_str.entry(s).or_default().push(secs);
+                }
+                if let Some(ts) = ts_opt {
+                    let slot = hist_recent_str.entry(s).or_insert(ts);
+                    if ts > *slot {
+                        *slot = ts;
+                    }
+                }
             }
+            Some(Value::Number(n)) => {
+                if let Some(id_num) = n.as_i64() {
+                    if secs > 0.0 {
+                        hist_sessions_num.entry(id_num).or_default().push(secs);
+                    }
+                    if let Some(ts) = ts_opt {
+                        let slot = hist_recent_num.entry(id_num).or_insert(ts);
+                        if ts > *slot {
+                            *slot = ts;
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
-    struct Eligible<'a> {
-        game: &'a Value,
-        score: f64,
-        reason_key: Option<&'static str>,
-        days: Option<i64>,
-        mood_match: bool,
-        fits_minutes: bool,
-        play_count: i64,
-        rating: f64,
-        user_rating: i64,
-        unplayed_progress: bool,
-        genre_lower: String,
-    }
-
-    let mut eligible: Vec<Eligible<'_>> = Vec::new();
+    const POOL_CAP: usize = 12;
+    let mut top: Vec<Eligible<'_>> = Vec::with_capacity(POOL_CAP + 1);
     let mood = criteria.mood.as_str();
     let familiarity = criteria.familiarity.as_str();
     let players = criteria.players.max(1);
     let minutes = criteria.minutes.max(0);
+    let target_secs = (minutes as f64) * 60.0;
+    let max_est_mins = (minutes as f64) * 1.5;
 
     for game in games {
-        if !game.is_object() {
+        let Some(g) = game.as_object() else {
             continue;
-        }
-        if game.get("hidden").and_then(Value::as_bool).unwrap_or(false)
-            || game
-                .get("hide_in_bigbox")
+        };
+        if g.get("hidden").and_then(Value::as_bool).unwrap_or(false)
+            || g.get("hide_in_bigbox")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
         {
             continue;
         }
-        if game.get("path_exists") == Some(&Value::Bool(false))
-            && game.get("store_installed") == Some(&Value::Bool(false))
+        if g.get("path_exists") == Some(&Value::Bool(false))
+            && g.get("store_installed") == Some(&Value::Bool(false))
         {
             continue;
         }
-        let max_players = int_val(game.get("max_players"), 1).max(1);
+        let max_players = if players > 1 || mood == "party" {
+            int_val(g.get("max_players"), 1).max(1)
+        } else {
+            1
+        };
         if players > 1 && max_players < players {
             continue;
         }
-        let genre = norm_text(game.get("genre"));
-        let is_mood_match = mood_matches(&genre, mood);
         if mood == "party" && max_players <= 1 {
             continue;
         }
+
+        let genre = g.get("genre").and_then(Value::as_str).unwrap_or("");
+        let is_mood_match = mood_matches(genre, mood);
         if mood == "retro" {
-            let year = int_val(game.get("year"), 0);
+            let year = int_val(g.get("year"), 0);
             if year >= 2001 {
                 continue;
             }
@@ -261,61 +405,38 @@ pub fn pick_games(games: &[Value], history: &[Value], criteria: &PickerCriteria)
             continue;
         }
 
-        let play_count = int_val(game.get("play_count"), 0);
+        let play_count = int_val(g.get("play_count"), 0);
         if familiarity == "new" && play_count > 0 {
             continue;
         }
-        let rating = float_val(game.get("rating"), 0.0);
-        let user_rating = clean_user_rating(game);
-        let is_fav = game
-            .get("favorite")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let rating = float_val(g.get("rating"), 0.0);
+        let user_rating = clean_user_rating(g);
+        let is_fav = g.get("favorite").and_then(Value::as_bool).unwrap_or(false);
         if familiarity == "favorite" && !(is_fav || rating >= 4.0 || user_rating >= 4) {
             continue;
         }
 
         let fits_minutes = if minutes <= 0 {
             true
+        } else if let Some(vals) = history_value(&hist_sessions_str, &hist_sessions_num, g)
+            && !vals.is_empty()
+        {
+            median(vals) <= target_secs * 1.5
         } else {
-            let target = (minutes as f64) * 60.0;
-            if let Some(vals) = history_value(&history_sessions, game)
-                && !vals.is_empty()
-            {
-                median(vals) <= target * 1.5
-            } else {
-                estimated_minutes_for_genre(&genre) <= (minutes as f64) * 1.5
-            }
+            estimated_minutes_for_genre(genre) <= max_est_mins
         };
         if !fits_minutes {
             continue;
         }
 
-        let days = parse_utc_secs(game.get("last_played"))
-            .or_else(|| history_value(&history_recent, game).copied())
+        let days = parse_utc_secs(g.get("last_played"))
+            .or_else(|| history_value(&hist_recent_str, &hist_recent_num, g).copied())
             .map(|ts| ((now_secs - ts).div_euclid(86_400)).max(0));
 
         let unplayed_progress = matches!(
-            game.get("progress").and_then(Value::as_str).unwrap_or(""),
+            g.get("progress").and_then(Value::as_str).unwrap_or(""),
             "" | "Unplayed"
         );
-        let mut reason_key = if play_count == 0 {
-            Some("picker.reason.never_played")
-        } else if is_fav {
-            Some("picker.reason.favorite")
-        } else if days.is_some_and(|d| d > 30) {
-            Some("picker.reason.long_time")
-        } else if is_mood_match && mood != "any" {
-            Some("picker.reason.mood")
-        } else {
-            None
-        };
-        if reason_key.is_none() && rating >= 4.0 {
-            reason_key = Some("picker.reason.rated");
-        }
-        if reason_key.is_none() && minutes > 0 {
-            reason_key = Some("picker.reason.fits_session");
-        }
 
         let mut score = if play_count == 0 {
             12.0
@@ -348,8 +469,41 @@ pub fn pick_games(games: &[Value], history: &[Value], criteria: &PickerCriteria)
             score += 3.0;
         }
 
-        eligible.push(Eligible {
+        // Fast reject against the 12th-best candidate before allocating or sorting.
+        let game_id_num = int_val(g.get("id"), 0);
+        if top.len() == POOL_CAP {
+            let worst = &top[POOL_CAP - 1];
+            let cmp = worst
+                .score
+                .partial_cmp(&score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| game_id_num.cmp(&worst.game_id_num));
+            if cmp != std::cmp::Ordering::Less {
+                continue;
+            }
+        }
+
+        let mut reason_key = if play_count == 0 {
+            Some("picker.reason.never_played")
+        } else if is_fav {
+            Some("picker.reason.favorite")
+        } else if days.is_some_and(|d| d > 30) {
+            Some("picker.reason.long_time")
+        } else if is_mood_match && mood != "any" {
+            Some("picker.reason.mood")
+        } else {
+            None
+        };
+        if reason_key.is_none() && rating >= 4.0 {
+            reason_key = Some("picker.reason.rated");
+        }
+        if reason_key.is_none() && minutes > 0 {
+            reason_key = Some("picker.reason.fits_session");
+        }
+
+        let cand = Eligible {
             game,
+            game_id_num,
             score,
             reason_key,
             days,
@@ -359,24 +513,25 @@ pub fn pick_games(games: &[Value], history: &[Value], criteria: &PickerCriteria)
             rating,
             user_rating,
             unplayed_progress,
-            genre_lower: genre,
-        });
+            genre,
+        };
+        let pos = top
+            .binary_search_by(|probe| eligible_cmp(probe, &cand))
+            .unwrap_or_else(|e| e);
+        if pos < POOL_CAP {
+            top.insert(pos, cand);
+            if top.len() > POOL_CAP {
+                top.pop();
+            }
+        }
     }
 
-    if eligible.is_empty() {
+    if top.is_empty() {
         return Vec::new();
     }
 
-    eligible.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| int_val(a.game.get("id"), 0).cmp(&int_val(b.game.get("id"), 0)))
-    });
-    eligible.truncate(12);
-
     let limit = criteria.limit.clamp(1, 3);
-    let mut pool = eligible;
+    let mut pool = top;
     let mut picks = Vec::new();
     let mut rng = rand::thread_rng();
     while !pool.is_empty() && picks.len() < limit {
@@ -420,7 +575,7 @@ pub fn pick_games(games: &[Value], history: &[Value], criteria: &PickerCriteria)
                 .filter(|v| v.as_f64().is_some_and(|n| n > 0.0))
                 .cloned()
                 .unwrap_or_else(|| {
-                    json!((estimated_minutes_for_genre(&item.genre_lower) / 60.0).round() as i64)
+                    json!((estimated_minutes_for_genre(item.genre) / 60.0).round() as i64)
                 });
             reason_params.insert("stars".into(), json!(item.user_rating));
             reason_params.insert("ttb".into(), ttb_val);

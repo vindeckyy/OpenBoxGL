@@ -132,28 +132,49 @@ pub fn json_response(status: StatusCode, payload: &Value, instance: &str) -> Res
     json_response_with_headers(status, payload, instance, &[])
 }
 
+pub fn serialized_json_response<T: serde::Serialize>(status: StatusCode, payload: &T) -> Response {
+    let bytes = serde_json::to_vec(payload).unwrap_or_else(|_| b"{}".to_vec());
+    let len = bytes.len();
+    let mut resp = Response::new(Body::from(bytes));
+    *resp.status_mut() = status;
+    apply_security_headers(
+        resp.headers_mut(),
+        "application/json; charset=utf-8",
+        "no-store",
+        false,
+    );
+    if let Ok(cl) = HeaderValue::from_str(&len.to_string()) {
+        resp.headers_mut().insert(CONTENT_LENGTH, cl);
+    }
+    resp
+}
+
 pub fn json_response_with_headers(
     status: StatusCode,
     payload: &Value,
     instance: &str,
     extra: &[(&str, &str)],
 ) -> Response {
-    let (body_val, ct) = if status.as_u16() >= 400
+    let (bytes, ct) = if status.as_u16() >= 400
         && let Some(obj) = payload.as_object()
     {
         let req_id = obj.get("request_id").and_then(Value::as_str).unwrap_or("");
+        let problem = problem_payload(status.as_u16(), obj, req_id, instance);
         (
-            problem_payload(status.as_u16(), obj, req_id, instance),
+            serde_json::to_vec(&problem).unwrap_or_else(|_| b"{}".to_vec()),
             "application/problem+json; charset=utf-8",
         )
     } else {
-        (payload.clone(), "application/json; charset=utf-8")
+        (
+            serde_json::to_vec(payload).unwrap_or_else(|_| b"{}".to_vec()),
+            "application/json; charset=utf-8",
+        )
     };
-    let bytes = serde_json::to_vec(&body_val).unwrap_or_else(|_| b"{}".to_vec());
-    let mut resp = Response::new(Body::from(bytes.clone()));
+    let len = bytes.len();
+    let mut resp = Response::new(Body::from(bytes));
     *resp.status_mut() = status;
     apply_security_headers(resp.headers_mut(), ct, "no-store", false);
-    if let Ok(cl) = HeaderValue::from_str(&bytes.len().to_string()) {
+    if let Ok(cl) = HeaderValue::from_str(&len.to_string()) {
         resp.headers_mut().insert(CONTENT_LENGTH, cl);
     }
     for (k, v) in extra {

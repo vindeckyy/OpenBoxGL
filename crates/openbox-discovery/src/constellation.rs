@@ -1,10 +1,13 @@
 //! Library relationship graph (`pkg/parity/parity_constellation.py`).
 
+use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 use jiff::Timestamp;
 use jiff::civil::{Date, DateTime};
-use serde_json::{Value, json};
+use serde::{Serialize, Serializer};
+use serde_json::Value;
 
 pub const KINDS: &[&str] = &[
     "series",
@@ -16,6 +19,53 @@ pub const KINDS: &[&str] = &[
 ];
 
 pub const CO_PLAY_WINDOW_DAYS: i64 = 7;
+
+static NULL_VALUE: Value = Value::Null;
+
+#[derive(Clone, Copy)]
+pub enum ValueOrEmpty<'a> {
+    Val(&'a Value),
+    Empty,
+}
+
+impl Serialize for ValueOrEmpty<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Val(v) => v.serialize(serializer),
+            Self::Empty => serializer.serialize_str(""),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ConstellationNode<'a> {
+    pub cover: ValueOrEmpty<'a>,
+    pub degree: usize,
+    pub game_id: Cow<'a, str>,
+    pub has_cover: bool,
+    pub i: usize,
+    pub id: &'a Value,
+    pub name: &'a str,
+    pub platform: ValueOrEmpty<'a>,
+    pub playtime_seconds: i64,
+    pub year: ValueOrEmpty<'a>,
+}
+
+#[derive(Clone, Copy, Serialize)]
+pub struct ConstellationEdge {
+    pub kind: &'static str,
+    pub s: usize,
+    pub t: usize,
+    pub w: f64,
+}
+
+#[derive(Serialize)]
+pub struct ConstellationGraph<'a> {
+    pub edges: Vec<ConstellationEdge>,
+    pub kinds: Vec<&'static str>,
+    pub nodes: Vec<ConstellationNode<'a>>,
+    pub truncated: bool,
+}
 
 pub fn kind_weight(kind: &str) -> f64 {
     match kind {
@@ -50,6 +100,22 @@ pub fn platform_family(platform: &str) -> &'static str {
     }
 }
 
+fn platform_family_id(platform: &str) -> u8 {
+    match platform_family(platform) {
+        "Computer" => 1,
+        "Nintendo" => 2,
+        "Sega" => 3,
+        "Sony" => 4,
+        "Microsoft" => 5,
+        "Arcade" => 6,
+        "Atari" => 7,
+        "Commodore" => 8,
+        "Z80" => 9,
+        "NEC" => 10,
+        _ => 0,
+    }
+}
+
 fn normalize(v: Option<&Value>) -> String {
     match v {
         None | Some(Value::Null) => String::new(),
@@ -58,11 +124,75 @@ fn normalize(v: Option<&Value>) -> String {
     }
 }
 
+fn days_in_month(year: i64, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
+}
+
+/// Howard Hinnant civil-to-days algorithm (days since 1970-01-01).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = y - i64::from(m <= 2);
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = m + if m > 2 { -3 } else { 9 };
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+#[inline]
+fn parse_ascii_2(b: &[u8]) -> Option<u8> {
+    let d0 = b[0].wrapping_sub(b'0');
+    let d1 = b[1].wrapping_sub(b'0');
+    if d0 < 10 && d1 < 10 {
+        Some(d0 * 10 + d1)
+    } else {
+        None
+    }
+}
+
+#[inline]
+fn parse_ascii_4(b: &[u8]) -> Option<i64> {
+    let hi = parse_ascii_2(&b[0..2])? as i64;
+    let lo = parse_ascii_2(&b[2..4])? as i64;
+    Some(hi * 100 + lo)
+}
+
 fn parse_date_ordinal(value: Option<&Value>) -> Option<i64> {
     let raw = value.and_then(Value::as_str)?.trim();
     if raw.is_empty() {
         return None;
     }
+    let bytes = raw.as_bytes();
+    // Fast zero-allocation path for YYYY-MM-DD, YYYY-MM-DDTHH:MM:SSZ, YYYY-MM-DD HH:MM:SS, etc.
+    // Falls through to jiff if a timezone offset (+/-/[) appears after the date prefix.
+    if bytes.len() >= 10 && bytes[4] == b'-' && bytes[7] == b'-' {
+        let has_tz_offset =
+            bytes.len() > 10 && bytes[10..].iter().any(|&c| matches!(c, b'+' | b'-' | b'['));
+        if !has_tz_offset
+            && let (Some(y), Some(m), Some(d)) = (
+                parse_ascii_4(&bytes[0..4]),
+                parse_ascii_2(&bytes[5..7]),
+                parse_ascii_2(&bytes[8..10]),
+            )
+            && (1..=12).contains(&m)
+            && d >= 1
+            && d <= days_in_month(y, m)
+        {
+            return Some(days_from_civil(y, i64::from(m), i64::from(d)));
+        }
+    }
+
     let d: Date = if let Ok(ts) = raw.parse::<Timestamp>() {
         jiff::tz::TimeZone::UTC.to_datetime(ts).date()
     } else if let Ok(dt) = raw.replace(' ', "T").parse::<DateTime>() {
@@ -78,6 +208,7 @@ fn parse_date_ordinal(value: Option<&Value>) -> Option<i64> {
     Some(ts.as_second().div_euclid(86_400))
 }
 
+#[inline]
 fn int_field(g: &Value, key: &str) -> i64 {
     g.get(key)
         .and_then(|v| {
@@ -88,73 +219,97 @@ fn int_field(g: &Value, key: &str) -> i64 {
         .unwrap_or(0)
 }
 
-fn game_id_str(g: &Value) -> String {
+fn game_id_cow(g: &Value) -> Cow<'_, str> {
     if let Some(s) = g
         .get("game_id")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
     {
-        return s.to_owned();
+        return Cow::Borrowed(s);
     }
     match g.get("id") {
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => n.to_string(),
-        _ => "None".to_owned(),
+        Some(Value::String(s)) => Cow::Borrowed(s.as_str()),
+        Some(Value::Number(n)) => Cow::Owned(n.to_string()),
+        _ => Cow::Borrowed("None"),
     }
 }
 
-fn co_play_days(history: &[Value], game_ids: &[String]) -> HashMap<(String, String), usize> {
-    let mut days_for: HashMap<String, HashSet<i64>> = HashMap::new();
-    for entry in history {
-        let Some(gid_val) = entry.get("game_id").filter(|v| !v.is_null()) else {
-            continue;
-        };
-        let gid = gid_val
-            .as_str()
-            .map(str::to_owned)
-            .unwrap_or_else(|| gid_val.to_string());
-        let Some(day) = parse_date_ordinal(entry.get("started")) else {
-            continue;
-        };
-        days_for.entry(gid).or_default().insert(day);
-    }
-    let mut pairs = HashMap::new();
-    for i in 0..game_ids.len() {
-        let a = &game_ids[i];
-        let Some(a_days) = days_for.get(a) else {
-            continue;
-        };
-        for b in &game_ids[i + 1..] {
-            let Some(b_days) = days_for.get(b) else {
-                continue;
-            };
-            let mut shared = 0usize;
-            for &d in a_days {
-                if (-CO_PLAY_WINDOW_DAYS..=CO_PLAY_WINDOW_DAYS)
-                    .any(|delta| b_days.contains(&(d + delta)))
-                {
-                    shared += 1;
-                }
-            }
-            if shared > 0 {
-                let key = if a <= b {
-                    (a.clone(), b.clone())
-                } else {
-                    (b.clone(), a.clone())
-                };
-                pairs.insert(key, shared.min(5));
+/// Counts days in `a_days` that have at least one day in `b_days` within `±CO_PLAY_WINDOW_DAYS`,
+/// capped at 5. Both slices must be sorted and deduplicated.
+#[inline]
+fn shared_co_play_days(a_days: &[i64], b_days: &[i64]) -> usize {
+    let mut shared = 0usize;
+    let mut j = 0usize;
+    let b_len = b_days.len();
+    for &d in a_days {
+        let lo = d.saturating_sub(CO_PLAY_WINDOW_DAYS);
+        let hi = d.saturating_add(CO_PLAY_WINDOW_DAYS);
+        while j < b_len && b_days[j] < lo {
+            j += 1;
+        }
+        if j < b_len && b_days[j] <= hi {
+            shared += 1;
+            if shared >= 5 {
+                return 5;
             }
         }
     }
-    pairs
+    shared
 }
 
-pub fn build_graph(
-    games: &[Value],
+struct CandidateKey<'a> {
+    playtime: i64,
+    play_count: i64,
+    favorite: bool,
+    name: &'a str,
+    orig_idx: usize,
+    game: &'a Value,
+}
+
+#[inline]
+fn cmp_candidate(a: &CandidateKey<'_>, b: &CandidateKey<'_>) -> Ordering {
+    b.playtime
+        .cmp(&a.playtime)
+        .then_with(|| b.play_count.cmp(&a.play_count))
+        .then_with(|| b.favorite.cmp(&a.favorite))
+        .then_with(|| a.name.cmp(b.name))
+        .then_with(|| a.orig_idx.cmp(&b.orig_idx))
+}
+
+#[derive(Default)]
+struct Interner {
+    map: HashMap<String, u32>,
+}
+
+impl Interner {
+    fn intern(&mut self, value: Option<&Value>) -> u32 {
+        let norm = normalize(value);
+        if norm.is_empty() {
+            return 0;
+        }
+        if let Some(&id) = self.map.get(&norm) {
+            return id;
+        }
+        let next = (self.map.len() as u32) + 1;
+        self.map.insert(norm, next);
+        next
+    }
+}
+
+struct NodeFeatures {
+    series: u32,
+    developer: u32,
+    publisher: u32,
+    genre: u32,
+    platform_family: u8,
+}
+
+pub fn build_graph_typed<'a>(
+    games: &'a [Value],
     history: &[Value],
     kinds: Option<&HashSet<String>>,
     limit: usize,
-) -> Value {
+) -> ConstellationGraph<'a> {
     let active_kinds: HashSet<&'static str> = match kinds {
         Some(ks) => {
             let filtered: HashSet<&'static str> =
@@ -168,108 +323,191 @@ pub fn build_graph(
         None => KINDS.iter().copied().collect(),
     };
 
-    let mut candidates: Vec<&Value> = games.iter().filter(|g| g.is_object()).collect();
-    candidates.sort_by(|a, b| {
-        int_field(b, "playtime_seconds")
-            .cmp(&int_field(a, "playtime_seconds"))
-            .then_with(|| int_field(b, "play_count").cmp(&int_field(a, "play_count")))
-            .then_with(|| {
-                let fa = a.get("favorite").and_then(Value::as_bool).unwrap_or(false);
-                let fb = b.get("favorite").and_then(Value::as_bool).unwrap_or(false);
-                fb.cmp(&fa)
-            })
-            .then_with(|| {
-                let na = a.get("name").and_then(Value::as_str).unwrap_or("");
-                let nb = b.get("name").and_then(Value::as_str).unwrap_or("");
-                na.cmp(nb)
-            })
-    });
-    let truncated = candidates.len() > limit;
-    candidates.truncate(limit);
+    let active_series = active_kinds.contains("series");
+    let active_developer = active_kinds.contains("developer");
+    let active_publisher = active_kinds.contains("publisher");
+    let active_genre = active_kinds.contains("genre");
+    let active_pf = active_kinds.contains("platform_family");
+    let active_co_played = active_kinds.contains("co_played");
 
-    let mut nodes: Vec<Value> = Vec::with_capacity(candidates.len());
-    let mut node_gids: Vec<String> = Vec::with_capacity(candidates.len());
-    for (i, game) in candidates.iter().enumerate() {
-        let gid = game_id_str(game);
-        node_gids.push(gid.clone());
-        nodes.push(json!({
-            "i": i,
-            "game_id": gid,
-            "id": game.get("id").cloned().unwrap_or(Value::Null),
-            "name": game.get("name").and_then(Value::as_str).unwrap_or(""),
-            "platform": game.get("platform").cloned().unwrap_or_else(|| json!("")),
-            "year": game.get("year").cloned().unwrap_or_else(|| json!("")),
-            "playtime_seconds": int_field(game, "playtime_seconds"),
-            "degree": 0,
-            "cover": game.get("cover").cloned().unwrap_or_else(|| json!("")),
-            "has_cover": game.get("has_cover").and_then(Value::as_bool).unwrap_or(false),
-        }));
+    let mut candidates: Vec<CandidateKey<'a>> = Vec::with_capacity(games.len());
+    for (orig_idx, g) in games.iter().enumerate() {
+        if !g.is_object() {
+            continue;
+        }
+        candidates.push(CandidateKey {
+            playtime: int_field(g, "playtime_seconds"),
+            play_count: int_field(g, "play_count"),
+            favorite: g.get("favorite").and_then(Value::as_bool).unwrap_or(false),
+            name: g.get("name").and_then(Value::as_str).unwrap_or(""),
+            orig_idx,
+            game: g,
+        });
+    }
+    let truncated = candidates.len() > limit;
+    if limit == 0 {
+        candidates.clear();
+    } else if candidates.len() > limit {
+        candidates.select_nth_unstable_by(limit, cmp_candidate);
+        candidates.truncate(limit);
+        candidates.sort_unstable_by(cmp_candidate);
+    } else {
+        candidates.sort_unstable_by(cmp_candidate);
     }
 
-    let co_play = if active_kinds.contains("co_played") {
-        co_play_days(history, &node_gids)
-    } else {
-        HashMap::new()
-    };
+    let n = candidates.len();
+    let mut nodes: Vec<ConstellationNode<'a>> = Vec::with_capacity(n);
+    let mut features: Vec<NodeFeatures> = Vec::with_capacity(n);
+    let mut series_intern = Interner::default();
+    let mut dev_intern = Interner::default();
+    let mut pub_intern = Interner::default();
+    let mut genre_intern = Interner::default();
 
-    let mut degrees = vec![0usize; nodes.len()];
-    let mut edges: Vec<(usize, usize, &'static str, f64)> = Vec::new();
-    for a_idx in 0..candidates.len() {
-        let a = candidates[a_idx];
-        for b_idx in (a_idx + 1)..candidates.len() {
-            let b = candidates[b_idx];
-            let mut best_kind: Option<&'static str> = None;
-            let mut best_weight = 0.0f64;
+    for (i, cand) in candidates.iter().enumerate() {
+        let game = cand.game;
+        let gid = game_id_cow(game);
+        features.push(NodeFeatures {
+            series: if active_series {
+                series_intern.intern(game.get("series"))
+            } else {
+                0
+            },
+            developer: if active_developer {
+                dev_intern.intern(game.get("developer"))
+            } else {
+                0
+            },
+            publisher: if active_publisher {
+                pub_intern.intern(game.get("publisher"))
+            } else {
+                0
+            },
+            genre: if active_genre {
+                genre_intern.intern(game.get("genre"))
+            } else {
+                0
+            },
+            platform_family: if active_pf {
+                platform_family_id(game.get("platform").and_then(Value::as_str).unwrap_or(""))
+            } else {
+                0
+            },
+        });
+        nodes.push(ConstellationNode {
+            i,
+            game_id: gid,
+            id: game.get("id").unwrap_or(&NULL_VALUE),
+            name: cand.name,
+            platform: game
+                .get("platform")
+                .map_or(ValueOrEmpty::Empty, ValueOrEmpty::Val),
+            year: game
+                .get("year")
+                .map_or(ValueOrEmpty::Empty, ValueOrEmpty::Val),
+            playtime_seconds: cand.playtime,
+            degree: 0,
+            cover: game
+                .get("cover")
+                .map_or(ValueOrEmpty::Empty, ValueOrEmpty::Val),
+            has_cover: game
+                .get("has_cover")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        });
+    }
 
-            for &kind in KINDS {
-                if kind == "co_played" || !active_kinds.contains(kind) {
-                    continue;
-                }
-                if kind == "platform_family" {
-                    let fa =
-                        platform_family(a.get("platform").and_then(Value::as_str).unwrap_or(""));
-                    let fb =
-                        platform_family(b.get("platform").and_then(Value::as_str).unwrap_or(""));
-                    if fa == fb && fa != "Other" {
-                        let w = kind_weight("platform_family");
-                        if w > best_weight {
-                            best_kind = Some("platform_family");
-                            best_weight = w;
-                        }
-                    }
-                } else {
-                    let va = normalize(a.get(kind));
-                    let vb = normalize(b.get(kind));
-                    if !va.is_empty() && va == vb {
-                        let w = kind_weight(kind);
-                        if w > best_weight {
-                            best_kind = Some(kind);
-                            best_weight = w;
-                        }
-                    }
-                }
+    // Build sorted, deduplicated play-day lists restricted to the top-`limit` nodes only.
+    let mut days_by_node: Vec<Vec<i64>> = Vec::new();
+    if active_co_played && !history.is_empty() && !nodes.is_empty() {
+        let mut gid_to_indices: HashMap<&str, Vec<usize>> = HashMap::with_capacity(n);
+        for (idx, node) in nodes.iter().enumerate() {
+            gid_to_indices
+                .entry(node.game_id.as_ref())
+                .or_default()
+                .push(idx);
+        }
+        days_by_node.resize_with(n, Vec::new);
+        for entry in history {
+            let Some(gid_val) = entry.get("game_id").filter(|v| !v.is_null()) else {
+                continue;
+            };
+            let indices = if let Some(s) = gid_val.as_str() {
+                gid_to_indices.get(s)
+            } else {
+                let owned = gid_val.to_string();
+                gid_to_indices.get(owned.as_str())
+            };
+            let Some(indices) = indices else {
+                continue;
+            };
+            let Some(day) = parse_date_ordinal(entry.get("started")) else {
+                continue;
+            };
+            for &idx in indices {
+                days_by_node[idx].push(day);
             }
+        }
+        for days in &mut days_by_node {
+            if days.len() > 1 {
+                days.sort_unstable();
+                days.dedup();
+            }
+        }
+    }
 
-            if active_kinds.contains("co_played") {
-                let ga = &node_gids[a_idx];
-                let gb = &node_gids[b_idx];
-                let key = if ga <= gb {
-                    (ga.clone(), gb.clone())
-                } else {
-                    (gb.clone(), ga.clone())
-                };
-                if let Some(&cp) = co_play.get(&key) {
-                    let w = (cp as f64 / 5.0).min(1.0) * kind_weight("co_played");
-                    if w > best_weight {
-                        best_kind = Some("co_played");
-                        best_weight = w;
+    let has_co_play = !days_by_node.is_empty();
+    let mut degrees = vec![0usize; n];
+    let mut edges: Vec<ConstellationEdge> = Vec::new();
+
+    for a_idx in 0..n {
+        let fa = &features[a_idx];
+        let a_days: &[i64] = if has_co_play {
+            &days_by_node[a_idx]
+        } else {
+            &[]
+        };
+        for b_idx in (a_idx + 1)..n {
+            let fb = &features[b_idx];
+
+            // Strict descending weight order:
+            // series (1.0) > developer (0.8) > co_played (0.6 max) > publisher (0.5)
+            // > genre (0.4) > platform_family (0.3)
+            let (mut best_kind, mut best_weight) = if fa.series != 0 && fa.series == fb.series {
+                (Some("series"), 1.0f64)
+            } else if fa.developer != 0 && fa.developer == fb.developer {
+                (Some("developer"), 0.8f64)
+            } else if fa.publisher != 0 && fa.publisher == fb.publisher {
+                (Some("publisher"), 0.5f64)
+            } else if fa.genre != 0 && fa.genre == fb.genre {
+                (Some("genre"), 0.4f64)
+            } else if fa.platform_family != 0 && fa.platform_family == fb.platform_family {
+                (Some("platform_family"), 0.3f64)
+            } else {
+                (None, 0.0f64)
+            };
+
+            if best_weight < 0.6 && !a_days.is_empty() {
+                let b_days = &days_by_node[b_idx];
+                if !b_days.is_empty() {
+                    let cp = shared_co_play_days(a_days, b_days);
+                    if cp > 0 {
+                        let w = (cp as f64 / 5.0).min(1.0) * 0.6;
+                        if w > best_weight {
+                            best_kind = Some("co_played");
+                            best_weight = w;
+                        }
                     }
                 }
             }
 
             if let Some(kind) = best_kind {
                 let rounded = (best_weight * 100.0).round() / 100.0;
-                edges.push((a_idx, b_idx, kind, rounded));
+                edges.push(ConstellationEdge {
+                    kind,
+                    s: a_idx,
+                    t: b_idx,
+                    w: rounded,
+                });
                 degrees[a_idx] += 1;
                 degrees[b_idx] += 1;
             }
@@ -277,27 +515,26 @@ pub fn build_graph(
     }
 
     for (node, deg) in nodes.iter_mut().zip(degrees) {
-        if let Some(m) = node.as_object_mut() {
-            m.insert("degree".into(), json!(deg));
-        }
+        node.degree = deg;
     }
-    edges.sort_by(|a, b| {
-        a.0.cmp(&b.0)
-            .then_with(|| a.1.cmp(&b.1))
-            .then_with(|| a.2.cmp(b.2))
-    });
-    let edge_vals: Vec<Value> = edges
-        .into_iter()
-        .map(|(s, t, kind, w)| json!({"s": s, "t": t, "kind": kind, "w": w}))
-        .collect();
 
-    let mut kinds_out: Vec<&str> = active_kinds.into_iter().collect();
+    let mut kinds_out: Vec<&'static str> = active_kinds.into_iter().collect();
     kinds_out.sort_unstable();
 
-    json!({
-        "nodes": nodes,
-        "edges": edge_vals,
-        "kinds": kinds_out,
-        "truncated": truncated,
-    })
+    ConstellationGraph {
+        edges,
+        kinds: kinds_out,
+        nodes,
+        truncated,
+    }
+}
+
+pub fn build_graph(
+    games: &[Value],
+    history: &[Value],
+    kinds: Option<&HashSet<String>>,
+    limit: usize,
+) -> Value {
+    let graph = build_graph_typed(games, history, kinds, limit);
+    serde_json::to_value(graph).unwrap_or(Value::Null)
 }
