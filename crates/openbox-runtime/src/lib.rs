@@ -44,10 +44,13 @@ mod tests {
 
     #[test]
     fn play_queue_skip_persistence_matches_python() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("game.rom");
+        std::fs::write(&existing, b"rom").unwrap();
         let mut state = json!({
             "games": [
                 {"game_id": "g1", "path": ""},
-                {"game_id": "g2", "path": "/bin/true"},
+                {"game_id": "g2", "path": existing.to_string_lossy()},
             ],
             "queue": [
                 {"game_id": "g1", "skip": false},
@@ -139,6 +142,8 @@ mod tests {
     #[tokio::test]
     async fn app_state_job_submit_and_transact() {
         let dir = tempfile::tempdir().unwrap();
+        let rom = dir.path().join("quake.rom");
+        std::fs::write(&rom, b"rom").unwrap();
         let app = AppState::new(
             Some(dir.path().to_path_buf()),
             dir.path().to_path_buf(),
@@ -148,7 +153,7 @@ mod tests {
             st["games"].as_array_mut().unwrap().push(json!({
                 "name": "Quake",
                 "platform": "PC",
-                "path": "/bin/true"
+                "path": rom.to_string_lossy()
             }));
             Ok(())
         })

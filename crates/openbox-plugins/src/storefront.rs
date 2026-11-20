@@ -258,7 +258,7 @@ pub fn clean_launch(command: &str) -> Result<String, String> {
     if LAUNCH_INTERPRETERS.contains(&name.as_str()) || name.starts_with("python") {
         return Err("Plugin launch command cannot start a shell or interpreter.".to_owned());
     }
-    if executable.is_absolute()
+    if (executable.is_absolute() || executable.has_root())
         && let Some(parent) = executable.parent()
     {
         let p = parent.to_string_lossy().replace('\\', "/");
