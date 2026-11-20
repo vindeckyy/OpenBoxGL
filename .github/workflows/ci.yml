@@ -228,13 +228,13 @@ jobs:
       # once.
       - name: Set up Rust for universal macOS bundle
         if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
         if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Build the app bundle
         if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
@@ -435,10 +435,10 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Build Rust openbox-server
         run: cargo build --release --locked -p openbox-cli
@@ -496,10 +496,10 @@ jobs:
           cache-dependency-path: scripts/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Build Rust openbox-server
         run: cargo build --release --locked -p openbox-cli
@@ -566,12 +566,12 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Format check
         run: cargo fmt --all -- --check
@@ -612,10 +612,10 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Build Rust openbox-server
         run: cargo build --release --locked -p openbox-cli

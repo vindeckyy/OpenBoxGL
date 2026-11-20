@@ -46,12 +46,12 @@ jobs:
             xdg-utils
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Compile native host
         run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
@@ -242,10 +242,10 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -364,10 +364,10 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -505,12 +505,12 @@ jobs:
       # hardened runtime and notarizes and staples the bundle (ADR 0094). Without them it
       # stays ad-hoc, and the release notes say the bundle is not notarized.
       - name: Set up Rust for universal macOS bundle
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Build the macOS app bundle
         env:

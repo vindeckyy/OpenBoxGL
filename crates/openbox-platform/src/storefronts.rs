@@ -157,9 +157,10 @@ mod windows_reg_impl {
                     vidx += 1;
                     let vname = String::from_utf16_lossy(&vname_buf[..vname_len as usize]);
                     if vtype == REG_SZ || vtype == REG_EXPAND_SZ {
-                        let u16s: Vec<u16> = data_buf[..data_len as usize]
-                            .chunks_exact(2)
-                            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        let (chunks, _) = data_buf[..data_len as usize].as_chunks::<2>();
+                        let u16s: Vec<u16> = chunks
+                            .iter()
+                            .map(|&c| u16::from_le_bytes(c))
                             .take_while(|&w| w != 0)
                             .collect();
                         vals.insert(vname, String::from_utf16_lossy(&u16s));

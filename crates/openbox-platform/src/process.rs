@@ -494,13 +494,14 @@ mod windows_impl {
     use windows_sys::Win32::Foundation::{
         CloseHandle, FILETIME, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
     };
+    use windows_sys::Win32::Storage::FileSystem::SYNCHRONIZE;
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
         TH32CS_SNAPPROCESS,
     };
     use windows_sys::Win32::System::Threading::{
         GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
-        QueryFullProcessImageNameW, SYNCHRONIZE, TerminateProcess, WaitForSingleObject,
+        QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
     };
 
     pub struct ProcRow {
