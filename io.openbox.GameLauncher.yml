@@ -35,6 +35,12 @@ modules:
       - install -d /app/share/openbox/locales
       - for f in locales/*.json; do install -Dm644 "$f" "/app/share/openbox/locales/"; done
       - install -Dm644 assets/openbox-logo.png /app/share/openbox/assets/openbox-logo.png
+      - install -Dm644 openbox.svg /app/share/openbox/openbox.svg
+      - install -Dm644 openbox-release.pub /app/share/openbox/openbox-release.pub
+      - install -Dm644 assets/placeholder-cover.svg /app/share/openbox/assets/placeholder-cover.svg
+      - install -Dm644 assets/mame/scanlines.png /app/share/openbox/assets/mame/scanlines.png
+      - install -Dm644 assets/shaders/scanlines.slangp /app/share/openbox/assets/shaders/scanlines.slangp
+      - install -Dm644 LICENSE /app/share/openbox/LICENSE
       - install -Dm644 plugins/catalog.json /app/share/openbox/plugins/catalog.json
       - install -d /app/share/openbox/emulator_defs
       - for f in emulator_defs/*.yaml; do install -Dm644 "$f" "/app/share/openbox/emulator_defs/"; done

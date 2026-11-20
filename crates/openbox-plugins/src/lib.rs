@@ -196,6 +196,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let pkg = tmp.path().join("demo.native");
         fs::create_dir_all(&pkg).unwrap();
+        #[cfg(windows)]
+        let (entry_name, script_body) = (
+            "run.cmd",
+            "@echo off\r\necho {\"id\":\"1\",\"type\":\"result\",\"result\":{\"ok\":true,\"data\":{\"ran\":1}}}\r\n",
+        );
+        #[cfg(not(windows))]
+        let (entry_name, script_body) = (
+            "run.sh",
+            "#!/bin/sh\nread line\necho '{\"id\":\"1\",\"type\":\"result\",\"result\":{\"ok\":true,\"data\":{\"ran\":1}}}'\n",
+        );
         fs::write(
             pkg.join("plugin.json"),
             serde_json::to_string_pretty(&json!({
@@ -203,19 +213,15 @@ mod tests {
                 "name": "Native v2",
                 "version": "1.0.0",
                 "api_version": 2,
-                "entry": "run.sh",
+                "entry": entry_name,
                 "hooks": ["command"],
                 "commands": [{"id": "ping", "label": "Ping"}]
             }))
             .unwrap(),
         )
         .unwrap();
-        let script = pkg.join("run.sh");
-        fs::write(
-            &script,
-            "#!/bin/sh\nread line\necho '{\"id\":\"1\",\"type\":\"result\",\"result\":{\"ok\":true,\"data\":{\"ran\":1}}}'\n",
-        )
-        .unwrap();
+        let script = pkg.join(entry_name);
+        fs::write(&script, script_body).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

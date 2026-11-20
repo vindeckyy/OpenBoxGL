@@ -40,6 +40,10 @@ say "== 1/8 Universal openbox-server =="
 if [ -n "${OPENBOX_SERVER_BIN:-}" ] && [ -x "${OPENBOX_SERVER_BIN}" ]; then
   cp "$OPENBOX_SERVER_BIN" "$work_root/openbox-server"
 else
+  if command -v rustup >/dev/null 2>&1; then
+    rustup target add aarch64-apple-darwin x86_64-apple-darwin
+  fi
+  export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
   cargo build --release --locked -p openbox-cli --target aarch64-apple-darwin \
     || die "aarch64-apple-darwin Rust build failed."
   cargo build --release --locked -p openbox-cli --target x86_64-apple-darwin \

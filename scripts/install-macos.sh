@@ -23,7 +23,7 @@ trap 'rm -rf -- "$TMP_DIR"' EXIT
 say() { printf '\033[1;32m%s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
 fetch() {
-  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --output "$1" "$2"
+  curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location --output "$2" "$1"
 }
 
 [ "$(uname -s)" = "Darwin" ] || die "this installer installs the macOS app bundle."

@@ -1,6 +1,6 @@
 //! Atomic filesystem writes, directory fsync, and bounded downloads mirroring `backend_io.py`.
 
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -17,7 +17,7 @@ pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 pub fn fsync_directory(dir: &Path) {
     #[cfg(unix)]
     {
-        if let Ok(f) = File::open(dir) {
+        if let Ok(f) = fs::File::open(dir) {
             let _ = f.sync_all();
         }
     }

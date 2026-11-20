@@ -537,10 +537,49 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
+
       - name: Build the ARM64 WebView2 native host
         shell: pwsh
         run: |
           scripts/build_native_host_windows.ps1 -Architecture arm64
+
+      - name: Build ARM64 Rust openbox-server
+        shell: pwsh
+        run: |
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            $candidates = @('C:\Program Files\LLVM\bin')
+            if (${env:ProgramFiles(x86)}) {
+              $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+              if (Test-Path -LiteralPath $vswhere) {
+                $vs = (& $vswhere -latest -products * -property installationPath | Select-Object -First 1)
+                if ($vs) {
+                  $candidates += @(
+                    (Join-Path $vs 'VC\Tools\Llvm\ARM64\bin'),
+                    (Join-Path $vs 'VC\Tools\Llvm\x64\bin'),
+                    (Join-Path $vs 'VC\Tools\Llvm\bin')
+                  )
+                }
+              }
+            }
+            foreach ($dir in $candidates) {
+              if (Test-Path -LiteralPath (Join-Path $dir 'clang.exe')) {
+                $env:PATH = "$dir;$env:PATH"
+                break
+              }
+            }
+          }
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            throw "clang.exe was not found on PATH, C:\Program Files\LLVM\bin, or Visual Studio LLVM tools; required by ring on aarch64-pc-windows-msvc"
+          }
+          clang --version
+          rustup target add aarch64-pc-windows-msvc
+          cargo build --release --locked -p openbox-cli --target aarch64-pc-windows-msvc
+          .\target\aarch64-pc-windows-msvc\release\openbox-server.exe --dump-contracts | Out-Null
 
       - name: Run test suite
         run: python -B scripts/run_windows_tests.py

@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 - **Opening a library does not migrate it.** Schema 7 opens. Schema 6 and older raise `STATE_SCHEMA_TOO_OLD` and the file is left unchanged. `openbox --migrate-library` is the only writer that upgrades a schema 6 library. Schema 1–5 names OpenBox 2.1 as the build that can bring the library forward.
-- **Python 3.11 is the floor.** Source launches on 3.10 stop before bind. CI runs 3.11 and 3.12. The release container stays `ubuntu:22.04` and pins CPython `3.12.16-1+jammy1` so the AppImage's highest glibc symbol stays `GLIBC_2.35`.
+- **Python 3.11 is the floor.** Source launches and Python v2 plugins on 3.10 stop before bind. CI runs 3.11 and 3.12. The release container stays `ubuntu:22.04` to compile `openbox-server` and `native_host` with a `GLIBC_2.35` floor and zero bundled CPython.
 - **State machines are declared once (ADR 0107).** `pkg/state/machines.py` lists every lifecycle (operations, legacy jobs, facades, sessions, previews, storefront scans, media queue, and the declared-only UI machines) with its states and allowed transitions; the operation service validates against that table, and the UI pollers share one set of job-state literals instead of re-declaring them. `legacy_job` is exposed only through `/api/v2/jobs`.
 
 ### Removed

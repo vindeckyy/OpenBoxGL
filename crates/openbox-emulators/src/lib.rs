@@ -111,7 +111,25 @@ mod tests {
             repo = repo_root.to_string_lossy(),
             rh = rust_hash,
         );
-        let out = std::process::Command::new("python3")
+        let python = if cfg!(windows) {
+            ["python", "python3"]
+        } else {
+            ["python3", "python"]
+        }
+        .into_iter()
+        .find(|cand| {
+            std::process::Command::new(cand)
+                .arg("--version")
+                .output()
+                .map(|o| {
+                    o.status.success()
+                        && String::from_utf8_lossy(&o.stdout).starts_with("Python 3.")
+                })
+                .unwrap_or(false)
+        })
+        .expect("python 3 must be available on PATH");
+        let out = std::process::Command::new(python)
+            .env("PYTHONUTF8", "1")
             .args(["-B", "-c", &py])
             .output()
             .unwrap();
@@ -153,13 +171,23 @@ mod tests {
     #[test]
     fn launch_engine_starts_tracks_and_stops_real_process() {
         let dir = tempfile::tempdir().unwrap();
-        let script = dir.path().join("fake_game.sh");
-        std::fs::write(&script, "#!/bin/sh\nsleep 2\n").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        #[cfg(windows)]
+        let script = {
+            let p = dir.path().join("fake_game.cmd");
+            std::fs::write(&p, "@echo off\r\nping -n 10 127.0.0.1 >nul\r\n").unwrap();
+            p
+        };
+        #[cfg(not(windows))]
+        let script = {
+            let p = dir.path().join("fake_game.sh");
+            std::fs::write(&p, "#!/bin/sh\nsleep 2\n").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            p
+        };
         let app = openbox_runtime::AppState::new(
             Some(dir.path().join("data")),
             dir.path().to_path_buf(),
@@ -181,7 +209,12 @@ mod tests {
 
         let ctrl = control_game_session(&app, &lid, "kill").unwrap();
         assert_eq!(ctrl["ok"], json!(true));
-        std::thread::sleep(std::time::Duration::from_millis(250));
+        for _ in 0..40 {
+            if app.registry.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         assert!(app.registry.is_empty());
         let after = app.load_state().unwrap();
         assert_eq!(after["history"].as_array().unwrap().len(), 1);

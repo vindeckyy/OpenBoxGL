@@ -99,6 +99,7 @@ jobs:
       # WebKit headers, as it did on the host.
       - name: Install container tools
         run: |
+          set -euo pipefail
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates git python3 curl gnupg \
@@ -107,7 +108,7 @@ jobs:
             libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
           # Build the standalone Rust openbox-server inside ubuntu:22.04 so its
           # highest GLIBC symbol stays <= GLIBC_2.35 (ADR 0065, ADR 0115).
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           # The checkout belongs to the runner user; git refuses it as root without this.
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -396,18 +397,39 @@ jobs:
       - name: Build ARM64 Rust openbox-server
         shell: pwsh
         run: |
-          cargo build --release --locked -p openbox-cli
-          Copy-Item -LiteralPath 'target/release/openbox-server.exe' -Destination 'openbox-server.exe' -Force
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            $candidates = @('C:\Program Files\LLVM\bin')
+            if (${env:ProgramFiles(x86)}) {
+              $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+              if (Test-Path -LiteralPath $vswhere) {
+                $vs = (& $vswhere -latest -products * -property installationPath | Select-Object -First 1)
+                if ($vs) {
+                  $candidates += @(
+                    (Join-Path $vs 'VC\Tools\Llvm\ARM64\bin'),
+                    (Join-Path $vs 'VC\Tools\Llvm\x64\bin'),
+                    (Join-Path $vs 'VC\Tools\Llvm\bin')
+                  )
+                }
+              }
+            }
+            foreach ($dir in $candidates) {
+              if (Test-Path -LiteralPath (Join-Path $dir 'clang.exe')) {
+                $env:PATH = "$dir;$env:PATH"
+                break
+              }
+            }
+          }
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            throw "clang.exe was not found on PATH, C:\Program Files\LLVM\bin, or Visual Studio LLVM tools; required by ring on aarch64-pc-windows-msvc"
+          }
+          clang --version
+          rustup target add aarch64-pc-windows-msvc
+          cargo build --release --locked -p openbox-cli --target aarch64-pc-windows-msvc
+          Copy-Item -LiteralPath 'target/aarch64-pc-windows-msvc/release/openbox-server.exe' -Destination 'openbox-server.exe' -Force
           if (-not (Test-Path -LiteralPath openbox-server.exe)) {
             throw "openbox-server.exe was not produced"
           }
           .\openbox-server.exe --dump-contracts | Out-Null
-
-      - name: Generate the ARM64 SBOM
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          python -B scripts/gen_sbom.py --no-stdlib --version $version --out "OpenBox-$version-arm64-windows-sbom.json"
 
       - name: Package the portable release
         shell: pwsh
@@ -443,6 +465,12 @@ jobs:
           Copy-Item -LiteralPath 'native_host.exe' -Destination $hostAsset -Force
           $hostDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $hostAsset).Hash.ToLower()
           "$hostDigest  $hostAsset" | Set-Content -LiteralPath "$hostAsset.sha256" -Encoding ascii -NoNewline
+
+      - name: Generate the ARM64 SBOM
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          python -B scripts/gen_sbom.py --no-stdlib --version $version --out "OpenBox-$version-arm64-windows-sbom.json"
 
       - name: Upload unsigned build outputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7.0.2

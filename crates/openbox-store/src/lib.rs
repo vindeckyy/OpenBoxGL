@@ -183,6 +183,24 @@ mod tests {
         std::fs::write(&rom1, b"snes").unwrap();
         std::fs::write(&rom2, b"#!/bin/sh\n").unwrap();
 
+        let python = if cfg!(windows) {
+            ["python", "python3"]
+        } else {
+            ["python3", "python"]
+        }
+        .into_iter()
+        .find(|cand| {
+            std::process::Command::new(cand)
+                .arg("--version")
+                .output()
+                .map(|o| {
+                    o.status.success()
+                        && String::from_utf8_lossy(&o.stdout).starts_with("Python 3.")
+                })
+                .unwrap_or(false)
+        })
+        .expect("python 3 must be available on PATH");
+
         // 1. Python writes a v7 library with Unicode title, real ROM path, and active session
         let py_write = format!(
             "import sys; sys.path.insert(0, {repo:?}); \
@@ -197,7 +215,8 @@ mod tests {
             prim = primary.to_string_lossy(),
             rom1 = rom1.to_string_lossy(),
         );
-        let out = std::process::Command::new("python3")
+        let out = std::process::Command::new(python)
+            .env("PYTHONUTF8", "1")
             .args(["-B", "-c", &py_write])
             .output()
             .expect("python3 must run");
@@ -256,7 +275,8 @@ mod tests {
             gid = py_gid,
             d = dir.path().to_string_lossy(),
         );
-        let out2 = std::process::Command::new("python3")
+        let out2 = std::process::Command::new(python)
+            .env("PYTHONUTF8", "1")
             .args(["-B", "-c", &py_verify])
             .output()
             .expect("python3 verify must run");

@@ -47,7 +47,7 @@ if [ "$arch" = "x86_64" ]; then
 else
   sbom_name="OpenBox-$VERSION-$arch-sbom.json"
 fi
-python3 scripts/gen_sbom.py --version "$VERSION" --appdir "$temporary/OpenBox.AppDir" --out "$sbom_name"
+python3 scripts/gen_sbom.py --no-stdlib --version "$VERSION" --appdir "$temporary/OpenBox.AppDir" --out "$sbom_name"
 
 echo "== 5/6 checksum + signature =="
 sha256sum "$appimage" | tee "$appimage.sha256"

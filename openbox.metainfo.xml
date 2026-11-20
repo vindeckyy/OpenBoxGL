@@ -47,7 +47,7 @@
         <p>OpenBox 3.0 ("The Rust-y Box") migrates the backend to a standalone native Rust server (openbox-server), cutting memory nearly 3x, accelerating every library endpoint, and graduating the formal scale to 50,000 games while keeping library.json schema 7 unchanged. It also polishes the desktop UI across the library grid, sidebar, details pane, searchable Tools menu, dialogs, and Big Box, removes Python 3.10, plugin API v1, and --rollback-library, and adds Save Vault, Achievement Trail, Deal Radar, Player's Log Time Capsules and Milestone Cards, and Backlog Itinerary.</p>
       </description>
     </release>
-    <release version="2.1.0" date="2026-12-09">
+    <release version="2.1.0" date="2026-11-02">
       <url>https://github.com/vindeckyy/OpenBoxGL/releases/tag/v2.1.0</url>
       <description>
         <p>OpenBox 2.1 makes the 2.0 contracts the only contracts: /api/v1 and unversioned public API paths are gone, the native windows use /api/host, backups write format 2 only (format 1 still restores), and the library schema stays at 7 with no migration.</p>
