@@ -40,11 +40,73 @@ mod tests {
         let doc: Value = serde_json::from_str(&raw).expect("valid json");
         let cases = doc["cases"].as_array().expect("cases array");
         assert!(cases.len() >= 10);
+
+        #[cfg(not(windows))]
         for case in cases {
             let input = case["input"].as_object().expect("input obj");
             let expected_id = case["game_id"].as_str().expect("game_id str");
             let actual_id = stable_game_id(input);
             assert_eq!(actual_id, expected_id, "mismatch for input {input:?}");
+        }
+
+        // `tests/golden/game_ids.json` was generated on POSIX (`os.path.normpath`);
+        // on Windows both Python `state_store._stable_game_id` and Rust apply
+        // `ntpath.normcase(ntpath.normpath(...))`, so verify pathless cases against
+        // the golden file AND every case live against Python `state_store._stable_game_id`.
+        #[cfg(windows)]
+        {
+            let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap();
+            let python = ["python", "python3"]
+                .into_iter()
+                .find(|cand| {
+                    std::process::Command::new(cand)
+                        .arg("--version")
+                        .output()
+                        .map(|o| {
+                            o.status.success()
+                                && String::from_utf8_lossy(&o.stdout).starts_with("Python 3.")
+                        })
+                        .unwrap_or(false)
+                })
+                .expect("python 3 must be available on PATH");
+            let script = format!(
+                "import json, sys; sys.path.insert(0, {repo:?}); \
+                 from state_store import _stable_game_id; \
+                 cases = json.load(open({fix:?}, encoding='utf-8'))['cases']; \
+                 print(json.dumps([_stable_game_id(c['input']) for c in cases]))",
+                repo = repo_root.to_string_lossy(),
+                fix = fixture_path.to_string_lossy(),
+            );
+            let out = std::process::Command::new(python)
+                .env("PYTHONUTF8", "1")
+                .args(["-B", "-c", &script])
+                .output()
+                .expect("python must run");
+            assert!(
+                out.status.success(),
+                "python _stable_game_id failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let py_ids: Vec<String> = serde_json::from_slice(&out.stdout).expect("valid json ids");
+            assert_eq!(py_ids.len(), cases.len());
+            for (case, py_id) in cases.iter().zip(py_ids.iter()) {
+                let input = case["input"].as_object().expect("input obj");
+                let actual_id = stable_game_id(input);
+                assert_eq!(&actual_id, py_id, "Windows parity mismatch for {input:?}");
+                let has_path = input
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .map(|s| !s.trim().is_empty())
+                    .unwrap_or(false);
+                if !has_path {
+                    let expected_id = case["game_id"].as_str().expect("game_id str");
+                    assert_eq!(actual_id, expected_id, "pathless mismatch for {input:?}");
+                }
+            }
         }
     }
 
