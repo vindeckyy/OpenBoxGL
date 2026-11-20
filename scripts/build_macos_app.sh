@@ -40,9 +40,9 @@ say "== 1/8 Universal openbox-server =="
 if [ -n "${OPENBOX_SERVER_BIN:-}" ] && [ -x "${OPENBOX_SERVER_BIN}" ]; then
   cp "$OPENBOX_SERVER_BIN" "$work_root/openbox-server"
 else
-  cargo build --release -p openbox-cli --target aarch64-apple-darwin \
+  cargo build --release --locked -p openbox-cli --target aarch64-apple-darwin \
     || die "aarch64-apple-darwin Rust build failed."
-  cargo build --release -p openbox-cli --target x86_64-apple-darwin \
+  cargo build --release --locked -p openbox-cli --target x86_64-apple-darwin \
     || die "x86_64-apple-darwin Rust build failed."
   lipo -create \
     "$source_root/target/aarch64-apple-darwin/release/openbox-server" \

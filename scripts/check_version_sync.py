@@ -127,8 +127,13 @@ def main() -> int:
     if release_notes_path.is_file():
         release_notes = release_notes_path.read_text(encoding="utf-8")
         first_line = release_notes.splitlines()[0] if release_notes.splitlines() else ""
-        if first_line != f"# OpenBox {version}":
-            print(f"RELEASE_NOTES.md: first line is {first_line!r}, expected '# OpenBox {version}'")
+        expected_prefix = f"# OpenBox {version}"
+        if not (
+            first_line == expected_prefix
+            or first_line.startswith(f"{expected_prefix}: ")
+            or first_line.startswith(f"{expected_prefix} - ")
+        ):
+            print(f"RELEASE_NOTES.md: first line is {first_line!r}, expected '{expected_prefix}' (or '{expected_prefix}: <title>')")
             failures.append("RELEASE_NOTES heading")
         if f"...v{version}" not in release_notes and f"v{version}" not in release_notes:
             print(f"RELEASE_NOTES.md: compare link does not mention v{version}")

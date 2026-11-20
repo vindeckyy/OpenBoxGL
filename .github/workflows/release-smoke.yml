@@ -149,6 +149,7 @@ jobs:
           python -B ..\scripts\verify_release.py --key ..\openbox-release.pub $name "$name.sig"
           Expand-Archive -LiteralPath $name -DestinationPath extracted
           if (-not (Test-Path 'extracted\OpenBox\native_host.exe')) { throw 'native_host.exe missing from the zip' }
+          if (-not (Test-Path 'extracted\OpenBox\openbox-server.exe')) { throw 'openbox-server.exe missing from the zip' }
 
       - name: Serve the web app headless
         shell: pwsh
@@ -156,7 +157,8 @@ jobs:
           OPENBOX_DATA_DIR: ${{ runner.temp }}\data-web
         run: |
           New-Item -ItemType Directory -Force -Path $env:OPENBOX_DATA_DIR | Out-Null
-          $web = Start-Process -FilePath python -ArgumentList '-B','smoke\extracted\OpenBox\web_app.py','--no-browser' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\web.out" -RedirectStandardError "$env:RUNNER_TEMP\web.err"
+          $env:OPENBOX_ROOT = (Resolve-Path 'smoke\extracted\OpenBox').Path
+          $web = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\openbox-server.exe" -ArgumentList '--no-browser' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\web.out" -RedirectStandardError "$env:RUNNER_TEMP\web.err"
           $url = $null
           for ($i = 0; $i -lt 90 -and -not $url; $i++) {
             Start-Sleep -Seconds 1
@@ -177,9 +179,9 @@ jobs:
           OPENBOX_DATA_DIR: ${{ runner.temp }}\data-native
         run: |
           New-Item -ItemType Directory -Force -Path $env:OPENBOX_DATA_DIR | Out-Null
-          # The launcher sets these before it starts the host (openbox-native.ps1); the host needs them.
-          $env:OPENBOX_WEB_APP = (Resolve-Path 'smoke\extracted\OpenBox\web_app.py').Path
-          $env:OPENBOX_PYTHON = (Get-Command python).Source
+          # The launcher sets these before it starts the host (openbox-native.ps1).
+          $env:OPENBOX_ROOT = (Resolve-Path 'smoke\extracted\OpenBox').Path
+          $env:OPENBOX_SERVER_BIN = (Resolve-Path 'smoke\extracted\OpenBox\openbox-server.exe').Path
           $host_proc = Start-Process -FilePath "$PWD\smoke\extracted\OpenBox\native_host.exe" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\host.out" -RedirectStandardError "$env:RUNNER_TEMP\host.err"
           Start-Sleep -Seconds 25
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
@@ -272,6 +274,10 @@ jobs:
             echo "the bundle has no native host" >&2
             exit 1
           }
+          test -x "extracted/OpenBox.app/Contents/MacOS/openbox-server" || {
+            echo "the bundle has no Rust openbox-server binary" >&2
+            exit 1
+          }
 
       - name: Serve the web app headless
         env:
@@ -279,7 +285,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$OPENBOX_DATA_DIR"
-          python3 -B "smoke/extracted/OpenBox.app/Contents/Resources/openbox/web_app.py" --no-browser \
+          OPENBOX_ROOT="$PWD/smoke/extracted/OpenBox.app/Contents/Resources/openbox" \
+            "smoke/extracted/OpenBox.app/Contents/MacOS/openbox-server" --no-browser \
             > "$RUNNER_TEMP/web.out" 2> "$RUNNER_TEMP/web.err" &
           web_pid=$!
           url=""

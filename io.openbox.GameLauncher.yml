@@ -27,7 +27,8 @@ modules:
   - name: openbox
     buildsystem: simple
     build-commands:
-      - mkdir -p /app/share/openbox
+      - mkdir -p /app/bin /app/share/openbox
+      - if [ -x openbox-server ]; then install -Dm755 openbox-server /app/share/openbox/openbox-server && ln -sf ../share/openbox/openbox-server /app/bin/openbox-server; fi
       - while IFS= read -r f; do [ -n "$f" ] || continue; install -Dm644 "$f" "/app/share/openbox/$f"; done < runtime_modules.txt
       - install -Dm644 index.html /app/share/openbox/index.html
       - for f in static/*.js static/*.css; do install -Dm644 "$f" "/app/share/openbox/$f"; done

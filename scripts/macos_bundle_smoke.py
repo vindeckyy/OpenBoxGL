@@ -2,10 +2,10 @@
 """Smoke test for the macOS app bundle.
 
 Checks the four things that break silently when the bundle is assembled
-wrong: the bundled interpreter, the runtime payload, the loopback server the
-host boots, and the host's own self test. The bundle is also exercised from a
-path with a space in it, because a bundle that only works in the build
-directory is not a bundle.
+wrong: the universal Rust openbox-server binary, the runtime payload, the
+loopback server the host boots, and the host's own self test. The bundle is
+also exercised from a path with a space in it, because a bundle that only
+works in the build directory is not a bundle.
 """
 
 from __future__ import annotations
@@ -29,45 +29,67 @@ def fail(message: str) -> NoReturn:
 
 
 def bundle_paths(bundle: Path) -> tuple[Path, Path, Path]:
-    interpreter = bundle / "Contents/Resources/python/bin/python3"
+    server = bundle / "Contents/MacOS/openbox-server"
     share = bundle / "Contents/Resources/openbox"
     host = bundle / "Contents/MacOS/OpenBox"
-    return interpreter, share, host
+    return server, share, host
 
 
-def check_interpreter(interpreter: Path) -> None:
-    if not interpreter.is_file():
-        fail(f"the bundle has no interpreter at {interpreter}")
+def check_server_binary(bundle: Path) -> None:
+    server, share, _host = bundle_paths(bundle)
+    if not server.is_file() or not os.access(server, os.X_OK):
+        fail(f"the bundle has no executable openbox-server at {server}")
+    bundled_python = bundle / "Contents/Resources/python"
+    if bundled_python.exists():
+        fail(f"unexpected bundled Python runtime found at {bundled_python}")
+    if not (share / "index.html").is_file():
+        fail(f"the bundle has no frontend index.html at {share / 'index.html'}")
     result = subprocess.run(
-        [str(interpreter), "-B", "-c", "import ssl, sqlite3, json, plistlib, urllib.request"],
+        [str(server), "--dump-contracts"],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=30,
         check=False,
     )
     if result.returncode != 0:
-        fail(f"the bundled interpreter cannot import the standard library: {result.stderr.strip()}")
+        fail(f"openbox-server --dump-contracts failed: {result.stderr.strip()}")
+    try:
+        contracts = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        fail(f"openbox-server --dump-contracts produced invalid JSON: {exc}")
+    if not contracts.get("routes") and not contracts.get("public_routes"):
+        fail("openbox-server --dump-contracts returned empty route contracts")
+    if not os.environ.get("OPENBOX_SERVER_BIN"):
+        archs = subprocess.run(
+            ["lipo", "-archs", str(server)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if archs.returncode != 0:
+            fail(f"lipo -archs failed on openbox-server: {archs.stderr.strip()}")
+        slices = set(archs.stdout.strip().split())
+        if not {"arm64", "x86_64"}.issubset(slices):
+            fail(f"openbox-server is not universal (arm64 + x86_64): got {sorted(slices)}")
 
 
 def check_server(bundle: Path) -> None:
-    interpreter, share, _host = bundle_paths(bundle)
-    web_app = share / "web_app.py"
-    if not web_app.is_file():
-        fail(f"the bundle has no runtime payload at {web_app}")
+    server, share, _host = bundle_paths(bundle)
+    if not server.is_file():
+        fail(f"the bundle has no server binary at {server}")
     with tempfile.TemporaryDirectory(prefix="openbox-macos-smoke.") as directory:
         data_dir = Path(directory)
         environment = dict(os.environ)
         environment["OPENBOX_DATA_DIR"] = str(data_dir)
+        environment["OPENBOX_ROOT"] = str(share)
         environment["OPENBOX_NATIVE_HOST"] = "1"
-        environment["PYTHONPATH"] = str(share)
-        certificate = share / "cacert.pem"
-        if certificate.is_file():
-            environment["SSL_CERT_FILE"] = str(certificate)
         process = subprocess.Popen(
-            [str(interpreter), "-B", str(web_app), "--no-browser"],
+            [str(server), "--no-browser"],
             env=environment,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
             start_new_session=True,
         )
         try:
@@ -78,15 +100,19 @@ def check_server(bundle: Path) -> None:
                 if port_file.is_file() and token_file.is_file():
                     break
                 if process.poll() is not None:
-                    fail("the bundled server exited before it published its port")
+                    stderr = process.stderr.read().strip() if process.stderr else ""
+                    fail(f"the bundled server exited before publishing its port: {stderr}")
                 time.sleep(0.1)
             else:
                 fail("the bundled server did not boot within 30 seconds")
             port = port_file.read_text(encoding="utf-8").strip()
             token = token_file.read_text(encoding="utf-8").strip()
             request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/api/v2/native/capabilities",
-                headers={"X-OpenBox-Token": token},
+                f"http://127.0.0.1:{port}/api/host/capabilities",
+                headers={
+                    "X-OpenBox-Token": token,
+                    "X-OpenBox-API-Version": "2",
+                },
             )
             with urllib.request.urlopen(request, timeout=15) as response:
                 payload = json.loads(response.read().decode("utf-8"))
@@ -106,13 +132,14 @@ def check_server(bundle: Path) -> None:
 
 
 def check_host(bundle: Path) -> None:
-    _interpreter, _share, host = bundle_paths(bundle)
+    server, share, host = bundle_paths(bundle)
     if not host.is_file():
         fail(f"the bundle has no native host at {host}")
     with tempfile.TemporaryDirectory(prefix="openbox-macos-selftest.") as directory:
         environment = dict(os.environ)
         environment["OPENBOX_DATA_DIR"] = directory
-        environment["OPENBOX_PYTHON"] = str(bundle_paths(bundle)[0])
+        environment["OPENBOX_SERVER_BIN"] = str(server)
+        environment["OPENBOX_ROOT"] = str(share)
         result = subprocess.run(
             [str(host), "--selftest"],
             env=environment,
@@ -134,8 +161,8 @@ def main(argv: list[str]) -> int:
     bundle = Path(argv[1]).resolve()
     if not bundle.is_dir():
         fail(f"{bundle} is not a directory")
-    print("smoke: bundled interpreter")
-    check_interpreter(bundle_paths(bundle)[0])
+    print("smoke: bundled Rust server binary")
+    check_server_binary(bundle)
     print("smoke: bundled server")
     check_server(bundle)
     print("smoke: native host self test")
@@ -145,7 +172,7 @@ def main(argv: list[str]) -> int:
         moved = Path(directory) / "OpenBox.app"
         shutil.copytree(bundle, moved, symlinks=True)
         print("smoke: relocated bundle")
-        check_interpreter(bundle_paths(moved)[0])
+        check_server_binary(moved)
         check_server(moved)
 
     print("smoke: ok")

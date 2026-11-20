@@ -95,11 +95,12 @@ def test_appdir_structure():
         )
         assert appdir.is_dir(), "AppDir not extracted"
         assert (appdir / "AppRun").is_file(), "missing AppRun"
-        assert (appdir / "usr" / "bin" / "python3").is_file(), "missing bundled python3"
+        assert (appdir / "usr" / "bin" / "openbox-server").exists(), "missing bundled openbox-server symlink"
         share = appdir / "usr" / "share" / "openbox"
         assert share.is_dir(), "missing openbox data dir"
-        missing = [module for module in PYTHON_MODULES if not (share / module).is_file()]
-        assert not missing, f"missing runtime modules in AppImage: {', '.join(missing)}"
+        assert (share / "openbox-server").is_file(), "missing bundled openbox-server binary"
+        assert (share / "plugin_runner_v2.py").is_file(), "missing plugin_runner_v2.py"
+        assert not (appdir / "usr" / "bin" / "python3").exists(), "unexpected bundled python3 in Rust AppImage"
         assert (share / "openbox-launcher.sh").is_file(), "missing keyboard launcher"
         for data in DATA_FILES:
             assert (share / data).is_file(), f"missing {data} in AppImage"
@@ -392,7 +393,8 @@ def test_windows_launchers():
         shutil.copy2(ROOT / "openbox.ps1", elsewhere / "openbox.ps1")
         result = _run_launcher(elsewhere / "openbox.ps1", ["--web"], elsewhere, local_app_data=elsewhere)
         assert result.returncode != 0
-        assert "web_app.py" in result.stdout + result.stderr
+        output = result.stdout + result.stderr
+        assert "OpenBox share files" in output or "web_app.py" in output, output
     print("  Windows launchers: ok")
 
 

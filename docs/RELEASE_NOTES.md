@@ -1,86 +1,119 @@
-# OpenBox 3.0.0
+# OpenBox 3.0.0: The Rust-y Box
 
-**OpenBox 3.0 keeps your library in one JSON file and removes the three bridges 2.1 scheduled for this release, while adding five player-focused features without changing schema 7 or adding any runtime dependency. The formal scale stays 20,000 games.**
+**OpenBox 3.0 ("The Rust-y Box") replaces the Python backend with a standalone native Rust server (`openbox-server`), delivers dramatic speed and memory upgrades across every library size up to 50,000 games, polishes the desktop UI from top to bottom, and adds five new player features without changing `library.json` schema 7.**
 
-A library that is already schema 7 opens unchanged. Nothing in the file format moved: schema 7, backup format 2, sync format 3, and `/api/v2` are the same contracts 2.1 shipped. A 2.1 build can open a 3.0 library. A 3.0 build does not upgrade an older library just because you opened it.
+Your existing schema 7 library opens unchanged with zero migration. A 2.1 build can still open a 3.0 library, every `/api/v2` and `/api/host` contract stays intact, and release packages for Linux, Windows, and macOS now ship the native Rust binary directly with no bundled Python runtime.
 
-The complete list is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), and the code changes are in [v2.1.0...v3.0.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.1.0...v3.0.0). The upgrade steps are in [upgrade-3.0.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/upgrade-3.0.md).
+The complete list of changes is in [CHANGELOG.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/CHANGELOG.md), the code diff is in [v2.1.0...v3.0.0](https://github.com/vindeckyy/OpenBoxGL/compare/v2.1.0...v3.0.0), and upgrade steps for older libraries are in [upgrade-3.0.md](https://github.com/vindeckyy/OpenBoxGL/blob/master/docs/upgrade-3.0.md).
 
-## Three contract changes in 3.0
+## The Rust Migration and Performance Upgrades
 
-### 1. Opening a library no longer migrates it
+All 417 HTTP endpoints (413 public `/api/v2/*` routes plus 4 `/api/host/*` native-window routes) and all core storage, search, emulator launch, metadata, sync, and plugin host subsystems now run natively in Rust (`openbox-server`, ADR 0115).
 
-- **Schema 7 opens as it is.** There is no new library format in this release.
-- **Schema 6 waits for `openbox --migrate-library`.** Startup, including crash recovery, leaves the file byte for byte. The command still writes `library.v6.backup.json` before it replaces the primary file.
-- **Schema 1 through 5 needs OpenBox 2.1 first.** Open that library once on 2.1, then install 3.0, or stay on 2.1. 3.0 will not rewrite those files.
-- **The error is `STATE_SCHEMA_TOO_OLD`.** The UI explains it. Nothing was changed.
+- **50,000-game scale graduation (ADR 0116):** The previous Python backend missed the 1,500 MB memory budget at 50,000 games (2,163.3 MB RSS). On Rust, a 50,000-game library finishes the full benchmark at **468.8 MB RSS** (31.3% of the budget), graduating OpenBox's formal supported scale from 20,000 to **50,000 games** while keeping `library.json` as the single human-readable canonical store.
+- **Nearly 3x less memory:** At 50,000 games, Rust uses **468.8 MB** vs Python's **1,281.9 MB** on the same machine (**2.73x lower RSS**). At 10,000 games it uses **113.4 MB**, and at 20,000 games it uses **204.1 MB**.
+- **Faster on every single server endpoint:** Streaming JSON and gzip projections, zero-copy cached payloads, in-place warm transactions, O(k) delta search, and a zero-allocation media probe cache beat Python across 10k, 20k, and 50k libraries on both median and p95 latency.
+- **No bundled Python runtime:** Linux AppImages, the Linux Flatpak, Windows portable zips, and the universal macOS `.app` bundle now run directly on `openbox-server`. Startup is faster and bundles carry zero embedded CPython runtime (host Python 3.11+ is only invoked on demand if you run `.py` v2 plugins).
 
-### 2. Rollback and the v1 plugin runner are gone
+### 50,000-Game Head-to-Head Benchmark (Same Machine, Python 3.0 vs Rust 3.0)
 
-- **`openbox --rollback-library` exits 4 and changes no file.** It names OpenBox 2.1.0 as the build that restores `library.v6.backup.json`. Copies already on disk are left where they are.
-- **The rollback button is gone.** `POST /api/v2/setup/migration/rollback` stays registered so old clients get a `409` with `ROLLBACK_REMOVED` instead of a missing route. It does not restore anything and it does not shut the app down.
-- **Plugins must say `"api_version": 2`.** A missing version and an explicit `1` both fail with `PLUGIN_API_RETIRED`. The message is `Plugin api_version is required and must be 2. OpenBox 3.0 removed the v1 runner.` The v2 JSON Lines protocol is unchanged.
+Measured on Linux x86_64 (AMD Ryzen 5 4600H, 16 GiB RAM, `scripts/perf_bench.py --sizes 10000,20000,50000 --runs 3 --memory`):
 
-### 3. Python 3.11 is the floor
+| Metric (p95) | Python 3.0 (`web_app.py`) | Rust 3.0 (`openbox-server`) | Upgrade |
+|---|---:|---:|---|
+| Server RSS after benchmark | 1,281.9 MB | **468.8 MB** | **2.73x less RAM** |
+| Favorite write mutation | 2,950.6 ms | **560.4 ms** | **5.27x faster** |
+| Bulk write mutation | 2,903.3 ms | **345.9 ms** | **8.39x faster** |
+| Cover media serving (`/api/v2/media`) | 2,346.9 ms | **0.4 ms** | **5,867x faster** |
+| Explorer facets (`/api/v2/explorer/facets`) | 2,998.0 ms | **21.1 ms** | **142.1x faster** |
+| Delta search (`/api/v2/library/delta`) | 41.3 ms | **0.5 ms** | **82.6x faster** |
+| Insights milestones (`/api/v2/insights/milestones`) | 2,599.9 ms | **157.5 ms** | **16.5x faster** |
+| Smart picker (`POST /api/v2/library/pick`) | 544.1 ms | **64.8 ms** | **8.40x faster** |
+| Paginated library (`offset=0&limit=500`) | 12.4 ms | **1.5 ms** | **8.27x faster** |
+| Constellation graph (`limit=400`) | 266.1 ms | **42.1 ms** | **6.32x faster** |
+| Full library transfer (gzip) | 5.9 ms | **4.8 ms** | **1.23x faster** |
 
-- **Source checkouts on Python 3.10 stop before the server binds.** The message names the interpreter you actually ran.
-- **3.12 is what the AppImage and the macOS bundle ship.** CI still tests 3.11 and 3.12. Do not use 3.12-only syntax.
-- **The AppImage is still built on Ubuntu 22.04** so the highest glibc symbol stays `GLIBC_2.35`. The build pins CPython `3.12.16-1+jammy1`.
+### 10,000- and 20,000-Game Highlights (`openbox-server`)
 
-## Five new features in 3.0
+| Library Size | Write p95 | Favorite p95 | Bulk p95 | Library gzip p95 | Library page p95 | Picker p95 | Constellation p95 | End RSS |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **10,000 games** | 110.6 ms | 110.0 ms | 70.2 ms | 1.3 ms | 1.3 ms | 14.6 ms | 13.8 ms | **113.4 MB** |
+| **20,000 games** | 220.7 ms | 216.1 ms | 144.6 ms | 2.4 ms | 1.3 ms | 27.1 ms | 19.6 ms | **204.1 MB** |
 
-### 1. Save Vault (`save-vault/`, ADR 0109)
+## UI and Usability Improvements
 
-- **Automatic or manual SHA-256 save snapshots.** Snapshot explicit `save_paths` and per-game discovered saves manually from the tabbed Save History dialog, automatically on game close (`save_vault_on_close`), or on a schedule (`save_vault_auto_days`). Automatic triggers exclude shared emulator roots (such as PCSX2 memory cards) unless explicitly added.
-- **Mandatory pre-restore safety snapshot.** Restoring any snapshot first captures live saves into an unpruned `pre-restore` safety snapshot; if that capture fails, restore aborts before touching disk (`VAULT_SAFETY_SNAPSHOT_FAILED`).
-- **Separate from `BACKUP_ITEMS`.** Snapshots live in `<data_dir>/save-vault/` so library ZIP backups remain bounded (`docs/backups.md`).
+Alongside the Rust migration, 3.0 includes a focused usability pass across the main library, sidebar, details pane, dialogs, and Big Box mode:
 
-### 2. Achievement Trail (offline RetroAchievements analytics, ADR 0110)
+- **More games above the fold:** Compacted the sticky library header into a single row (`94 px` down from `226 px`) by moving Artwork and Layout into a `Display` popover, auto-hid the drag-and-drop banner until files are actively dragged over the window, made `Jump back in` a slim dismissible strip, hid the redundant `PORTRAIT` group banner when all covers share one shape, and auto-collapsed the empty right Details pane until a game or collection is selected. On a `1280x720` laptop screen, 6 full game cards now sit completely above the fold (up from 0).
+- **Direct Settings and a searchable Tools menu:** Promoted **Settings** directly into the top bar, added a live `Filter tools...` search box with keyboard navigation at the top of the **Tools** menu, reorganized Tools into a 3-column layout so all 41 items fit inside a `1440x900` viewport without scrolling, and clarified tool labels and hints across all 5 locales.
+- **Focused Game Details pane:** Added a visible close (`x`) button and `Escape` shortcut to dismiss Details, kept the 4 primary actions upfront while moving secondary tools into a collapsible **More actions** section, removed the duplicate `Moments` button, hid blank `-` fields in `Information`, deduplicated read-only `Backlog` stats, and made **Save management** and **Launch check** collapsible cards (with Launch Check auto-expanding whenever an issue needs attention).
+- **Cleaner sidebar hierarchy:** Ordered the sidebar into `Search`, `View`, `Platforms`, `Categories`, `Playlists`, and a collapsed `More filters` section (tucking `ESRB`, `Source`, `Exclude`, and `Explorer` out of the way), and hid empty `Filter presets` and `Collections` walls until populated.
+- **Polished dialogs, list view, activity, and Big Box:**
+  - **Guided Setup:** Fixed sequential `1` through `6` step numbering, removed duplicated helper text on the source picker, and disabled `Continue` until at least one source is selected.
+  - **Edit Game:** Reorganized `Basics` into a compact 2-column layout with `Name` first and paired short fields.
+  - **Filters Drawer:** Switched smart toggles to a 2-column grid and pinned `Apply smart filters` in a sticky footer so it never clips.
+  - **Surprise Me Picker:** Picks a recommendation immediately on open and cycles suggestions when clicking `Another`.
+  - **Settings:** Pinned the header, category nav, sticky `Search settings` bar, and action footer; isolated `Remove all imported Steam games` inside a clear bottom danger zone.
+  - **Cards and List View:** Moved the hover star-rating bar to the top of card covers so it never overlaps badges, hid the grid-only `Display` menu in List view, and removed duplicated progress/rating pills from List view titles.
+  - **Activity Drawer:** Switched routine running job badges from red to a calm neutral pill (reserving red strictly for errors needing attention), compacted filters into a 2-column row, humanized internal job types, and removed redundant single-job `Grouped by run` duplicates.
+  - **Big Box:** Added a clickable `Exit` button in the top bar and fixed portrait cover image framing in Stage mode to eliminate the dark bottom chin.
 
-- Reads strictly from `cache/retroachievements/` and `cache/trail.json` with zero network calls during reads.
-- `game_progress` now stores `id`, `date_earned`, and `date_earned_hardcore` additively (older caches label `"no date data — refresh to populate"` honestly until refreshed).
-- Renders CSS-only 8-week unlock velocity charts, confidence-rated ETAs, 100-point milestones, and cheapest-first next-up queues in Insights and Game Details.
+## Five New Player Features in 3.0
 
-### 3. Deal Radar (opt-in Steam watchlist, ADR 0111)
+- **Save Vault (`save-vault/`, ADR 0109):** Automatic or manual SHA-256 save snapshots from the tabbed Save History dialog, on game close (`save_vault_on_close`), or on a schedule (`save_vault_auto_days`), with mandatory pre-restore safety snapshots and automatic exclusion of shared emulator roots.
+- **Achievement Trail (ADR 0110):** Offline RetroAchievements analytics over `cache/retroachievements/` with 8-week unlock velocity charts, confidence-rated ETAs, 100-point milestones, and cheapest-first next-up queues.
+- **Deal Radar (ADR 0111):** Opt-in (`deals_enabled=false` by default) Steam watchlist and manual price tracker restricted to `https://store.steampowered.com` with durable drop-notification tracking.
+- **Player's Log: Time Capsules and Milestone Cards (ADR 0112):** Sealed notes and questions that unlock on a chosen local date, plus 9 deterministic milestone kinds with offline 1200x630 PNG card export.
+- **Backlog Itinerary (ADR 0113):** Multi-week backlog planner with `quick-wins`, `comeback`, and `raided` strategies, IGDB and play-history hour estimates, RetroAchievements progress refinement, and live status tracking.
 
-- **Off by default (`deals_enabled=false`).** Zero outbound connections until you review the host disclosure (`https://store.steampowered.com`, AppID & search queries only) and opt in.
-- Redirects off `store.steampowered.com` are refused on every hop; manual entries track non-Steam deals with zero polling.
-- Drop/target notifications use durable `last_notified_price_cents` tracking independent of notification feed eviction.
+## Contract Changes in 3.0
 
-### 4. Player's Log — Time Capsules & Milestone Cards (ADR 0112)
-
-- Seal notes or questions until a chosen local calendar date (`YYYY-MM-DD`); bodies are stripped server-side from every API payload until `unlock_at` passes and unlock once on startup/hourly sweeps or explicit open. ("Sealed" hides content in the app and is not on-disk encryption.)
-- Derives 9 deterministic milestone kinds (game/library playtime, first clears, sessions, RA points/mastery, full-history play streaks, library age anniversaries, collection size) and exports offline 1200×630 PNG cards using the shared canvas renderer from `static/moments.js`.
-
-### 5. Backlog Itinerary (multi-week planner, ADR 0113)
-
-- Builds a dated weekly schedule from unfinished backlog games using `quick-wins`, `comeback`, or `raided` ordering, ignoring `"Abandoned"`, trashed, and hidden games.
-- Ranks estimates honestly (`IGDB` via bounded concurrency-2 job & 30-day `cache/igdb/` → `Own history` median from `>= 3` completed games → `Default` `8.0 h`) refined by RetroAchievements completion percentage, and derives live `done`/`on_track`/`behind`/`stale` statuses without cluttering settings.
+1. **Opening a library no longer migrates it:** Schema 7 opens unchanged. Schema 6 waits for `openbox --migrate-library` (writing `library.v6.backup.json` first). Schema 1 through 5 requires opening once on OpenBox 2.1 before upgrading to 3.0.
+2. **Rollback and plugin API v1 are removed:** `openbox --rollback-library` exits 4 without touching files (use 2.1.0 to restore a v6 backup). Plugins must declare `"api_version": 2`.
+3. **Lifecycles declared in one table (ADR 0107):** Background jobs, metadata sync, match preview, and launch audit share one unified state machine table.
+4. **Python 3.11+ floor for source runs and Python plugins:** Prebuilt 3.0 binaries run natively on Rust `openbox-server` without Python. Running from Python source (`OPENBOX_BACKEND=python`) or executing `.py` v2 plugins requires Python 3.11 or newer.
 
 | Contract | 2.1.0 | 3.0.0 |
 |---|---|---|
+| Server backend | Python (`web_app.py`) | Native Rust (`openbox-server`) |
+| Formal scale | 20,000 games | **50,000 games** |
 | Public API | `/api/v2` | `/api/v2` |
 | Native host channel | `/api/host` | `/api/host` |
 | Library schema | 7 | 7 (no migration on open) |
 | Backup format | Write 2, read 1 and 2 | Write 2, read 1 and 2 |
-| Plugin API | 2, with the v1 adapter | 2 only |
+| Plugin API | 2, with v1 adapter | 2 only |
 | Sync format | 3 | 3 |
 | Canonical store | `library.json` | `library.json` |
 
-Deleting `sqlite_readmodel.db` still loses nothing. The projection rebuilds from the JSON file.
+Deleting `sqlite_readmodel.db` still loses nothing. The projection rebuilds automatically from `library.json`.
 
-## Also in this release
+## Get OpenBox 3.0.0
 
-- **Lifecycles are declared in one table (ADR 0107).** Operations check that table. The jobs panel, metadata sync, and match job share one set of state names. `/api/metadata/status` reports a running sync as `job` and a running match as `match_job`, so one no longer clears the other's progress. Launch Audit stays on its running button while a run is `cancelling`.
-- **Five UI machines stay declared only.** Setup, the party wheel, the picker, Big Box overlays, and the repair wizard are listed and not enforced.
+| Platform | Download | Notes |
+|---|---|---|
+| Linux x86_64 | `OpenBox-x86_64.AppImage` | Native Rust binary; glibc 2.35 floor; zsync available |
+| Linux aarch64 | `OpenBox-aarch64.AppImage` | Native Rust binary; glibc 2.35 floor; zsync available |
+| Linux Flatpak | `OpenBox-x86_64.flatpak` | Native Rust binary; GNOME 51 runtime |
+| Windows x86_64 | `OpenBox-x86_64-windows.zip` | Includes native WebView2 host and `openbox-server.exe` |
+| Windows ARM64 | `OpenBox-arm64-windows.zip` | Includes ARM64 WebView2 host and `openbox-server.exe` |
+| macOS | `OpenBox-macos.zip` | Universal (`arm64` + `x86_64`) native host and `openbox-server`; ad-hoc signed |
 
-## Known limits
+On macOS, install with the signed installer:
 
-- The macOS bundle is ad-hoc signed. Notarization is unchanged.
-- Some features are Linux-only and hidden on Windows and macOS.
+```bash
+VERSION=3.0.0
+curl --proto '=https' --tlsv1.2 --fail --location \
+  --output install-macos.sh \
+  "https://github.com/vindeckyy/OpenBoxGL/releases/download/v${VERSION}/install-macos.sh"
+less install-macos.sh
+OPENBOX_RELEASE_TAG="v${VERSION}" bash install-macos.sh
+```
+
+On Windows, extract the release archive and run `OpenBox\scripts\install.ps1`. On Linux, use the AppImage, the Flatpak, or `scripts/install.sh`.
+
+## Known Limits
+
+- The macOS bundle is ad-hoc signed, so first launch and updates require Privacy & Security confirmation.
+- Linux-only features (such as Steam Game Mode / Gamescope and Flatpak management) remain hidden on Windows and macOS by design.
 - OpenBox 1.19 cannot read a schema 7 library.
-- Flathub is not submitted.
-
-## Not tagged
-
-The 50,000-game run on 2026-11-13 (Apple M4, Python 3.15.2) met the write budget and missed the RSS budget. Favorite mutation p95 was 1174.2 ms and bulk mutation p95 was 1319.5 ms, both under 1500 ms. Server RSS after the benchmark was 2163.3 MB, over the 1500 MB budget. The formal scale stays 20,000. Do not tag 3.0.0 on this measurement. No soak was run. The numbers are in `docs/development/PERF.md` and ADR 0108.
+- Flathub submission is tracked separately.

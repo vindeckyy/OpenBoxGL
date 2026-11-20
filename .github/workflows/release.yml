@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Install build dependencies
         run: |
@@ -44,10 +45,13 @@ jobs:
             binutils \
             xdg-utils
 
-      - name: Install Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --component rustfmt,clippy
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Compile native host
         run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
@@ -56,9 +60,11 @@ jobs:
         run: |
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
-          cargo build --release -p openbox-cli
+          cargo test --workspace --locked
+          cargo build --release --locked -p openbox-cli
           OPENBOX_CONTRACT_SOURCE=rust make ratchets
+          OPENBOX_CONTRACT_SOURCE=rust python3 -B scripts/check_csp.py
+          python3 -B scripts/diff_oracle.py --rust-bin target/release/openbox-server --suite all --verify-disk-state
 
       - name: Run test suite
         run: ./run_all_tests.sh
@@ -220,7 +226,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -234,6 +240,12 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # actions/setup-python@v7.1.0
         with:
           python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -266,11 +278,12 @@ jobs:
       - name: Build Rust openbox-server
         shell: pwsh
         run: |
-          cargo build --release -p openbox-cli
+          cargo build --release --locked -p openbox-cli
           Copy-Item -LiteralPath 'target/release/openbox-server.exe' -Destination 'openbox-server.exe' -Force
           if (-not (Test-Path -LiteralPath openbox-server.exe)) {
             throw "openbox-server.exe was not produced"
           }
+          .\openbox-server.exe --dump-contracts | Out-Null
 
       - name: Package the portable release
         shell: pwsh
@@ -279,7 +292,7 @@ jobs:
           # into %LOCALAPPDATA%\OpenBox\share\openbox in a single move.
           $root = Join-Path $env:RUNNER_TEMP 'OpenBox-windows/OpenBox'
           New-Item -ItemType Directory -Path $root -Force | Out-Null
-          $skip = @('.git', '.github', '.venv-dev', 'build', 'target', 'crates', 'tests', 'node_modules', '__pycache__', '.coverage')
+          $skip = @('.git', '.github', '.venv-dev', 'build', 'target', 'crates', 'Cargo.toml', 'Cargo.lock', 'tests', 'node_modules', '__pycache__', '.coverage')
           Get-ChildItem -Force -LiteralPath . |
             Where-Object { $skip -notcontains $_.Name } |
             ForEach-Object { Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $root }
@@ -335,7 +348,7 @@ jobs:
   # file names.
   build-windows-arm64:
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -349,6 +362,12 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # actions/setup-python@v7.1.0
         with:
           python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -377,11 +396,12 @@ jobs:
       - name: Build ARM64 Rust openbox-server
         shell: pwsh
         run: |
-          cargo build --release -p openbox-cli
+          cargo build --release --locked -p openbox-cli
           Copy-Item -LiteralPath 'target/release/openbox-server.exe' -Destination 'openbox-server.exe' -Force
           if (-not (Test-Path -LiteralPath openbox-server.exe)) {
             throw "openbox-server.exe was not produced"
           }
+          .\openbox-server.exe --dump-contracts | Out-Null
 
       - name: Generate the ARM64 SBOM
         shell: pwsh
@@ -394,7 +414,7 @@ jobs:
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'OpenBox-windows/OpenBox'
           New-Item -ItemType Directory -Path $root -Force | Out-Null
-          $skip = @('.git', '.github', '.venv-dev', 'build', 'target', 'crates', 'tests', 'node_modules', '__pycache__', '.coverage')
+          $skip = @('.git', '.github', '.venv-dev', 'build', 'target', 'crates', 'Cargo.toml', 'Cargo.lock', 'tests', 'node_modules', '__pycache__', '.coverage')
           Get-ChildItem -Force -LiteralPath . |
             Where-Object { $skip -notcontains $_.Name } |
             ForEach-Object { Copy-Item -Recurse -Force -LiteralPath $_.FullName -Destination $root }
@@ -438,7 +458,7 @@ jobs:
             OpenBox-*-arm64-windows-sbom.json
   build-macos:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     # The secrets context is not available in a step condition, so the
@@ -484,9 +504,13 @@ jobs:
       # With the Developer ID secrets set, the build signs with that identity under the
       # hardened runtime and notarizes and staples the bundle (ADR 0094). Without them it
       # stays ad-hoc, and the release notes say the bundle is not notarized.
-      - name: Ensure macOS Rust universal targets
-        run: |
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Set up Rust for universal macOS bundle
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Build the macOS app bundle
         env:
@@ -831,7 +855,12 @@ jobs:
 
       - name: Compute release name
         id: relname
-        run: echo "name=OpenBox ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          title="$(head -n 1 docs/RELEASE_NOTES.md | sed 's/^# //')"
+          if [ -z "$title" ]; then
+            title="OpenBox ${GITHUB_REF_NAME#v}"
+          fi
+          echo "name=$title" >> "$GITHUB_OUTPUT"
 
       - name: Create release and upload signed assets
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # softprops/action-gh-release@v3.0.4

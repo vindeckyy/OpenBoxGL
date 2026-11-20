@@ -73,6 +73,20 @@ jobs:
       - name: Run packaging tests
         run: python3 -B tests/test_packaging.py
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Rust openbox-server for Flatpak
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
+        run: |
+          cargo build --release --locked -p openbox-cli
+          install -Dm755 "$RUNNER_TEMP/cargo-target/release/openbox-server" ./openbox-server
+          ./openbox-server --dump-contracts >/dev/null
+
       - name: Install Flatpak runtime and SDK
         run: |
           flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -81,6 +95,7 @@ jobs:
       - name: Build Flatpak bundle
         run: |
           flatpak-builder --force-clean --repo=repo build-dir io.openbox.GameLauncher.yml
+          test -x build-dir/files/share/openbox/openbox-server
           flatpak build-bundle repo "OpenBox-x86_64.flatpak" io.openbox.GameLauncher --arch=x86_64
 
       - name: Upload Flatpak artifact
@@ -119,7 +134,12 @@ jobs:
 
       - name: Compute release name
         id: relname
-        run: echo "name=OpenBox ${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          title="$(head -n 1 docs/RELEASE_NOTES.md | sed 's/^# //')"
+          if [ -z "$title" ]; then
+            title="OpenBox ${GITHUB_REF_NAME#v}"
+          fi
+          echo "name=$title" >> "$GITHUB_OUTPUT"
 
       - name: Create release and upload Flatpak
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # softprops/action-gh-release@v3.0.4

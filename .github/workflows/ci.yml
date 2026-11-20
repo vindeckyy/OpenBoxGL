@@ -136,7 +136,7 @@ jobs:
   macos:
     name: macOS (${{ matrix.runner }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -223,9 +223,19 @@ jobs:
       - name: Native host self test
         run: OPENBOX_PYTHON="$(command -v python)" ./native_host --selftest
 
-      # The bundle build merges the two interpreter builds, signs the
-      # result, and runs the smoke test. It is the slow job, so it runs
+      # The bundle build compiles the universal Rust openbox-server + native host,
+      # signs the result, and runs the smoke test. It is the slow job, so it runs
       # once.
+      - name: Set up Rust for universal macOS bundle
+        if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
+        uses: Swatinem/rust-cache@v2
+
       - name: Build the app bundle
         if: matrix.runner == 'macos-15' && matrix.python-version == '3.12'
         run: scripts/build_macos_app.sh "$RUNNER_TEMP/OpenBox-macos.zip"
@@ -424,9 +434,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Rust openbox-server
+        run: cargo build --release --locked -p openbox-cli
+
       - name: Run 10k/20k performance gates
         env:
           OPENBOX_PERF_CI_MULT: "2.5"
+          OPENBOX_SERVER_BIN: target/release/openbox-server
         run: python3 -B scripts/perf_bench.py --sizes 10000,20000 --runs 5 --out "$RUNNER_TEMP/perf-current.json"
 
       # The no-regression gate compares the gated run above against the 1.19.1
@@ -475,13 +495,27 @@ jobs:
           cache: npm
           cache-dependency-path: scripts/package-lock.json
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Rust openbox-server
+        run: cargo build --release --locked -p openbox-cli
+
       - name: Install puppeteer
         run: |
           cd scripts
           npm ci
 
-      - name: Frontend smoke test
+      - name: Frontend smoke test (Python + a11y)
         run: ./scripts/ui_smoke.sh
+
+      - name: Frontend smoke test (Rust backend)
+        env:
+          OPENBOX_SERVER_BIN: target/release/openbox-server
+        run: python3 -B scripts/run_ui_smoke.py
 
   # Conditional ARM64 job (ADR 0095). The artifact ships only after this job has built the
   # native host for ARM64 and the suite has passed on windows-11-arm, so the job is
@@ -514,7 +548,7 @@ jobs:
   rust:
     name: Rust (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -536,6 +570,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Format check
         run: cargo fmt --all -- --check
 
@@ -544,3 +581,51 @@ jobs:
 
       - name: Workspace tests
         run: cargo test --workspace --locked
+
+      - name: Build release binary
+        run: cargo build --release --locked -p openbox-cli
+
+      - name: Verify openbox-server contracts (Unix)
+        if: runner.os != 'Windows'
+        run: ./target/release/openbox-server --dump-contracts >/dev/null
+
+      - name: Verify openbox-server contracts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\target\release\openbox-server.exe --dump-contracts | Out-Null
+
+  rust-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Rust openbox-server
+        run: cargo build --release --locked -p openbox-cli
+
+      - name: Rust contract ratchets and CSP
+        env:
+          OPENBOX_CONTRACT_SOURCE: rust
+        run: |
+          make ratchets
+          python3 -B scripts/check_csp.py
+
+      - name: Differential parity oracle
+        run: python3 -B scripts/diff_oracle.py --rust-bin target/release/openbox-server --suite all --verify-disk-state

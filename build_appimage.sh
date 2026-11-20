@@ -21,7 +21,7 @@ mkdir -p "$appdir/usr/bin" "$appdir/usr/lib" "$appdir/usr/share/openbox" "$appdi
 # Build or reuse the standalone Rust openbox-server binary (ADR 0115: zero bundled CPython).
 server_bin="${OPENBOX_SERVER_BIN:-$source_root/target/release/openbox-server}"
 if [ ! -x "$server_bin" ]; then
-  (cd "$source_root" && cargo build --release -p openbox-cli)
+  (cd "$source_root" && cargo build --release --locked -p openbox-cli)
   server_bin="$source_root/target/release/openbox-server"
 fi
 [ -x "$server_bin" ] || {
