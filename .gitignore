@@ -67,6 +67,9 @@ local/
 /ui.log
 /w.log
 
+# Local security-ledger casefile DB (harness working state, never committed)
+.pi/
+
 
 # Per-user Claude Code settings (written by the harness, not by the project)
 .claude/settings.local.json
