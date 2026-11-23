@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity.parity_picker import _days_since_last_play, _eligibility, _estimated_minutes_for_unplayed, _fits_minutes, _game_history_seconds, _median, _score, pick_games  # noqa: E402
 

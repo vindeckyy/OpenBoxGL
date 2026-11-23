@@ -3,7 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-export PYTHONPATH="$ROOT:${PYTHONPATH:-}"
+export PYTHONPATH="$ROOT/app:$ROOT:${PYTHONPATH:-}"
 
 # A test run must never hand a path or a URL to the desktop: that opens a
 # browser window or a file manager behind the user's back.

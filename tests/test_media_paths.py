@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 import webapp_state
 from api_errors import MediaNotFound

@@ -17,6 +17,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.state import library_v7  # noqa: E402
 from pkg.parity.parity_compat import readiness_checks  # noqa: E402

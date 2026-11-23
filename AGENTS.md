@@ -4,7 +4,8 @@ Read this before writing code. A convention that lives only in a human's head is
 
 ## Where things go
 - `crates/` - the Rust workspace (ADR 0115): 15 crates producing the `openbox-server` binary that 3.0 ships. `cargo build --release -p openbox-cli` produces it; `make build-rust` / `make rust-check` are the gates.
-- `openbox.py` and the other root `*.py` files are the flat runtime module surface: `runtime_modules.txt` mirrors them into the install share dir and they are imported by bare name, so they stay at root (ADR 0002). `openbox.py` is the shared core library for data paths, state, and launch helpers. `index.html`, `openbox.svg`, and `openbox-release.pub` also stay at root: the server, native hosts, and update channel read them from the share root.
+- `app/` - the flat runtime module surface: `runtime_modules.txt` mirrors these into `share/openbox/app/` and they are imported by bare name, resolved by putting `app/` on `sys.path` (`web_app.py` bootstraps it; tests and scripts insert it alongside the repo root). `app/openbox.py` is the shared core library for data paths, state, and launch helpers.
+- `web_app.py` stays at root as the Python fallback entry point (spawned by path from launchers, native hosts, and the Rust strangler). `index.html`, `openbox.svg`, and `openbox-release.pub` also stay at root: the server, native hosts, and update channel read them from the share root.
 - Launch paths: `openbox.sh` / `openbox-native.sh` on Linux and macOS, `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1` on Windows, `OpenBox.app` (built by `scripts/build_macos_app.sh`) on macOS. The launchers resolve the Rust `openbox-server` by default; `OPENBOX_BACKEND=python` falls back to `web_app.py` for side-by-side soak testing (ADR 0115). The native window sources live in `native/` (`native_host_mac.m` on macOS). Platform seams live in `pkg/platform_compat.py` (ADR 0048, ADR 0085). Feature gates that hide platform-specific controls come from its `platform_features()` contract (ADR 0086).
 - `handlers/` - HTTP handlers, one module per domain or feature surface (library, imports, media, party, picker, etc.). Shared helpers live in `_shared.py`.
 - `pkg/parity/` - parity_* modules (clear names, cohesive cluster) plus the shared `launch_tokens.py` helper. New parity code goes there. Parity modules are imported as `pkg.parity.*`; the flat `parity_*` bridge was removed in 2.0 and `scripts/check_flat_imports.py` keeps flat imports from returning.
@@ -18,7 +19,7 @@ Read this before writing code. A convention that lives only in a human's head is
 - `docs/` - all markdown except README.md and LICENSE. ADR in `docs/adr/`. Superseded plans and old release notes go in `docs/archive/`, never deleted.
 - `build/`, `native_host`, `target/`, `.venv-dev/`, `.coverage` - generated, never commit.
 
-New integration goes in `pkg/parity/`, `handlers/`, or `crates/` as appropriate, never at root. New runtime module must be added to `runtime_modules.txt`; new Rust code goes in the matching `crates/openbox-*` member.
+New integration goes in `pkg/parity/`, `handlers/`, `app/` (flat runtime modules), or `crates/` as appropriate, never loose at root. New runtime module must be added to `runtime_modules.txt`; new Rust code goes in the matching `crates/openbox-*` member.
 
 ## Design system
 - Every color, spacing, and typography value comes from a token in `static/app.css` `:root` (`--brand`, `--focus`, `--surface-card`, `--font-heading`, etc.).

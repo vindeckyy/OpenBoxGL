@@ -37,7 +37,7 @@ echo "== 3/6 AppImage build ($arch) =="
 OPENBOX_APPDIR="$temporary/OpenBox.AppDir" bash scripts/build_appimage.sh "$PWD/$appimage"
 [ -f "$appimage" ] || fail "AppImage missing after build"
 
-VERSION="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("updates.py").read(), re.M).group(1))')"
+VERSION="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("app/updates.py").read(), re.M).group(1))')"
 
 echo "== 4/6 SBOM =="
 # x86_64 keeps the legacy unprefixed SBOM name matching prior releases;

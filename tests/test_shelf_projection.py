@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import pkg.parity  # noqa: F401,E402
 from pkg.parity.parity_export import build_export_games  # noqa: E402

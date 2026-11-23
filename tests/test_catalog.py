@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from catalog import bulk_update, related_game_ids
 from catalog import (canon_progress, clean_currency, clean_price_cents, clean_user_rating, display_progress,

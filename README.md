@@ -224,7 +224,7 @@ Prebuilt OpenBox 3.0 releases (Linux AppImages, Linux Flatpak, Windows portable 
 
 1. **Run optional `.py` Plugin API v2 plugins:** Invoked strictly on demand out-of-process through `plugin_runner_v2.py` (with bubblewrap sandboxing on Linux). Native executable v2 plugin entrypoints need no Python.
 2. **Run the Python fallback or dev/test suite from source:** Using `OPENBOX_BACKEND=python` / `python3 web_app.py`, or running `./scripts/run_all_tests.sh` and `make check`.
-3. **Run the signed release installer scripts:** `scripts/install.ps1` (Windows) verifies Ed25519 signatures and registers desktop integration via `updates.py`; `scripts/install-macos.sh` verifies via `verify_release.py`; `scripts/install.sh` uses `python3` + `openssl`. Manual downloads (AppImage, Flatpak, or extracting `OpenBox-*-windows.zip` and running `OpenBox\openbox.cmd`) need no Python.
+3. **Run the signed release installer scripts:** `scripts/install.ps1` (Windows) verifies Ed25519 signatures and registers desktop integration via `app/updates.py`; `scripts/install-macos.sh` verifies via `verify_release.py`; `scripts/install.sh` uses `python3` + `openssl`. Manual downloads (AppImage, Flatpak, or extracting `OpenBox-*-windows.zip` and running `OpenBox\openbox.cmd`) need no Python.
 
 ---
 
@@ -665,8 +665,10 @@ OpenBoxGL/
 ├── locales/                      5 JSON localization files (`en`, `es`, `de`, `fr`, `pt`)
 ├── emulator_defs/                44 bundled YAML emulator definitions
 ├── plugins/catalog.json          Bundled community plugin catalog
-├── plugin_runner_v2.py           Out-of-process JSON Lines runner for optional `.py` v2 plugins
-├── web_app.py, handlers/, pkg/   Reference/fallback Python backend (170 modules in `runtime_modules.txt`)
+├── app/plugin_runner_v2.py       Out-of-process JSON Lines runner for optional `.py` v2 plugins
+├── web_app.py                    Python fallback entry point (OPENBOX_BACKEND=python)
+├── app/                          Flat runtime modules (28 files, imported by bare name via sys.path)
+├── handlers/, pkg/               HTTP handlers + parity/state packages (170 modules in `runtime_modules.txt`)
 ├── api_contracts.json            Frozen 417-route API contract (413 `/api/v2/*` + 4 `/api/host/*`)
 ├── Makefile                      Build (`build-rust`, `native-host`, `macos-app`), install, & check targets
 ├── scripts/build_appimage.sh     Linux AppImage builder (`x86_64` & `aarch64`, zero bundled Python)

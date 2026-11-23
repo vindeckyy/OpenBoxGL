@@ -12,6 +12,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import VaultSafetySnapshotFailed  # noqa: E402
 from pkg.parity import parity_save_vault as sv  # noqa: E402

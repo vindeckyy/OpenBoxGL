@@ -12,6 +12,7 @@ from api_errors import BadRequest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import web_app  # noqa: E402
 import handlers.picker as picker_module  # noqa: E402

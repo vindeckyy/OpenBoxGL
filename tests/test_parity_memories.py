@@ -27,6 +27,7 @@ _DATA_ROOT = tempfile.TemporaryDirectory(prefix="openbox-memories-test-")
 # to carry the canonical spelling: %TEMP% can be an 8.3 alias.
 os.environ["OPENBOX_DATA_DIR"] = str(Path(_DATA_ROOT.name).resolve())
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 sys.path.insert(0, str(ROOT / "pkg" / "parity"))
 
 import pkg.parity.parity_memories as memories  # noqa: E402  # flat import == the module handlers use

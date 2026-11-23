@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))
 
 import pkg.parity  # noqa: E402,F401
 from pkg.parity.parity_save_tools import run_ludusavi  # noqa: E402

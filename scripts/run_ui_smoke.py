@@ -29,7 +29,7 @@ SEED_BB = [
 
 def run_pass(script, extra_args, games, settings, extra_env, schema=7):
     data = Path(tempfile.mkdtemp(prefix="obx-ui-smoke-"))
-    env = dict(os.environ, OPENBOX_DATA_DIR=str(data), PYTHONPATH=str(ROOT))
+    env = dict(os.environ, OPENBOX_DATA_DIR=str(data), PYTHONPATH=str(ROOT / "app") + os.pathsep + str(ROOT))
     log = open(data / "server.log", "wb")
     server_bin = os.environ.get("OPENBOX_SERVER_BIN", "").strip()
     if schema == 6:

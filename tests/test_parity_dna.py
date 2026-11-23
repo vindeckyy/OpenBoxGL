@@ -16,6 +16,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pkg", "parity"))
 import pkg.parity  # noqa: E402,F401  (registers the flat parity_* MetaPathFinder)
 
@@ -419,7 +420,7 @@ class IndexIoTests(unittest.TestCase):
 
 class CloudSyncTests(unittest.TestCase):
     def test_index_excluded_from_cloud_sync(self):
-        path = os.path.join(os.path.dirname(__file__), "..", "cloud_sync.py")
+        path = os.path.join(os.path.dirname(__file__), "..", "app", "cloud_sync.py")
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
         self.assertNotIn("dna_index", source)

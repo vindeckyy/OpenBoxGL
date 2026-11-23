@@ -75,7 +75,7 @@ python scripts\run_windows_tests.py test_platform_compat.py
 
 `make check` and `./scripts/run_all_tests.sh` stay POSIX-only — they run on the Linux and `macos-15`/`macos-15-intel` CI lanes (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); Windows uses `scripts\run_windows_tests.py` above, and `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep all lanes green.
 
-Check that the version in `updates.py` matches every published spot:
+Check that the version in `app/updates.py` matches every published spot:
 
 ```bash
 make version-check
@@ -123,10 +123,10 @@ they do not automatically wait for an unrelated master run.
 ### Repository and release authority
 
 - Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for the AppImages, Flatpak bundle, Windows portable zip, macOS app bundle, SBOMs, and install scripts.
-- Version strings are declared once in `updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
+- Version strings are declared once in `app/updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
 - Changelog, `packaging/openbox.metainfo.xml`, README release badge/latest/installer text,
   PARITY lead, release-note compare link, SBOM fallback metadata, and issue
-  templates must agree with `updates.py`; the version check also covers SUPPORT,
+  templates must agree with `app/updates.py`; the version check also covers SUPPORT,
   SECURITY, and Flathub checklist markers. Review those documents for
   release-specific validation claims as well.
 

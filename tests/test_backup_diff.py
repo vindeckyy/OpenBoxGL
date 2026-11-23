@@ -15,6 +15,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity.parity_backup import AUTO_BACKUP_DAYS, auto_backup_due, diff_manifests, create_backup  # noqa: E402
 from datetime import datetime, timedelta, timezone  # noqa: E402
@@ -139,13 +140,13 @@ def test_diff_empty_backup():
 
 def test_diff_route_registered():
     """The /api/v2/backup/diff route should be in routes.py."""
-    content = (ROOT / "routes.py").read_text(encoding="utf-8")
+    content = (ROOT / "app/routes.py").read_text(encoding="utf-8")
     assert "/api/v2/backup/diff" in content, "backup/diff route not in routes.py"
 
 
 def test_diff_route_in_public_get_paths():
     """The backup diff route should not need to be in PUBLIC_GET_PATHS (it's not public)."""
-    content = (ROOT / "routes.py").read_text(encoding="utf-8")
+    content = (ROOT / "app/routes.py").read_text(encoding="utf-8")
     # It should be in GET_TABLE but not in PUBLIC_GET_PATHS
     assert "/api/v2/backup/diff" in content
 

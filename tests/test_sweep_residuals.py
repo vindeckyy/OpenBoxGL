@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 _DATA_ROOT = tempfile.TemporaryDirectory(prefix="openbox-sweep-residuals-")
 os.environ["OPENBOX_DATA_DIR"] = _DATA_ROOT.name
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 sys.path.insert(0, str(ROOT / "pkg" / "parity"))
 
 import saves  # noqa: E402

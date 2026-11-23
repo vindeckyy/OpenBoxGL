@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import webapp_state  # noqa: E402  # registers the parity_* flat finder + dep registry
 from pkg.parity import parity_emulator_defs as defs  # noqa: E402

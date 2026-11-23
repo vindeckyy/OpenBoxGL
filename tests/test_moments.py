@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import openbox  # noqa: E402
 import webapp_state  # noqa: E402  # installs the parity finder and dep registry

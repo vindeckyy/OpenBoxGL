@@ -8,6 +8,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from handlers.settings import clean_settings  # noqa: E402
 from pkg.state.cache import _public_settings_uncached  # noqa: E402

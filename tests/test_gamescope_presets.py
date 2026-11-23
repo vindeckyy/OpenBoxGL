@@ -15,6 +15,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity.parity_gamescope import (  # noqa: E402
     GAMESCOPE_PRESETS,

@@ -129,6 +129,7 @@ def _check_new_module_coverage(coverage_bin: Path, failures: list[str]) -> None:
 def _check_changed_line_floor(coverage_bin: Path, failures: list[str]) -> None:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+        sys.path.insert(0, str(ROOT / "app"))
     from scripts.check_changed_coverage import measure_changed_lines
 
     hit, total, changed_files = measure_changed_lines()
@@ -326,7 +327,7 @@ def main() -> int:
         failed_tests = []
         # Ensure root is on PYTHONPATH so tests in tests/ can import flat modules
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["PYTHONPATH"] = str(ROOT / "app") + os.pathsep + str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["COVERAGE_RUN"] = "1"
         # A gate run must never open a browser window or a file manager.
         env["OPENBOX_DISABLE_EXTERNAL_OPEN"] = "1"

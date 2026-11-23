@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from fixtures.state.corpus import HUNDRED, make_v6_library  # noqa: E402
 from pkg.state import library_cli  # noqa: E402

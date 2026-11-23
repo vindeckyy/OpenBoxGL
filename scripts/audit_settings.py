@@ -41,6 +41,7 @@ def _sources() -> list[Path]:
 
 def audit() -> list[dict[str, object]]:
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
     from settings_schema import KNOWN_SETTINGS
 
     texts = {path: path.read_text(encoding="utf-8", errors="replace") for path in _sources()}

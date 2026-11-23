@@ -10,7 +10,7 @@ from api_errors import (
     V1ApiRemoved,
 )
 
-__path__ = [str(Path(__file__).resolve().parent / "routes")]
+__path__ = [str(Path(__file__).resolve().parent.parent / "routes")]
 
 PUBLIC_GET_PATHS = frozenset({
     "/",

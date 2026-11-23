@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import MediaNotFound, RangeParseError  # noqa: E402
 from handlers.media import MediaHandlers  # noqa: E402

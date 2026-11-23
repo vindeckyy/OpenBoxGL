@@ -37,7 +37,7 @@ def _results_path() -> Path:
 
 def _env() -> dict:
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(ROOT / "app") + os.pathsep + str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     env["PYTHONIOENCODING"] = "utf-8"
     # A test run must never hand a path or a URL to the desktop.
     env["OPENBOX_DISABLE_EXTERNAL_OPEN"] = "1"

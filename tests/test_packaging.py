@@ -49,6 +49,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 PYTHON_MODULES = [line.strip() for line in (ROOT / "runtime_modules.txt").read_text(encoding="utf-8").splitlines() if line.strip() and not line.lstrip().startswith("#")]
 DATA_FILES = ["index.html", "openbox.svg"] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.js"))] + [f"static/{p.name}" for p in sorted((ROOT / "static").glob("*.css"))] + [f"locales/{p.name}" for p in sorted((ROOT / "locales").glob("*.json"))]
 
@@ -99,7 +100,7 @@ def test_appdir_structure():
         share = appdir / "usr" / "share" / "openbox"
         assert share.is_dir(), "missing openbox data dir"
         assert (share / "openbox-server").is_file(), "missing bundled openbox-server binary"
-        assert (share / "plugin_runner_v2.py").is_file(), "missing plugin_runner_v2.py"
+        assert (share / "app/plugin_runner_v2.py").is_file(), "missing plugin_runner_v2.py"
         assert not (appdir / "usr" / "bin" / "python3").exists(), "unexpected bundled python3 in Rust AppImage"
         assert (share / "openbox-launcher.sh").is_file(), "missing keyboard launcher"
         for data in DATA_FILES:
@@ -316,7 +317,7 @@ def _run_launcher(launcher, arguments, share_dir, local_app_data=None):
     env = dict(os.environ)
     env["OPENBOX_SHARE"] = str(share_dir)
     env["OPENBOX_PYTHON"] = sys.executable
-    env["PYTHONPATH"] = str(ROOT)
+    env["PYTHONPATH"] = str(ROOT / "app") + os.pathsep + str(ROOT)
     if local_app_data is not None:
         # Keeps the install-dir candidate from reaching a real %LOCALAPPDATA%
         # install while the launcher resolves its share dir.

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from handlers.extensions import ExtensionsHandlers  # noqa: E402
 from handlers.library import LibraryHandlers  # noqa: E402

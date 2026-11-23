@@ -34,6 +34,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.state.sqlite_readmodel import SqliteReadModel, _check_fts5  # noqa: E402
 

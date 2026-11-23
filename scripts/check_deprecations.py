@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 LEDGER = ROOT / "docs" / "api-deprecations.md"
 VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 STATUS_REMOVED = "Removed"
@@ -35,7 +36,7 @@ def _version(value: str) -> tuple[int, int, int]:
 
 
 def _current_version() -> str:
-    source = (ROOT / "updates.py").read_text(encoding="utf-8")
+    source = (ROOT / "app/updates.py").read_text(encoding="utf-8")
     match = re.search(r'^VERSION\s*=\s*"([^"]+)"', source, re.MULTILINE)
     return match.group(1) if match else "0.0.0"
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import api_errors  # noqa: E402
 from state_store import StateFutureVersionError, StateMigrationError, StateSchemaTooOldError  # noqa: E402

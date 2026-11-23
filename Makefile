@@ -105,9 +105,8 @@ install: native-host
 	install -d $(DESTDIR)$(SHAREDIR)/emulator_defs
 	for f in emulator_defs/*.yaml; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/emulator_defs/"; done
 	install -Dm755 scripts/openbox-launcher.sh $(DESTDIR)$(SHAREDIR)/openbox-launcher.sh
-	# Runtime Python modules (web_app.py, the handlers/ package, parity_*.py,
-	# ...) from runtime_modules.txt, mirroring the repo layout under the share
-	# dir. `install -D` creates the handlers/ subdirectory as needed.
+	# Runtime Python modules (web_app.py, the app/ modules, handlers/, pkg/) from
+	# runtime_modules.txt, mirroring the repo layout under the share dir.
 	for f in $(PYTHON_SOURCES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	# plugin_catalog.py resolves plugins/catalog.json relative to its own path.
 	install -Dm644 plugins/catalog.json $(DESTDIR)$(SHAREDIR)/plugins/catalog.json

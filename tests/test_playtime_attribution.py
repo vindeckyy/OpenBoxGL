@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))
 
 import webapp_state
 from pkg.state.launch import _match_fallback_index, resolve_library_game

@@ -205,6 +205,7 @@ class ManagedServer:
 def seed_data_dir(target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
     from state_store import JsonStateStore
 
     store = JsonStateStore(target / "library.json")

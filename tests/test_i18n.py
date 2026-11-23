@@ -100,7 +100,7 @@ def test_i18n_js_exists():
 
 def test_locale_routes_registered():
     """Locale file routes must be in PUBLIC_GET_PATHS and GET_TABLE."""
-    routes_path = ROOT / "routes.py"
+    routes_path = ROOT / "app/routes.py"
     content = routes_path.read_text(encoding="utf-8")
     for locale in SUPPORTED_LOCALES:
         path = f"/locales/{locale}.json"

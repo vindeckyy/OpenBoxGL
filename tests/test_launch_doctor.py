@@ -13,6 +13,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import BadRequest, GameNotFound  # noqa: E402
 from handlers.launch import LaunchHandlers  # noqa: E402

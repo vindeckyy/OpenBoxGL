@@ -134,7 +134,7 @@ class SandboxMasksDataDirTests(unittest.TestCase):
         joined = " ".join(command)
         self.assertIn("plugin_runner_v2.py", joined)
         self.assertNotIn("plugin_runner.py", joined)
-        runner = Path(__file__).resolve().parent.parent / "plugin_runner_v2.py"
+        runner = Path(__file__).resolve().parent.parent / "app" / "plugin_runner_v2.py"
         source = runner.read_text(encoding="utf-8")
         self.assertIn("for raw in sys.stdin", source)
 

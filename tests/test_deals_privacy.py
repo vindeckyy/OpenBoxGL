@@ -11,6 +11,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import DealsHostBlocked  # noqa: E402
 from pkg.parity import parity_compat  # noqa: E402

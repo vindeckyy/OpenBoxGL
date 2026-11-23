@@ -36,7 +36,7 @@ def _doc_path(name: str) -> Path:
 def runtime_version():
     # Importing updates.py drags in no heavyweight dependencies; parse
     # the literal instead so this script works without importing the app.
-    source = (ROOT / "updates.py").read_text(encoding="utf-8")
+    source = (ROOT / "app/updates.py").read_text(encoding="utf-8")
     match = re.search(r'^VERSION\s*=\s*"([^"]+)"', source, re.MULTILINE)
     if not match:
         print("updates.py: VERSION literal not found")

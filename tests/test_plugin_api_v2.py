@@ -19,10 +19,11 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from plugins import read_manifest, run_plugin_hook  # noqa: E402
 
-RUNNER_V2 = ROOT / "plugin_runner_v2.py"
+RUNNER_V2 = ROOT / "app/plugin_runner_v2.py"
 ECHO_HOOK = "def before_launch(payload):\n    payload['args'].append('--ran')\n    return payload\n"
 
 

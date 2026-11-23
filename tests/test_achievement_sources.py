@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from pkg.state.cache import _achievement_source, _achievement_sources  # noqa: E402
 from retroachievements import game_progress  # noqa: E402

@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity import parity_launch_audit as audit  # noqa: E402
 from pkg.parity.parity_emulator_defs import _registry  # noqa: E402

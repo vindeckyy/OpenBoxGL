@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from api_errors import MovePlanStale  # noqa: E402
 from pkg.state import library_v7  # noqa: E402

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from pkg.state import paths  # noqa: E402
 from pkg.state.paths import PathTokenError  # noqa: E402

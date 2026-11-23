@@ -14,6 +14,7 @@ def _repo_root() -> Path:
 
 ROOT = _repo_root()
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity.parity_filter_presets import rules_to_chips, chips_to_rules, CHIP_LABELS  # noqa: E402
 

@@ -242,6 +242,7 @@ def spawn_steam_owner_window():
 def main():
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
 
     emu_log = os.environ.get("OPENBOX_DECK_EMU_LOG")
     if emu_log:

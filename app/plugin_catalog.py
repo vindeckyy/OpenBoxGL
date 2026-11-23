@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 from backend_io import download_file, read_limited
 
-CATALOG_PATH = Path(__file__).resolve().parent / "plugins" / "catalog.json"
+CATALOG_PATH = Path(__file__).resolve().parent.parent / "plugins" / "catalog.json"
 REMOTE_CATALOG = "https://raw.githubusercontent.com/vindeckyy/OpenBoxGL/566f57e276cd5fffb587675c970bc86f50dfbccb/plugins/catalog.json"
 REMOTE_CATALOG_SHA256 = "8569fa78415cdd5b0042cfef36ed8ef40fe9df5cea3f536f1c6e5d79f5d95a78"
 PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")

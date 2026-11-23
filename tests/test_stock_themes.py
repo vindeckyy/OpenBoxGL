@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent
 if not (ROOT / "themes").is_dir() and (ROOT.parent / "themes").is_dir():
     ROOT = ROOT.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from stock_themes import ensure_stock_themes, is_stock_theme, stock_theme_sources  # noqa: E402
 

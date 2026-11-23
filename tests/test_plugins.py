@@ -16,6 +16,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from plugin_catalog import download_plugin_package, load_local_catalog, REMOTE_CATALOG  # noqa: E402
 from plugins import install_plugin, list_plugins, remove_plugin, run_plugins, set_plugin_enabled  # noqa: E402

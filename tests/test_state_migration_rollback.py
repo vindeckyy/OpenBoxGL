@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from pkg.state import library_v7  # noqa: E402
 from state_store import JsonStateStore, StateBackupError, StateMigrationError, default_state  # noqa: E402

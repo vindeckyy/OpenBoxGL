@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from api_errors import BackupFormatRetired, BackupFormatUnsupported  # noqa: E402
 from pkg.parity import parity_backup as backup  # noqa: E402

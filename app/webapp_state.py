@@ -166,7 +166,7 @@ from pkg.state.sse import (
     webhook_configs,
 )
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent.parent
 TOKEN = secrets.token_urlsafe(24)
 LOGGER = logging.getLogger("openbox")
 # Boot recovery messages are process-local and read by /api/library exactly once

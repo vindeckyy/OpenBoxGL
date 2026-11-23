@@ -19,6 +19,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+# Runtime modules live in app/ (flat imports resolved via sys.path, ADR 0117).
+sys.path.insert(0, str(Path(__file__).resolve().parent / "app"))
+
 from api_errors import ApiError, BadRequest, RangeParseError, RouteNotFound
 from env_config import bootstrap_env
 from openbox_logging import configure_logging

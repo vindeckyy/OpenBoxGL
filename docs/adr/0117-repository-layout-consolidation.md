@@ -37,18 +37,41 @@ Move build-time files into folders; keep runtime-loaded files at root.
 
 Stay at root, deliberately:
 
-- All root `*.py` modules — `runtime_modules.txt` mirrors them into the share
-  dir and they are imported by bare name; moving them is an architectural
-  change, not a tidy-up (ADR 0002).
+- `web_app.py` — the Python fallback entry point, spawned by absolute path
+  from the launchers, the native hosts, and the Rust strangler proxy
+  (`strangler.rs` joins `web_app.py` to the app root).
 - `index.html` — repo-root marker used by `openbox.sh` share-dir detection
   and served at `/` by `openbox-server`.
-- `openbox.svg`, `openbox-release.pub`, `openbox.ico`'s installed copies —
-  read from the share root at runtime (`static_files.rs`, native host icon
-  lookup, `include_bytes!`/`root.join` in `openbox-integrations`).
+- `openbox.svg`, `openbox-release.pub` — read from the share root at runtime
+  (`static_files.rs`, native host icon lookup, `include_bytes!`/`root.join`
+  in `openbox-integrations`).
 - Launchers (`openbox.sh`, `openbox-native.sh`, `openbox.cmd`, `openbox.ps1`,
   `openbox-native.ps1`) — user-facing entry points referenced by docs,
   desktop files, and muscle memory.
 
+## Amendment (same day): the flat `*.py` modules move to `app/`
+
+The "keep flat modules at root" call in ADR 0002 was about avoiding a package
+rewrite, not about root placement being load-bearing. Bare-name imports
+(`import plugins`, `from saves import ...`) resolve through `sys.path`, so the
+modules move to `app/` — a plain directory, not a package — and `app/` joins
+`sys.path` wherever Python runs: `web_app.py` inserts it before its local
+imports, `run_all_tests.sh` and `run_windows_tests.py` prepend it to
+`PYTHONPATH`, and each test/script that already inserted the repo root gained a
+sibling `... / "app"` insert. `runtime_modules.txt` entries become `app/*.py`,
+so installs land at `share/openbox/app/` and `web_app.py`'s bootstrap finds
+them there unchanged. `plugin_runner_v2.py` moves with the rest; the Rust
+plugin host's `locate_runner_v2` joins `app/plugin_runner_v2.py`, and the
+bubblewrap sandbox still bind-mounts the runner's parent directory, so the
+in-sandbox path is unchanged.
+
+`__file__`-relative lookups that pointed at share-root siblings
+(`plugins/catalog.json`, `routes/`, `openbox-release.pub`, `openbox.svg`,
+`webapp_state.ROOT`, `updates.py`'s install root) resolve one level up via
+`parent.parent`; `stock_themes.py` already probed both layouts.
+`web_app.py`, `openbox.py`, and `updates.py` carry explicit `sys.path`
+bootstraps so direct `python app/<module>.py` invocation still resolves
+`pkg/`/`handlers/`.
 `assets/OpenBoxLogo.svg` and root `openbox.svg` are not duplicates:
 `scripts/render_branding.sh` generates the latter from the former.
 

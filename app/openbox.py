@@ -10,6 +10,9 @@ import shutil
 import sys
 from pathlib import Path
 
+# pkg/ and handlers/ live one level up; app/ modules resolve via the script dir.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from archives import extract_game
 from pkg.parity.parity_import import EXTENSIONS_EXTRA, PLATFORM_BY_EXTENSION_EXTRA
 from pkg.parity.parity_emulator_defs import build_platform_by_extension, register_import_snapshot as _register_import_snapshot, resolve_launch

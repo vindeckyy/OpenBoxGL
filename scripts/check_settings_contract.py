@@ -33,6 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import contract_ratchet  # noqa: E402  (scripts/ is not a package)

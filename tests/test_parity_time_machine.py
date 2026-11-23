@@ -23,6 +23,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import pkg.parity.parity_time_machine as tm  # noqa: E402
 from pkg.parity import parity_library_sync as sync_mod  # noqa: E402

@@ -16,6 +16,7 @@ from unittest import mock
 from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from pkg.parity import parity_steam_achievements as steam  # noqa: E402
 

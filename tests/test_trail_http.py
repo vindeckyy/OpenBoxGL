@@ -13,6 +13,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import BadRequest, RaDisabled, RaNotLinked, TrailGameUnknown  # noqa: E402
 from handlers import trail as trail_handler  # noqa: E402

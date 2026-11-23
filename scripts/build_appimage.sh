@@ -32,7 +32,7 @@ install -Dm755 "$server_bin" "$appdir/usr/share/openbox/openbox-server"
 ln -sf ../share/openbox/openbox-server "$appdir/usr/bin/openbox-server"
 
 # Optional host-Python v2 plugin bridge script (invoked strictly on demand for .py plugins).
-install -Dm644 "$source_root/plugin_runner_v2.py" "$appdir/usr/share/openbox/plugin_runner_v2.py"
+install -Dm644 "$source_root/app/plugin_runner_v2.py" "$appdir/usr/share/openbox/app/plugin_runner_v2.py"
 install -Dm644 "$source_root/openbox-release.pub" "$appdir/usr/share/openbox/openbox-release.pub"
 cp "$source_root/index.html" "$appdir/usr/share/openbox/index.html"
 cp "$source_root/openbox.svg" "$appdir/usr/share/openbox/openbox.svg"
@@ -89,7 +89,7 @@ exec "$app_root/usr/share/openbox/openbox-native.sh" "$@"
 EOF
 
 # Unique desktop/icon names avoid colliding with the Openbox window manager.
-python3 - "$source_root/packaging/openbox.desktop" "$source_root/updates.py" > "$appdir/usr/share/applications/io.openbox.GameLauncher.desktop" <<'PY'
+python3 - "$source_root/packaging/openbox.desktop" "$source_root/app/updates.py" > "$appdir/usr/share/applications/io.openbox.GameLauncher.desktop" <<'PY'
 import pathlib, re, sys
 desktop = pathlib.Path(sys.argv[1]).read_text()
 version = "0.0.0"

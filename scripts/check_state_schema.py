@@ -25,6 +25,7 @@ def live_contract() -> dict:
     if contract_ratchet.use_rust_source():
         return contract_ratchet.rust_contracts()["state_schema"]
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
     import state_store
     from updates import VERSION
 

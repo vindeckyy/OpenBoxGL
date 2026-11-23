@@ -138,7 +138,7 @@ iconutil -c icns "$iconset" -o "$bundle/Contents/Resources/OpenBox.icns"
 
 # --- 6. Info.plist --------------------------------------------------------
 say "== 6/8 Info.plist =="
-version="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("updates.py").read(), re.M).group(1))')"
+version="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("app/updates.py").read(), re.M).group(1))')"
 python3 - "$bundle/Contents/Info.plist" "$version" "$BUNDLE_ID" <<'PY'
 import plistlib
 import sys

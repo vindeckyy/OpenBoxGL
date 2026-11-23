@@ -22,6 +22,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, str(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")))
 
 from pkg.state import cache as state_cache
 

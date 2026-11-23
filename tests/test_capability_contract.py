@@ -15,6 +15,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from pkg import platform_compat as pc  # noqa: E402
 from pkg.platform_compat import platform_features  # noqa: E402

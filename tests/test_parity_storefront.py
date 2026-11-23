@@ -8,6 +8,7 @@ from unittest import mock
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 import pkg.parity.parity_storefront as storefront_module
 from pkg.parity.parity_storefront import catalog_entries_to_games, catalog_heroic, catalog_steam, storefront_catalog

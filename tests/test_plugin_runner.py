@@ -10,6 +10,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from plugins import (  # noqa: E402
     PLUGIN_API_RETIRED,
@@ -30,7 +31,7 @@ def _package(root, plugin_id, manifest, source):
 
 def test():
     assert not (ROOT / "plugin_runner.py").exists()
-    assert (ROOT / "plugin_runner_v2.py").is_file()
+    assert (ROOT / "app/plugin_runner_v2.py").is_file()
 
     source = (
         "def before_launch(payload):\n"

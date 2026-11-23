@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 from plugins import set_plugin_enabled, set_plugin_permissions  # noqa: E402
 from pkg.parity import parity_plugin_stats as stats  # noqa: E402

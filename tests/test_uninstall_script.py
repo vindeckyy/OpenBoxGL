@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 UNINSTALL = ROOT / "scripts" / "uninstall.ps1"
 INSTALL = ROOT / "scripts" / "install.ps1"
@@ -31,7 +32,7 @@ class UninstallScriptTests(unittest.TestCase):
         self.assertIn(r"HKCU:\Software\Classes\openbox", self.uninstall)
 
     def test_shortcut_and_protocol_names_match_the_registering_code(self):
-        source = (ROOT / "updates.py").read_text(encoding="utf-8")
+        source = (ROOT / "app/updates.py").read_text(encoding="utf-8")
         self.assertIn('programs / "OpenBox.lnk"', source)
         self.assertIn(r'Software\Classes\openbox', source)
 

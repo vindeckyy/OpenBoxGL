@@ -14,6 +14,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from api_errors import DealsInvalidAppId, DealsLimitExceeded  # noqa: E402
 from notifications import CAP as NOTICE_CAP, add_notification  # noqa: E402

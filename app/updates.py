@@ -22,6 +22,9 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+# pkg/ and handlers/ live one level up; app/ modules resolve via the script dir.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from backend_io import atomic_write_bytes, atomic_write_text, download_file, fsync_directory, read_limited
 from pkg.platform_compat import (
     IS_MACOS,
@@ -69,7 +72,7 @@ ASSET = _arch_asset(_current_arch())
 PLACEHOLDER_PUBLIC_KEY = bytes.fromhex(
     "9df1f9e7cdba094ac9d858d541b7529c28329a309ff79a4812457eb3f259fa8d"
 )
-PUBLIC_KEY_PATH = Path(__file__).resolve().parent / "openbox-release.pub"
+PUBLIC_KEY_PATH = Path(__file__).resolve().parent.parent / "openbox-release.pub"
 SIGNATURE_ASSET = f"{ASSET}.sig"
 
 
@@ -689,7 +692,7 @@ def install_desktop_entry(appimage=None):
     applications.mkdir(parents=True, exist_ok=True)
     icons.mkdir(parents=True, exist_ok=True)
     icon = icons / "io.openbox.GameLauncher.svg"
-    atomic_write_bytes(icon, (Path(__file__).parent / "openbox.svg").read_bytes(), mode=0o644)
+    atomic_write_bytes(icon, (Path(__file__).parent.parent / "openbox.svg").read_bytes(), mode=0o644)
     desktop = applications / "io.openbox.GameLauncher.desktop"
     atomic_write_text(desktop, (
         "[Desktop Entry]\n"
@@ -717,7 +720,7 @@ if IS_WINDOWS:  # pragma: no cover - Windows branch exercised on windows CI
 
     def _install_root() -> Path:
         """The directory holding the running OpenBox tree."""
-        return Path(__file__).resolve().parent
+        return Path(__file__).resolve().parent.parent
 
     def _installed_root() -> Path | None:
         """The portable install tree, or None when running from a checkout.

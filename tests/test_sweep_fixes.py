@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from backend_io import is_public_ip  # noqa: E402
 from pkg.parity.parity_duplicates import normalize_title  # noqa: E402

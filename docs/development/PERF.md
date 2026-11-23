@@ -365,7 +365,7 @@ Notes:
 - **Virtual Spacer-Window Grid**: `#grid` uses spacer-window virtualization (`IntersectionObserver`, `contain-intrinsic-size`, rAF coalescing) rendering only visible cards + overscan buffer, with full DOM a11y focus restoration. Scrolling cost is bounded by the visible window rather than the library size, which is what keeps the 20,000-game budget viable. Can be bypassed via `localStorage['openbox-virtual-grid'] = 'false'`. *(Frame time at that scale is not measured — see §1.7 above — so no FPS figure is claimed here.)*
 - **Search Offloading**: Search indexing and query evaluation run off the main thread in `static/worker.search.js` using trigram index + acronym matching with synchronous fallback.
 - **FacetCache**: LRU facet cache (capacity 64) with epoch bumping on state changes, preventing repeated facet recalculations on large libraries.
-- **Write Coalescing**: `state_store.py` micro-batches writes within a 50ms window with single fsync, minimizing disk write amplification during bulk mutations.
+- **Write Coalescing**: `app/state_store.py` micro-batches writes within a 50ms window with single fsync, minimizing disk write amplification during bulk mutations.
 
 ## Gate
 

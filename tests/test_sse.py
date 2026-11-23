@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 # Isolate state at import time: openbox.py binds DATA once per process, and
 # unittest runs SseModuleTests (which imports pkg.state) before SseTests.

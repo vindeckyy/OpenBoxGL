@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from api_errors import BadRequest, MovePlanStale  # noqa: E402
 from handlers import library_storage  # noqa: E402

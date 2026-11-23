@@ -10,6 +10,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "app"))
 
 from pkg.parity import parity_emulator_settings as settings  # noqa: E402
 

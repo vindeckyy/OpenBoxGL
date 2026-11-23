@@ -233,19 +233,19 @@ pub fn sandbox_status() -> &'static str {
 
 pub fn locate_runner_v2(app_root: Option<&Path>) -> Option<PathBuf> {
     if let Some(root) = app_root {
-        let p = root.join("plugin_runner_v2.py");
+        let p = root.join("app/plugin_runner_v2.py");
         if p.is_file() {
             return Some(p);
         }
     }
     if let Ok(env_root) = std::env::var("OPENBOX_APP_ROOT") {
-        let p = PathBuf::from(env_root).join("plugin_runner_v2.py");
+        let p = PathBuf::from(env_root).join("app/plugin_runner_v2.py");
         if p.is_file() {
             return Some(p);
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
-        let p = cwd.join("plugin_runner_v2.py");
+        let p = cwd.join("app/plugin_runner_v2.py");
         if p.is_file() {
             return Some(p);
         }
@@ -254,7 +254,7 @@ pub fn locate_runner_v2(app_root: Option<&Path>) -> Option<PathBuf> {
         let mut cur = exe.parent().map(Path::to_path_buf);
         for _ in 0..5 {
             if let Some(dir) = cur {
-                let p = dir.join("plugin_runner_v2.py");
+                let p = dir.join("app/plugin_runner_v2.py");
                 if p.is_file() {
                     return Some(p);
                 }

@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import pkg.parity  # noqa: E402,F401
 from pkg.parity.parity_bulk_edit import find_replace  # noqa: E402

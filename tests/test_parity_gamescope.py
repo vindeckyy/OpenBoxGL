@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 import pkg.parity.parity_gamescope as parity_gamescope
 from pkg.parity.parity_gamescope import (

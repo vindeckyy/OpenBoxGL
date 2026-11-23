@@ -19,12 +19,13 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 # file -> number of unbounded subprocess calls allowed in it.
 ALLOWED_UNBOUNDED = {
     # The Windows update applier verifies and stages a whole install; a fixed
     # timeout would abort a legitimate slow disk mid-update.
-    "updates.py": 1,
+    "app/updates.py": 1,
 }
 
 SUBPROCESS_CALLS = {"run", "call", "check_output", "check_call"}

@@ -128,7 +128,7 @@ function Get-Sha256 {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$verifier = Join-Path $repoRoot 'updates.py'
+$verifier = Join-Path $repoRoot 'app/updates.py'
 if (-not (Test-Path -LiteralPath $verifier -PathType Leaf)) {
     # The verifier is the trust anchor for the signature check, so it is never
     # downloaded on its own: a fetched verifier could be replaced by whoever
@@ -259,7 +259,7 @@ try {
     }
 
     Say 'Registering the Start Menu shortcut and the openbox:// protocol...'
-    & $python -B (Join-Path $target 'updates.py') install-desktop-entry (Join-Path $target 'openbox.cmd')
+    & $python -B (Join-Path $target 'app/updates.py') install-desktop-entry (Join-Path $target 'openbox.cmd')
     if ($LASTEXITCODE -ne 0) {
         & $RestorePreviousInstall
         Die 'Could not register the desktop integration.'

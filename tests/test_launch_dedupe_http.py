@@ -18,6 +18,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import webapp_state  # noqa: E402
 from api_errors import Conflict  # noqa: E402

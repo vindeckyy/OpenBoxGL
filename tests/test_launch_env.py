@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 from handlers.library import _clean_game_fields, _clean_launch_env  # noqa: E402
 from pkg.state.launch import _apply_launch_env  # noqa: E402

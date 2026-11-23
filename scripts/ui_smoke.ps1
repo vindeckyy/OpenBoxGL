@@ -53,7 +53,7 @@ print("seeded")
     $env:PYTHONIOENCODING = "utf-8"
     # The seed script lives in the temp data dir, so `openbox` is not importable
     # from there; the bash heredoc gets it for free because it runs in the repo root.
-    $env:PYTHONPATH = (Get-Location).Path
+    $env:PYTHONPATH = (Join-Path (Get-Location).Path 'app') + ';' + (Get-Location).Path
     python -B (Join-Path $dataDir "seed.py")
     if ($LASTEXITCODE -ne 0) { Write-Error "seeding failed"; exit 2 }
 
