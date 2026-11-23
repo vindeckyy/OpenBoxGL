@@ -1537,9 +1537,17 @@ const failures = [];
     AppState.platform = 'PC';
     AppState.selectedId = null;
     library.render();
-    const plat = document.querySelector('#platforms [data-platform="SNES"]');
+    // Facet counts arrive async from the search worker; the SNES chip can
+    // legitimately appear a tick later. Retry the click briefly so the check
+    // tests the handler, not the render timing.
+    for (let i = 0; i < 20; i++) {
+      const plat = document.querySelector('#platforms [data-platform="SNES"]');
+      if (plat) plat.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+      if (AppState.activeFilterPreset === '') break;
+      library.render();
+      await new Promise(r => setTimeout(r, 100));
+    }
     results.platformButtons = [...document.querySelectorAll('#platforms [data-platform]')].map(button => button.dataset.platform);
-    if (plat) plat.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
     results.presetClearedOnPlatform = AppState.activeFilterPreset === '';
     state.resetQuery();
     AppState.importBatchId = 'batch-smoke';
