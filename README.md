@@ -158,9 +158,9 @@ All three hosts implement the shared [Native Host Contract](docs/native-host-con
 
 | Platform | Binary & Source | Webview & UI Toolkit | Architectures | Server Supervision & Shutdown | Single-Instance IPC |
 | --- | --- | --- | --- | --- | --- |
-| **Linux** | `native_host` ([`native_host.c`](native_host.c)) | WebKitGTK 4.1 / GTK 3 | `x86_64`, `aarch64` | `fork()` + `setpgid(0, 0)` + `execl(openbox-server, "--no-browser")`; `inotify` boot watch (30 s timeout); `SIGTERM` to process group (2 s grace) then `SIGKILL`; catches `SIGINT`/`SIGTERM`/`SIGHUP` | `0600` `AF_UNIX` socket (`<data_dir>/openbox.sock`) |
-| **Windows** | `native_host.exe` ([`native_host_win.c`](native_host_win.c)) | WebView2 (statically linked via `WebView2LoaderStatic.lib`) / Win32 | `x64`, `arm64` | `CreateProcessW` (`CREATE_NEW_PROCESS_GROUP \| CREATE_NO_WINDOW \| CREATE_SUSPENDED`) attached to a Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`); graceful `POST /api/host/shutdown` + `CTRL_BREAK_EVENT` (3 s grace), then `TerminateJobObject` backstop | Per-data-dir named pipe (`FILE_FLAG_FIRST_PIPE_INSTANCE`) |
-| **macOS** | `OpenBox.app/Contents/MacOS/OpenBox` ([`native_host_mac.m`](native_host_mac.m)) | WKWebView / AppKit (macOS 11.0+) | Universal (`arm64` + `x86_64`) | `posix_spawn` (`POSIX_SPAWN_SETPGROUP`) with `DISPATCH_PROC_EXIT` monitor (window exits with server's status if child dies); `SIGTERM` to process group (2 s grace) then `SIGKILL`; catches `SIGINT`/`SIGTERM`/`SIGHUP` | `0600` `AF_UNIX` socket (`<data_dir>/openbox.sock`, verifying Darwin's 104-byte `sun_path` cap) |
+| **Linux** | `native_host` ([`native_host.c`](native/native_host.c)) | WebKitGTK 4.1 / GTK 3 | `x86_64`, `aarch64` | `fork()` + `setpgid(0, 0)` + `execl(openbox-server, "--no-browser")`; `inotify` boot watch (30 s timeout); `SIGTERM` to process group (2 s grace) then `SIGKILL`; catches `SIGINT`/`SIGTERM`/`SIGHUP` | `0600` `AF_UNIX` socket (`<data_dir>/openbox.sock`) |
+| **Windows** | `native_host.exe` ([`native_host_win.c`](native/native_host_win.c)) | WebView2 (statically linked via `WebView2LoaderStatic.lib`) / Win32 | `x64`, `arm64` | `CreateProcessW` (`CREATE_NEW_PROCESS_GROUP \| CREATE_NO_WINDOW \| CREATE_SUSPENDED`) attached to a Win32 Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`); graceful `POST /api/host/shutdown` + `CTRL_BREAK_EVENT` (3 s grace), then `TerminateJobObject` backstop | Per-data-dir named pipe (`FILE_FLAG_FIRST_PIPE_INSTANCE`) |
+| **macOS** | `OpenBox.app/Contents/MacOS/OpenBox` ([`native_host_mac.m`](native/native_host_mac.m)) | WKWebView / AppKit (macOS 11.0+) | Universal (`arm64` + `x86_64`) | `posix_spawn` (`POSIX_SPAWN_SETPGROUP`) with `DISPATCH_PROC_EXIT` monitor (window exits with server's status if child dies); `SIGTERM` to process group (2 s grace) then `SIGKILL`; catches `SIGINT`/`SIGTERM`/`SIGHUP` | `0600` `AF_UNIX` socket (`<data_dir>/openbox.sock`, verifying Darwin's 104-byte `sun_path` cap) |
 
 - **Server binary resolution:** Unless `OPENBOX_BACKEND=python` is set, the launchers (`openbox.sh`, `openbox-native.sh`, `openbox.ps1`, `openbox-native.ps1`, `OpenBox.app/Contents/Resources/bin/openbox`) and native hosts resolve `openbox-server` in order: `OPENBOX_SERVER_BIN` → bundle/share binary (`Contents/MacOS/openbox-server` inside `OpenBox.app`, or `openbox-server` / `openbox-server.exe` beside `native_host` or in the share dir) → `target/release/openbox-server` (launchers) → `PATH`. On source checkouts with no compiled Rust binary (or when `OPENBOX_BACKEND=python` is explicitly set), they fall back to `web_app.py` with Python 3.11+.
 - **Linux WebKitGTK GPU guard:** `native_host.c` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` by default (unless `OPENBOX_ENABLE_DMABUF` is set) to prevent blank windows on AMD GPUs and Steam Deck, and defaults WebKitGTK hardware acceleration to on-demand (`OPENBOX_WEBKIT_HARDWARE_ACCELERATION=always` to force always-on).
@@ -223,7 +223,7 @@ All three hosts implement the shared [Native Host Contract](docs/native-host-con
 Prebuilt OpenBox 3.0 releases (Linux AppImages, Linux Flatpak, Windows portable zips launched via `openbox.cmd`, and the universal macOS `OpenBox.app`) ship **zero bundled Python** and require **no Python installed** to run. Host **Python 3.11+** is only needed if you:
 
 1. **Run optional `.py` Plugin API v2 plugins:** Invoked strictly on demand out-of-process through `plugin_runner_v2.py` (with bubblewrap sandboxing on Linux). Native executable v2 plugin entrypoints need no Python.
-2. **Run the Python fallback or dev/test suite from source:** Using `OPENBOX_BACKEND=python` / `python3 web_app.py`, or running `./run_all_tests.sh` and `make check`.
+2. **Run the Python fallback or dev/test suite from source:** Using `OPENBOX_BACKEND=python` / `python3 web_app.py`, or running `./scripts/run_all_tests.sh` and `make check`.
 3. **Run the signed release installer scripts:** `scripts/install.ps1` (Windows) verifies Ed25519 signatures and registers desktop integration via `updates.py`; `scripts/install-macos.sh` verifies via `verify_release.py`; `scripts/install.sh` uses `python3` + `openssl`. Manual downloads (AppImage, Flatpak, or extracting `OpenBox-*-windows.zip` and running `OpenBox\openbox.cmd`) need no Python.
 
 ---
@@ -436,7 +436,7 @@ Or build from the manifest in a source checkout (build `openbox-server` first so
 ```bash
 cargo build --release --locked -p openbox-cli
 cp target/release/openbox-server .
-flatpak-builder --user --install --force-clean build-dir io.openbox.GameLauncher.yml
+flatpak-builder --user --install --force-clean build-dir packaging/io.openbox.GameLauncher.yml
 flatpak run io.openbox.GameLauncher
 ```
 
@@ -653,10 +653,10 @@ OpenBoxGL/
 │   ├── openbox-plugins/          Plugin API v2 host, JSON Lines runner client, bubblewrap sandbox
 │   ├── openbox-integrations/     Steam Bridge, OBS WebSocket 5, Quick Resume, deep links, tray/theme
 │   └── openbox-parity-tests/     Differential & golden parity integration tests
-├── native_host.c                 Linux WebKitGTK 4.1 host (spawns `openbox-server`; `web_app.py` fallback)
-├── native_host_win.c             Windows WebView2 host (`x64`/`arm64`, spawns `openbox-server.exe`)
-├── native_host_win.rc            Windows icon resource script (`openbox.ico`)
-├── native_host_mac.m             macOS universal WKWebView host (spawns `openbox-server`, `--selftest`)
+├── native/                       Native host sources: `native_host.c` (Linux WebKitGTK, spawns
+│                                `openbox-server`; `web_app.py` fallback),
+│   ├── native_host_win.c/.rc     Windows WebView2 host + icon resource (`openbox.ico`)
+│   └── native_host_mac.m         macOS universal WKWebView host (`--selftest`)
 ├── openbox.sh / openbox-native.sh    POSIX launchers (`--web`, backend & native-host resolution)
 ├── openbox.cmd / openbox.ps1 / openbox-native.ps1   Windows launchers
 ├── index.html                    Single-page UI shell
@@ -669,11 +669,12 @@ OpenBoxGL/
 ├── web_app.py, handlers/, pkg/   Reference/fallback Python backend (170 modules in `runtime_modules.txt`)
 ├── api_contracts.json            Frozen 417-route API contract (413 `/api/v2/*` + 4 `/api/host/*`)
 ├── Makefile                      Build (`build-rust`, `native-host`, `macos-app`), install, & check targets
-├── build_appimage.sh             Linux AppImage builder (`x86_64` & `aarch64`, zero bundled Python)
-├── io.openbox.GameLauncher.yml   Flatpak manifest (GNOME 51 runtime)
+├── scripts/build_appimage.sh     Linux AppImage builder (`x86_64` & `aarch64`, zero bundled Python)
+├── packaging/                    Install metadata: `openbox.desktop`, `openbox.metainfo.xml`,
+│                                Flatpak manifest `io.openbox.GameLauncher.yml` (GNOME 51 runtime)
 ├── scripts/                      Build scripts, installers, contract ratchets, benchmarks, screenshots
 ├── docs/                         User docs, upgrade guides, OpenAPI spec, reliability catalog, ADRs
-└── tests/test_*.py               265 standalone Python test files (`./run_all_tests.sh`)
+└── tests/test_*.py               265 standalone Python test files (`./scripts/run_all_tests.sh`)
 ```
 
 ### Build, test, and verify
@@ -689,7 +690,7 @@ OPENBOX_CONTRACT_SOURCE=rust make ratchets
 **Full Python & contract verification suite (265 test files):**
 
 ```bash
-./run_all_tests.sh
+./scripts/run_all_tests.sh
 make check                        # ruff, contracts, ratchets, frontend/i18n/CSP/tokens, coverage floors
 ```
 
@@ -706,7 +707,7 @@ python scripts\run_windows_tests.py test_platform_compat.py  # a subset
 # Linux (needs gcc + libwebkit2gtk-4.1-dev + Rust 1.92+)
 make build-rust
 make native-host
-./build_appimage.sh               # produces OpenBox-<arch>.AppImage
+./scripts/build_appimage.sh               # produces OpenBox-<arch>.AppImage
 ```
 
 ```powershell

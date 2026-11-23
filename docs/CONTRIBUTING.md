@@ -57,7 +57,7 @@ The gate needs dev-only tooling (ruff and coverage) in `.venv-dev`, which `make 
 Run the plain test suite without coverage when iterating:
 
 ```bash
-./run_all_tests.sh
+./scripts/run_all_tests.sh
 ```
 
 Run an individual module when iterating:
@@ -73,7 +73,7 @@ python scripts\run_windows_tests.py
 python scripts\run_windows_tests.py test_platform_compat.py
 ```
 
-`make check` and `./run_all_tests.sh` stay POSIX-only — they run on the Linux and `macos-15`/`macos-15-intel` CI lanes (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); Windows uses `scripts\run_windows_tests.py` above, and `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep all lanes green.
+`make check` and `./scripts/run_all_tests.sh` stay POSIX-only — they run on the Linux and `macos-15`/`macos-15-intel` CI lanes (coverage flooring, ruff, and the frontend/i18n/POSIX-packaging gates need the dev tooling and bash); Windows uses `scripts\run_windows_tests.py` above, and `ci.yml` runs the same portable gates on `windows-latest`. A change that touches platform behavior must keep all lanes green.
 
 Check that the version in `updates.py` matches every published spot:
 
@@ -84,7 +84,7 @@ make version-check
 Packaging checks:
 
 ```bash
-./build_appimage.sh
+./scripts/build_appimage.sh
 python3 -B tests/test_packaging.py
 ```
 
@@ -124,7 +124,7 @@ they do not automatically wait for an unrelated master run.
 
 - Git tags and [GitHub Releases](https://github.com/vindeckyy/OpenBoxGL/releases) on this repository are the canonical publication channel for the AppImages, Flatpak bundle, Windows portable zip, macOS app bundle, SBOMs, and install scripts.
 - Version strings are declared once in `updates.py`; `make version-check` (`scripts/check_version_sync.py`) must pass before tagging.
-- Changelog, `openbox.metainfo.xml`, README release badge/latest/installer text,
+- Changelog, `packaging/openbox.metainfo.xml`, README release badge/latest/installer text,
   PARITY lead, release-note compare link, SBOM fallback metadata, and issue
   templates must agree with `updates.py`; the version check also covers SUPPORT,
   SECURITY, and Flathub checklist markers. Review those documents for
@@ -152,7 +152,7 @@ OpenBox does not add telemetry. Diagnostics (`/api/v2/diagnostic`), artifacts, a
 
 1. Fork the repository and create a feature branch from `master`.
 2. Make your changes with clear commits.
-3. Run `make check` (or `./run_all_tests.sh` when coverage is not available locally).
+3. Run `make check` (or `./scripts/run_all_tests.sh` when coverage is not available locally).
 4. Open a pull request using the provided template.
 5. Describe the problem, the solution, and the test plan.
 6. Address review feedback promptly.
@@ -199,7 +199,7 @@ Update relevant docs when behavior changes:
 - [README.md](../README.md) for user-facing overview changes
 - [PARITY.md](PARITY.md) for capability status changes
 - [CHANGELOG.md](CHANGELOG.md) for release-visible changes
-- [openbox.metainfo.xml](../openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
+- [openbox.metainfo.xml](../packaging/openbox.metainfo.xml) and [SECURITY.md](SECURITY.md) when releases or support policy change
 
 Parity-related modules live in `pkg/parity/` (e.g. `parity_import.py`, `parity_premium.py`, `parity_storefront.py`, `parity_discovery.py`, `parity_media.py`, `parity_saves.py`, `parity_integrations.py`, `parity_gamescope.py`, `parity_wine.py`, `parity_faugus.py`). They are imported as `pkg.parity.*`; the flat `parity_*` import bridge was removed in 2.0 and `scripts/check_flat_imports.py` fails on any flat import. There are no root shim files since 1.9.0 (ADR 0003).
 

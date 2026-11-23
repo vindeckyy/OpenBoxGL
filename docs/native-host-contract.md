@@ -7,9 +7,9 @@ is absent, so the web UI remains usable in a plain browser for development.
 
 ## Platform implementations
 
-Two hosts implement this contract: `native_host.c` (WebKitGTK, Linux, built by
-`make native-host`) and `native_host_win.c` (WebView2, Windows, built by
-`scripts\build_native_host_windows.ps1`). A third one, `native_host_mac.m`
+Two hosts implement this contract: `native/native_host.c` (WebKitGTK, Linux, built by
+`make native-host`) and `native/native_host_win.c` (WebView2, Windows, built by
+`scripts\build_native_host_windows.ps1`). A third one, `native/native_host_mac.m`
 (WKWebView, macOS, built by `scripts/build_native_host_macos.sh`), implements
 it the same way. Where a clause below names a POSIX mechanism, the WebView2
 host uses the equivalent Windows mechanism:
@@ -221,13 +221,13 @@ through the capability resolver with a browser fallback.
 - On window close, the page requests `POST /api/v2/shutdown` when tracked games
   remain, while the native host signals the server child as the lifecycle
   owner: on Linux and macOS it sends `SIGTERM` to the child process group; on
-  Windows (`native_host_win.c`) it sends `CTRL_BREAK` to the
+  Windows (`native/native_host_win.c`) it sends `CTRL_BREAK` to the
   `CREATE_NEW_PROCESS_GROUP` child.
 - `openbox-server` performs graceful teardown by stopping tracked sessions, waiting
   up to two seconds, force-killing known game process groups (or their PIDs),
   persisting final cleanup, and emitting the `app_shutdown` plugin event. The native host also waits
   for the child and, on Linux and macOS, sends `SIGKILL` to its process group
-  if it remains alive; on Windows (`native_host_win.c`) the backstop is
+  if it remains alive; on Windows (`native/native_host_win.c`) the backstop is
   `TerminateJobObject` on the child's job object, which also kills children.
 - The host holds no credentials. The token stays in the URL and the
   owner-readable `server.token` file, unchanged from the current threat model.
@@ -235,7 +235,7 @@ through the capability resolver with a browser fallback.
 ## Persistence
 
 Window geometry lives in a flat `window-geometry` file in the data directory
-(`native_host.c` `load_geometry`/`save_geometry`), not in `ui_state` and not in
+(`native/native_host.c` `load_geometry`/`save_geometry`), not in `ui_state` and not in
 `settings`. The file holds size plus maximized state only (`"<w> <h> <maximized>"`);
 there is no x/y — on Wayland absolute window position is WM-controlled and never
 persisted. `crates/openbox-store/src/json_store.rs` owns the `ui_state` schema default (`{}`), which carries

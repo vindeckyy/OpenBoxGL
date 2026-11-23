@@ -16,7 +16,7 @@ Fixes #
 
 Describe how you verified the change.
 
-- [ ] `./run_all_tests.sh`
+- [ ] `./scripts/run_all_tests.sh`
 - [ ] Manual UI verification
 - [ ] AppImage or packaging check
 

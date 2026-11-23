@@ -233,7 +233,7 @@ build has a deliberate, documented narrower surface.
 
 | Capability | Status | Acceptance check |
 |---|---|---|
-| Native window | done | `native_host_win.c` (WebView2) renders the same UI in a real window, with remembered geometry, tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via a named pipe (1.13.0) |
+| Native window | done | `native/native_host_win.c` (WebView2) renders the same UI in a real window, with remembered geometry, tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via a named pipe (1.13.0) |
 | Portable install and verified update | done | `scripts/install.ps1` verifies the release key anchor, the SHA-256 sidecar, and the Ed25519 signature before extracting to `%LOCALAPPDATA%\OpenBox\share\openbox`, keeps `share\openbox.previous`, and registers Start Menu plus the `openbox://` handler; the in-app updater refuses to replace anything that is not an installed copy (1.13.0) |
 | Compiled host without a toolchain | done | The release job builds, attests, and signs `native_host.exe` into the zip and publishes it standalone as `OpenBox-x86_64-windows-native-host.exe`; a source checkout can save it beside `web_app.py` and get the native window with no MSVC or WebView2 SDK (1.13.0) |
 | Launcher ladder | done | `openbox.cmd` / `openbox.ps1` / `openbox-native.ps1` mirror the shell scripts: native host, else browser app window, else a plain tab; `openbox --web` forces the browser (1.13.0) |
@@ -262,7 +262,7 @@ specifically; the matrix above is Linux behavior.
 
 | Capability | Status | Acceptance check |
 |---|---|---|
-| Native window | done | `native_host_mac.m` (WKWebView) renders the same UI in a real window, with remembered geometry, `NSStatusItem` tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via an `AF_UNIX` socket with the 104-byte `sun_path` limit checked before binding (1.19.0) |
+| Native window | done | `native/native_host_mac.m` (WKWebView) renders the same UI in a real window, with remembered geometry, `NSStatusItem` tray/minimize-to-tray, `openbox://` deeplinks, and one instance per data directory via an `AF_UNIX` socket with the 104-byte `sun_path` limit checked before binding (1.19.0) |
 | Universal install and verified update | done | `OpenBox-macos.zip` carries arm64 and x86_64 hosts and the universal `openbox-server`; `scripts/install-macos.sh` verifies the release key anchor, SHA-256 sidecar, and Ed25519 signature before installing `OpenBox.app`; the in-app updater swaps the bundle after the server exits and keeps `OpenBox.app.previous` (1.19.0) |
 | No-install app | done | The 3.0 bundle ships the universal Rust `openbox-server` and the WKWebView host with zero bundled CPython, so the app runs without Python installed. `scripts/install-macos.sh` needs `python3` 3.11+ to verify the release (1.19.0; zero-CPython bundle ADR 0115) |
 | Emulator detection and launch | done | Every bundled definition carries `native_exe_macos`; an app bundle resolves through `Contents/Info.plist`, and an explicit empty value means "no verified macOS build" and is reported as not installed (1.19.0) |
