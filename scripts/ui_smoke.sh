@@ -3,6 +3,7 @@
 # puppeteer, and asserts the AppState refactor renders a working grid.
 set -u
 cd "$(dirname "$0")/.."
+export PYTHONPATH="$PWD/app:$PWD"
 
 DATA_DIR=$(mktemp -d /tmp/obx-ui-smoke.XXXXXX)
 export OPENBOX_DATA_DIR="$DATA_DIR"

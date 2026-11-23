@@ -74,11 +74,12 @@ mod tests {
                 })
                 .expect("python 3 must be available on PATH");
             let script = format!(
-                "import json, sys; sys.path.insert(0, {repo:?}); \
+                "import json, sys; sys.path.insert(0, {repo:?}); sys.path.insert(0, {app:?}); \
                  from state_store import _stable_game_id; \
                  cases = json.load(open({fix:?}, encoding='utf-8'))['cases']; \
                  print(json.dumps([_stable_game_id(c['input']) for c in cases]))",
                 repo = repo_root.to_string_lossy(),
+                app = repo_root.join("app").to_string_lossy(),
                 fix = fixture_path.to_string_lossy(),
             );
             let out = std::process::Command::new(python)

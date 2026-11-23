@@ -102,13 +102,14 @@ mod tests {
             .parent()
             .unwrap();
         let py = format!(
-            "import sys; sys.path.insert(0, {repo:?}); \
+            "import sys; sys.path.insert(0, {repo:?}); sys.path.insert(0, {app:?}); \
              from handlers.arcade import hash_kiosk_pin, verify_kiosk_pin; \
              h = hash_kiosk_pin('4242', salt=b'0123456789abcdef', iterations=120000); \
              assert h == {rh:?}, (h, {rh:?}); \
              assert verify_kiosk_pin({rh:?}, '4242'); \
              print('OK')",
             repo = repo_root.to_string_lossy(),
+            app = repo_root.join("app").to_string_lossy(),
             rh = rust_hash,
         );
         let python = if cfg!(windows) {

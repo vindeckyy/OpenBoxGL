@@ -457,7 +457,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7.0.1
         with:
           repository: vindeckyy/OpenBoxGL
-          ref: release/1.19
+          ref: release/1.19.1
           path: .baseline
           persist-credentials: false
 

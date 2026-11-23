@@ -203,7 +203,7 @@ mod tests {
 
         // 1. Python writes a v7 library with Unicode title, real ROM path, and active session
         let py_write = format!(
-            "import sys; sys.path.insert(0, {repo:?}); \
+            "import sys; sys.path.insert(0, {repo:?}); sys.path.insert(0, {app:?}); \
              from pathlib import Path; from state_store import JsonStateStore; \
              s = JsonStateStore(Path({prim:?})); \
              st = s.load(); \
@@ -212,6 +212,7 @@ mod tests {
              s.save(st); \
              print(st['library_id'])",
             repo = repo_root.to_string_lossy(),
+            app = repo_root.join("app").to_string_lossy(),
             prim = primary.to_string_lossy(),
             rom1 = rom1.to_string_lossy(),
         );
@@ -256,7 +257,7 @@ mod tests {
 
         // 3. Python reads Rust-saved library and runs check_library() cleanly!
         let py_verify = format!(
-            "import sys, json; sys.path.insert(0, {repo:?}); \
+            "import sys, json; sys.path.insert(0, {repo:?}); sys.path.insert(0, {app:?}); \
              from pathlib import Path; from state_store import JsonStateStore; \
              from pkg.state import library_v7; \
              s = JsonStateStore(Path({prim:?})); \
@@ -270,6 +271,7 @@ mod tests {
              assert rep['exit_code'] == 0, rep; \
              print('OK')",
             repo = repo_root.to_string_lossy(),
+            app = repo_root.join("app").to_string_lossy(),
             prim = primary.to_string_lossy(),
             lib_id = py_lib_id,
             gid = py_gid,
