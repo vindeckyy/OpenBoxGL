@@ -31,7 +31,7 @@ jobs:
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           }
-          expected_version="$(python3 -c 'import updates; print(updates.VERSION)')"
+          expected_version="$(python3 -c 'import sys; sys.path.insert(0, "app"); import updates; print(updates.VERSION)')"
           test "$GITHUB_REF_NAME" = "v$expected_version" || {
             echo "tag $GITHUB_REF_NAME does not match updates.py version $expected_version" >&2
             exit 1

@@ -125,7 +125,7 @@ jobs:
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           }
-          expected_version="$(python3 -c 'import updates; print(updates.VERSION)')"
+          expected_version="$(python3 -c 'import sys; sys.path.insert(0, "app"); import updates; print(updates.VERSION)')"
           test "$GITHUB_REF_NAME" = "v$expected_version" || {
             echo "tag $GITHUB_REF_NAME does not match updates.py version $expected_version" >&2
             exit 1
@@ -256,7 +256,7 @@ jobs:
           if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
             throw "invalid release tag: $tag"
           }
-          $expected = (python -B -c "import updates; print(updates.VERSION)").Trim()
+          $expected = (python -B -c "import sys; sys.path.insert(0, 'app'); import updates; print(updates.VERSION)").Trim()
           if ($tag -ne "v$expected") {
             throw "tag $tag does not match updates.py version $expected"
           }
@@ -378,7 +378,7 @@ jobs:
           if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
             throw "invalid release tag: $tag"
           }
-          $expected = (python -B -c "import updates; print(updates.VERSION)").Trim()
+          $expected = (python -B -c "import sys; sys.path.insert(0, 'app'); import updates; print(updates.VERSION)").Trim()
           if ($tag -ne "v$expected") {
             throw "tag $tag does not match updates.py version $expected"
           }
@@ -515,7 +515,7 @@ jobs:
             echo "invalid release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
-          expected="$(python3 -c 'import updates; print(updates.VERSION)')"
+          expected="$(python3 -c 'import sys; sys.path.insert(0, "app"); import updates; print(updates.VERSION)')"
           if [ "$GITHUB_REF_NAME" != "v$expected" ]; then
             echo "tag $GITHUB_REF_NAME does not match updates.py version $expected" >&2
             exit 1
