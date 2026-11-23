@@ -34,9 +34,9 @@ $WEBVIEW2_SDK_SHA256 = if ($env:WEBVIEW2_SDK_SHA256) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $repoRoot 'native_host_win.c'
+$source = Join-Path $repoRoot 'native/native_host_win.c'
 if (-not (Test-Path -LiteralPath $source)) {
-    throw "native_host_win.c not found at $source"
+    throw "native/native_host_win.c not found at $source"
 }
 
 function Find-VcVars {
@@ -103,8 +103,8 @@ $vcvars = Find-VcVars
 $sdk = Find-WebView2Sdk
 if (-not $OutputPath) { $OutputPath = Join-Path $repoRoot 'native_host.exe' }
 
-$icon = Join-Path $repoRoot 'openbox.ico'
-$resource = Join-Path $repoRoot 'native_host_win.rc'
+$icon = Join-Path $repoRoot 'native/openbox.ico'
+$resource = Join-Path $repoRoot 'native/native_host_win.rc'
 $objects = Join-Path ([System.IO.Path]::GetTempPath()) 'openbox-native-host-obj'
 if (Test-Path -LiteralPath $objects) { Remove-Item -Recurse -Force -LiteralPath $objects }
 New-Item -ItemType Directory -Path $objects | Out-Null
@@ -112,7 +112,7 @@ New-Item -ItemType Directory -Path $objects | Out-Null
 $iconArg = if (Test-Path -LiteralPath $icon) { "`"$icon`"" } else { '' }
 $resourceArg = if ($iconArg -and (Test-Path -LiteralPath $resource)) { "`"$resource`"" } else { '' }
 if (-not $resourceArg) {
-    Write-Warning "openbox.ico or native_host_win.rc missing; building without an embedded icon."
+    Write-Warning "native/openbox.ico or native/native_host_win.rc missing; building without an embedded icon."
 }
 
 # cl.exe, rc.exe and their environment only exist inside the vcvars shell.

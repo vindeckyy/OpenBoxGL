@@ -38,7 +38,7 @@ def _data_dir():
 def capabilities(handler, parsed):
     """Report host capabilities; never blocks, and is the page's first call.
 
-    The native host (native_host.c) sets OPENBOX_NATIVE_HOST before spawning
+    The native host (native/native_host.c) sets OPENBOX_NATIVE_HOST before spawning
     this server, so its presence means native chrome and dialogs are available
     and the frontend should route through the bridge. gamepad stays "webkit"
     regardless: the host's onGamepad is a no-op stub, so the Web Gamepad API

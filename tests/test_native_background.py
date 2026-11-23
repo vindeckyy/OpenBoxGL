@@ -110,7 +110,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             "  printf(\"%d %d %d\\n\", (int)(bg.red * 255 + 0.5), (int)(bg.green * 255 + 0.5), (int)(bg.blue * 255 + 0.5));\n"
             "  return 0;\n}\n"
         )
-        source = _helper_source("native_host.c")
+        source = _helper_source("native/native_host.c")
         with tempfile.TemporaryDirectory() as data:
             (Path(data) / "native-background").write_text("#f5f1e8\n", encoding="utf-8")
             self.assertEqual(self._compile_and_run("linux_helper", source, prelude, driver, data), ["245", "241", "232"])
@@ -141,7 +141,7 @@ class NativeHostFirstPaintTests(unittest.TestCase):
             "  apply_saved_background(&c);\n"
             "  printf(\"%u %u %u\\n\", c.R, c.G, c.B);\n  return 0;\n}\n"
         )
-        source = _helper_source("native_host_win.c")
+        source = _helper_source("native/native_host_win.c")
         with tempfile.TemporaryDirectory() as data:
             (Path(data) / "native-background").write_text("#f5f1e8\n", encoding="utf-8")
             self.assertEqual(self._compile_and_run("win_helper", source, prelude, driver, data), ["245", "241", "232"])

@@ -54,7 +54,7 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # Swatinem/rust-cache@v2
 
       - name: Compile native host
-        run: gcc -O2 native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
+        run: gcc -O2 native/native_host.c -o /tmp/native_host_check $(pkg-config --cflags --libs webkit2gtk-4.1)
 
       - name: Run Rust workspace checks
         run: |
@@ -266,7 +266,7 @@ jobs:
 
       # The released zip carries the WebView2 host, so users get the native
       # window without a toolchain. Building it here also means a broken
-      # native_host_win.c fails the release instead of shipping silently;
+      # native/native_host_win.c fails the release instead of shipping silently;
       # the windows CI job proves the same build on every push.
       - name: Build the WebView2 native host
         shell: pwsh

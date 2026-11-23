@@ -30,7 +30,7 @@ scripts/node_modules/
 htmlcov/
 perf-results.json
 
-# Compiled native host binary (built from native_host.c)
+# Compiled native host binary (built from native/native_host.c)
 native_host
 native_host.exe
 

@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
     g_free(token);
     return 0;
 }
-'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native" / "native_host.c")),
             encoding="utf-8",
         )
         cflags = subprocess.check_output(
@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
     g_free(path);
     return 0;
 }
-'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native" / "native_host.c")),
             encoding="utf-8",
         )
         cflags = subprocess.check_output(
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
         # Compile
-        compile_cmd = ['gcc', '-Wall', '-Wextra'] + cflags.split() + ['-o', '/tmp/test_native_host', 'native_host.c'] + libs.split()
+        compile_cmd = ['gcc', '-Wall', '-Wextra'] + cflags.split() + ['-o', '/tmp/test_native_host', 'native/native_host.c'] + libs.split()
         result = subprocess.run(
             compile_cmd,
             capture_output=True, text=True,
@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
     def test_boot_wait_uses_kernel_notification(self):
         """Boot wait should not add a fixed 100ms delay after every check."""
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(root_dir, 'native_host.c'), encoding='utf-8') as handle:
+        with open(os.path.join(root_dir, 'native', 'native_host.c'), encoding='utf-8') as handle:
             source = handle.read()
         parent_wait = source[source.index('wait_for_boot_files'):source.index('static gboolean\nboot_server')]
         self.assertIn('inotify_init1', parent_wait)
@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
 
     def test_application_icon_uses_bundled_svg_for_source_and_installed_layouts(self):
         """Window and tray branding resolve the SVG beside the web app."""
-        source = (Path(__file__).resolve().parent.parent / 'native_host.c').read_text(
+        source = (Path(__file__).resolve().parent.parent / 'native' / 'native_host.c').read_text(
             encoding='utf-8'
         )
         self.assertIn('gtk_window_set_icon_from_file', source)
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
     def test_single_instance_dispatches_forwarded_requests(self):
         """A running owner receives deeplinks, not only the legacy focus ping."""
         root_dir = Path(__file__).resolve().parent.parent
-        source = (root_dir / 'native_host.c').read_text(encoding='utf-8')
+        source = (root_dir / 'native' / 'native_host.c').read_text(encoding='utf-8')
         self.assertIn('send_single_instance_request(sock_fd, request)', source)
         self.assertIn('g_str_has_prefix(message, "deeplink ")', source)
         self.assertIn('dispatch_native_request(&request)', source)
@@ -423,7 +423,7 @@ int main(int argc, char **argv) {
     }
     return 0;
 }
-'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native" / "native_host.c")),
                 encoding='utf-8',
             )
             flags = subprocess.check_output(
@@ -476,7 +476,7 @@ int main(int argc, char **argv) {
     }
     return 0;
 }
-'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native_host.c")),
+'''.replace("@@NATIVE_SOURCE@@", str(root_dir / "native" / "native_host.c")),
                 encoding='utf-8',
             )
             flags = subprocess.check_output(
@@ -498,7 +498,7 @@ int main(int argc, char **argv) {
 
     def test_signal_shutdown_covers_sigterm(self):
         """SIGTERM/SIGHUP must stop the server, which has its own pgid."""
-        source = (Path(__file__).resolve().parent.parent / 'native_host.c').read_text(
+        source = (Path(__file__).resolve().parent.parent / 'native' / 'native_host.c').read_text(
             encoding='utf-8'
         )
         self.assertIn('g_unix_signal_add(SIGTERM, on_signal, NULL)', source)
@@ -507,7 +507,7 @@ int main(int argc, char **argv) {
 
     def test_windows_host_dispatches_startup_request(self):
         """The first Windows instance must not drop its own --play/--uri."""
-        source = (Path(__file__).resolve().parent.parent / 'native_host_win.c').read_text(
+        source = (Path(__file__).resolve().parent.parent / 'native' / 'native_host_win.c').read_text(
             encoding='utf-8'
         )
         main_body = source[source.index('wWinMain('):]

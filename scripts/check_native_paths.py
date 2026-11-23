@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native host gate (ADR 0091): the three native hosts call only the /api/host channel.
 
-``native_host.c``, ``native_host_win.c``, and ``native_host_mac.m`` must not name
+``native/native_host.c``, ``native/native_host_win.c``, and ``native/native_host_mac.m`` must not name
 the retired unversioned host paths or any /api/v1 route. A host may name
 ``/api/host/*`` and the public ``/api/v2/*`` operations only.
 """
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HOSTS = ("native_host.c", "native_host_win.c", "native_host_mac.m")
+HOSTS = ("native/native_host.c", "native/native_host_win.c", "native/native_host_mac.m")
 RETIRED = ("/api/launch", "/api/shutdown", "/api/native/capabilities", "/api/v2/resume")
 RETIRED_PATTERN = re.compile("|".join(re.escape(path) + r"(?![\w/-])" for path in RETIRED))
 V1_PATTERN = re.compile(r"/api/v1\b")

@@ -51,7 +51,7 @@ ratchets:
 
 
 native-host:
-	gcc -O2 native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)
+	gcc -O2 native/native_host.c -o $(NATIVE_HOST) $$(pkg-config --cflags --libs webkit2gtk-4.1)
 
 # The macOS native host (WKWebView) and the app bundle that ships it.
 native-host-macos:

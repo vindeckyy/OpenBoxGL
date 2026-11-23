@@ -42,7 +42,7 @@ for arch in "${arches[@]}"; do
     -fobjc-arc -O2 -Wall -Werror \
     -mmacosx-version-min=11.0 \
     -arch "$arch" \
-    native_host_mac.m \
+    native/native_host_mac.m \
     -framework Cocoa -framework WebKit \
     -o "$slice"
   slices+=("$slice")

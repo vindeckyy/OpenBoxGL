@@ -54,7 +54,7 @@ mkdir -p "$appdir/usr/share/openbox/plugins"
 cp "$source_root/plugins/catalog.json" "$appdir/usr/share/openbox/plugins/catalog.json"
 mkdir -p "$appdir/usr/share/openbox/themes"
 cp "$source_root"/themes/*.css "$appdir/usr/share/openbox/themes/"
-gcc -O2 "$source_root/native_host.c" -o "$appdir/usr/share/openbox/native_host" $(pkg-config --cflags --libs webkit2gtk-4.1)
+gcc -O2 "$source_root/native/native_host.c" -o "$appdir/usr/share/openbox/native_host" $(pkg-config --cflags --libs webkit2gtk-4.1)
 
 install -m 755 /dev/stdin "$appdir/AppRun" <<'EOF'
 #!/bin/bash

@@ -48,7 +48,7 @@ from stock_themes import ensure_stock_themes
 from webapp_state import PLUGIN_EPOCH, ROOT, game_from_payload, load_state_view, public_webhook_configs, transact_state, webhook_configs
 
 # The native windows paint their background before the page loads. The app writes the active
-# theme's page background here; both hosts read it at launch (native_host.c, native_host_win.c).
+# theme's page background here; both hosts read it at launch (native/native_host.c, native/native_host_win.c).
 NATIVE_BACKGROUND_FILE = "native-background"
 DEFAULT_NATIVE_BACKGROUND = "#0F0E0C"
 _THEME_BACKGROUND = re.compile(r"--bg\s*:\s*(#[0-9a-fA-F]{6})\b")

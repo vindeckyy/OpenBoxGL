@@ -1407,7 +1407,7 @@ def test_native_host_deeplink_actions_are_handled_by_the_page():
     The host used to emit "resume", which the page ignored, so a native
     resume landed on an unchanged library view.
     """
-    host = (ROOT / "native_host.c").read_text(encoding="utf-8")
+    host = (ROOT / "native/native_host.c").read_text(encoding="utf-8")
     app = APP_JS.read_text(encoding="utf-8")
     host_actions = set(re.findall(r'return "([a-z]+)";', host))
     assert host_actions, "the host must map requests to deeplink actions"
@@ -1976,8 +1976,8 @@ def test_p2_bigbox_keyboard_resolves_one_action_before_directions():
     assert action < arrows, "directional navigation must only run when no action matched"
 
 def test_p2_native_dialogs_forward_start_path_to_hosts():
-    win = (ROOT / "native_host_win.c").read_text(encoding="utf-8")
-    linux = (ROOT / "native_host.c").read_text(encoding="utf-8")
+    win = (ROOT / "native/native_host_win.c").read_text(encoding="utf-8")
+    linux = (ROOT / "native/native_host.c").read_text(encoding="utf-8")
     assert "IFileDialog_SetFolder" in win and "start_path" in win, \
         "Windows host must open the chooser at the requested folder"
     assert "gtk_file_chooser_set_current_folder" in linux and '"start_path"' in linux, \
