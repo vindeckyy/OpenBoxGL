@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, ROOT / "app")
+sys.path.insert(0, os.path.join(ROOT, "app"))
 os.environ.setdefault("OPENBOX_DATA_DIR", tempfile.mkdtemp())
 
 from pkg.state import launch as launch_mod  # noqa: E402
