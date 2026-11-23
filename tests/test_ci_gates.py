@@ -270,9 +270,10 @@ class SuiteRunnerRetryTests(unittest.TestCase):
         )
 
     def _run(self, root: Path) -> subprocess.CompletedProcess:
-        shutil.copy(ROOT / "run_all_tests.sh", root / "run_all_tests.sh")
+        (root / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "run_all_tests.sh", root / "scripts" / "run_all_tests.sh")
         return subprocess.run(
-            ["bash", str(root / "run_all_tests.sh")],
+            ["bash", str(root / "scripts" / "run_all_tests.sh")],
             capture_output=True, text=True, timeout=300, check=False,
         )
 
@@ -323,7 +324,7 @@ class SuiteRunnerRetryTests(unittest.TestCase):
         the same commit, which is the gap this closes."""
         gate = (ROOT / "scripts" / "check_tests.py").read_text(encoding="utf-8")
         self.assertIn("range(3)", gate, "check_tests.py must still allow 3 attempts")
-        runner = (ROOT / "run_all_tests.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "run_all_tests.sh").read_text(encoding="utf-8")
         self.assertIn(
             f"ATTEMPTS={self.ATTEMPTS}", runner,
             "the CI suite runner must keep the same tolerance as the local gate",

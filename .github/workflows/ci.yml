@@ -36,7 +36,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Run test suite
-        run: ./run_all_tests.sh
+        run: ./scripts/run_all_tests.sh
 
   windows:
     runs-on: windows-latest
@@ -165,7 +165,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           ln -sf "$(command -v python)" "$RUNNER_TEMP/bin/python3"
-          PATH="$RUNNER_TEMP/bin:$PATH" ./run_all_tests.sh
+          PATH="$RUNNER_TEMP/bin:$PATH" ./scripts/run_all_tests.sh
 
       - name: Runtime module manifest
         run: python -B scripts/check_runtime_modules.py
@@ -380,7 +380,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
-          shellcheck -S error -x run_all_tests.sh build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh
+          shellcheck -S error -x scripts/run_all_tests.sh scripts/build_appimage.sh openbox.sh openbox-native.sh scripts/*.sh
 
   desktop-appstream:
     runs-on: ubuntu-latest

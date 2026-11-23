@@ -140,7 +140,7 @@ def test_i18n_js_in_app_imports():
 
 def test_locales_in_build():
     """build_appimage.sh must bundle locale files."""
-    build_path = ROOT / "build_appimage.sh"
+    build_path = ROOT / "scripts" / "build_appimage.sh"
     content = build_path.read_text(encoding="utf-8")
     assert "locales" in content, "locales not in build_appimage.sh"
 

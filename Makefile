@@ -131,4 +131,4 @@ uninstall:
 	rm -rf $(DESTDIR)$(LICENSEDIR)
 
 appimage:
-	bash build_appimage.sh
+	bash scripts/build_appimage.sh

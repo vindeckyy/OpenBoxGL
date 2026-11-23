@@ -295,7 +295,7 @@ if __name__ == "__main__":
         if IS_WINDOWS:
             print("To run tests: python -B scripts\\run_windows_tests.py")
         else:
-            print("To run tests: ./run_all_tests.sh or make check")
+            print("To run tests: ./scripts/run_all_tests.sh or make check")
         sys.exit(0)
     else:
         # Only the self-test above runs this module directly.

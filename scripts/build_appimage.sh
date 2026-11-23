@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # Bundle the host interpreter and libraries, so the artifact arch follows the
 # build host. OPENBOX_ARCH overrides detection (CI cross-builds set it).
 arch="${OPENBOX_ARCH:-$(uname -m)}"

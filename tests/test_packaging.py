@@ -210,7 +210,7 @@ def test_runtime_manifest():
     for mod in modules:
         assert not mod.endswith(".pyc"), f"manifest should not contain pyc files: {mod}"
         assert not mod.startswith("build/"), f"manifest should not contain build files: {mod}"
-    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build_appimage.sh").read_text(encoding="utf-8")
     flatpak = (ROOT / "packaging/io.openbox.GameLauncher.yml").read_text(encoding="utf-8")
     assert "openbox-server" in build_script
     assert "plugin_runner_v2.py" in build_script
@@ -475,7 +475,7 @@ def test_windows_installer_rollback():
 
 
 def test_build_appimage_validation():
-    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build_appimage.sh").read_text(encoding="utf-8")
     assert "openbox-server" in build_script
     assert "missing openbox-server binary" in build_script
     assert "sbom-manifest.json" in build_script
@@ -687,7 +687,7 @@ def test_update_verification():
 
 
 def test_appimage_update_info():
-    build_script = ROOT / "build_appimage.sh"
+    build_script = ROOT / "scripts" / "build_appimage.sh"
     content = build_script.read_text(encoding="utf-8")
     assert "OPENBOX_UPDATE_INFORMATION" in content
     assert "gh-releases-zsync|vindeckyy|OpenBoxGL|latest" in content
@@ -699,7 +699,7 @@ def test_appimage_update_info():
 @_posix_only
 @_linux_only
 def test_appimage_library_scope():
-    build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build_appimage.sh").read_text(encoding="utf-8")
     app_run = build_script.split('install -m 755 /dev/stdin "$appdir/AppRun" <<\'EOF\'', 1)[1].split("\nEOF\n", 1)[0]
     native_launcher = (ROOT / "openbox-native.sh").read_text(encoding="utf-8")
     assert "OPENBOX_BUNDLED_LIB_PATH" in app_run
@@ -754,7 +754,7 @@ def test_release_workflow():
     assert "ubuntu-22.04" in content
     assert "ubuntu-latest" not in content
     assert "tags:" in content and '"v*"' in content
-    assert "./build_appimage.sh" in content
+    assert "scripts/build_appimage.sh" in content
     assert "target_commitish: ${{ github.sha }}" in content
     # Two-arch build matrix (ADR 0024): x86_64 on ubuntu-22.04, aarch64 on
     # ubuntu-24.04-arm (ubuntu-22.04-arm deprecates 2026-09-17).

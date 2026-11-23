@@ -34,7 +34,7 @@ echo "== 2/6 verification gate =="
 make check
 
 echo "== 3/6 AppImage build ($arch) =="
-OPENBOX_APPDIR="$temporary/OpenBox.AppDir" bash build_appimage.sh "$PWD/$appimage"
+OPENBOX_APPDIR="$temporary/OpenBox.AppDir" bash scripts/build_appimage.sh "$PWD/$appimage"
 [ -f "$appimage" ] || fail "AppImage missing after build"
 
 VERSION="$(python3 -c 'import re; print(re.search(r"^VERSION\s*=\s*\"([^\"]+)\"", open("updates.py").read(), re.M).group(1))')"

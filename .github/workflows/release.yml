@@ -67,7 +67,7 @@ jobs:
           python3 -B scripts/diff_oracle.py --rust-bin target/release/openbox-server --suite all --verify-disk-state
 
       - name: Run test suite
-        run: ./run_all_tests.sh
+        run: ./scripts/run_all_tests.sh
 
   build:
     needs: test
@@ -135,7 +135,7 @@ jobs:
         env:
           OPENBOX_APPDIR: ${{ runner.temp }}/OpenBox.AppDir
           OPENBOX_ARCH: ${{ matrix.arch }}
-        run: ./build_appimage.sh "$PWD/OpenBox-${{ matrix.arch }}.AppImage"
+        run: ./scripts/build_appimage.sh "$PWD/OpenBox-${{ matrix.arch }}.AppImage"
 
       # The AppImage must not need a glibc newer than the 2.35 floor (ADR 0065).
       # Extract it and read the GLIBC_ symbol versions of every ELF file in it.
@@ -525,7 +525,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
           ln -sf "$(command -v python)" "$RUNNER_TEMP/bin/python3"
-          PATH="$RUNNER_TEMP/bin:$PATH" ./run_all_tests.sh
+          PATH="$RUNNER_TEMP/bin:$PATH" ./scripts/run_all_tests.sh
 
       # The bundle carries the universal native host and the bundled
       # interpreter, and the build signs it and runs the smoke test.
