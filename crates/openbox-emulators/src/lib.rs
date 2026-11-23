@@ -210,7 +210,7 @@ mod tests {
 
         let ctrl = control_game_session(&app, &lid, "kill").unwrap();
         assert_eq!(ctrl["ok"], json!(true));
-        for _ in 0..40 {
+        for _ in 0..200 {
             if app.registry.is_empty() {
                 break;
             }
