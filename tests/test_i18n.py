@@ -147,7 +147,7 @@ def test_locales_in_build():
 
 def test_locales_in_flatpak():
     """Flatpak manifest must install locale files."""
-    flatpak_path = ROOT / "io.openbox.GameLauncher.yml"
+    flatpak_path = ROOT / "packaging/io.openbox.GameLauncher.yml"
     content = flatpak_path.read_text(encoding="utf-8")
     assert "locales" in content, "locales not in Flatpak manifest"
 

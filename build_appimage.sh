@@ -89,7 +89,7 @@ exec "$app_root/usr/share/openbox/openbox-native.sh" "$@"
 EOF
 
 # Unique desktop/icon names avoid colliding with the Openbox window manager.
-python3 - "$source_root/openbox.desktop" "$source_root/updates.py" > "$appdir/usr/share/applications/io.openbox.GameLauncher.desktop" <<'PY'
+python3 - "$source_root/packaging/openbox.desktop" "$source_root/updates.py" > "$appdir/usr/share/applications/io.openbox.GameLauncher.desktop" <<'PY'
 import pathlib, re, sys
 desktop = pathlib.Path(sys.argv[1]).read_text()
 version = "0.0.0"
@@ -106,7 +106,7 @@ if "X-AppImage-Version=" not in desktop:
 sys.stdout.write(desktop if desktop.endswith("\n") else desktop + "\n")
 PY
 cp "$source_root/openbox.svg" "$appdir/usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg"
-cp "$source_root/openbox.metainfo.xml" "$appdir/usr/share/metainfo/openbox.appdata.xml"
+cp "$source_root/packaging/openbox.metainfo.xml" "$appdir/usr/share/metainfo/openbox.appdata.xml"
 cp "$source_root/LICENSE" "$appdir/usr/share/openbox/LICENSE"
 ln -s usr/share/applications/io.openbox.GameLauncher.desktop "$appdir/io.openbox.GameLauncher.desktop"
 ln -s usr/share/icons/hicolor/scalable/apps/io.openbox.GameLauncher.svg "$appdir/io.openbox.GameLauncher.svg"

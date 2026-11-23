@@ -211,7 +211,7 @@ def test_runtime_manifest():
         assert not mod.endswith(".pyc"), f"manifest should not contain pyc files: {mod}"
         assert not mod.startswith("build/"), f"manifest should not contain build files: {mod}"
     build_script = (ROOT / "build_appimage.sh").read_text(encoding="utf-8")
-    flatpak = (ROOT / "io.openbox.GameLauncher.yml").read_text(encoding="utf-8")
+    flatpak = (ROOT / "packaging/io.openbox.GameLauncher.yml").read_text(encoding="utf-8")
     assert "openbox-server" in build_script
     assert "plugin_runner_v2.py" in build_script
     assert "runtime_modules.txt" in flatpak
@@ -497,9 +497,9 @@ def test_desktop_and_appstream_validate_subprocess():
     if shutil.which("desktop-file-validate") is None or shutil.which("appstreamcli") is None:
         print("  Desktop/AppStream validators: skipped (tools not installed)")
         return
-    subprocess.run(["desktop-file-validate", str(ROOT / "openbox.desktop")], check=True)
+    subprocess.run(["desktop-file-validate", str(ROOT / "packaging/openbox.desktop")], check=True)
     subprocess.run(
-        ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
+        ["appstreamcli", "validate", "--no-net", str(ROOT / "packaging/openbox.metainfo.xml")],
         check=True,
     )
     print("  Desktop/AppStream validators: ok")
@@ -507,8 +507,8 @@ def test_desktop_and_appstream_validate_subprocess():
 
 def test_ci_desktop_appstream_job():
     block = _ci_job_block("desktop-appstream")
-    assert "desktop-file-validate openbox.desktop" in block
-    assert "appstreamcli validate --no-net openbox.metainfo.xml" in block
+    assert "desktop-file-validate packaging/openbox.desktop" in block
+    assert "appstreamcli validate --no-net packaging/openbox.metainfo.xml" in block
     print("  CI desktop-appstream job: ok")
 
 
@@ -532,7 +532,7 @@ def test_flatpak_validate_subprocess():
                 "--dry-run",
                 "--force-clean",
                 "/tmp/ob-flatpak-dry",
-                str(ROOT / "io.openbox.GameLauncher.yml"),
+                str(ROOT / "packaging/io.openbox.GameLauncher.yml"),
             ],
             check=True,
         )
@@ -546,7 +546,7 @@ def test_flatpak_validate_subprocess():
         print("  Flatpak dry-run validator: skipped (appstreamcli not installed)")
         return
     subprocess.run(
-        ["appstreamcli", "validate", "--no-net", str(ROOT / "openbox.metainfo.xml")],
+        ["appstreamcli", "validate", "--no-net", str(ROOT / "packaging/openbox.metainfo.xml")],
         check=True,
     )
     print("  Flatpak dry-run validator: ok")
@@ -554,12 +554,12 @@ def test_flatpak_validate_subprocess():
 
 def test_ci_flatpak_validate_job():
     block = _ci_job_block("flatpak-validate")
-    assert "flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml" in block
+    assert "flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry packaging/io.openbox.GameLauncher.yml" in block
     print("  CI flatpak-validate job: ok")
 
 
 def test_flatpak_manifest():
-    manifest = ROOT / "io.openbox.GameLauncher.yml"
+    manifest = ROOT / "packaging/io.openbox.GameLauncher.yml"
     assert manifest.exists(), "missing Flatpak manifest"
     content = manifest.read_text(encoding="utf-8")
     assert "app-id: io.openbox.GameLauncher" in content
@@ -599,7 +599,7 @@ def test_release_flatpak_workflow():
 
 
 def test_desktop_entry():
-    desktop = ROOT / "openbox.desktop"
+    desktop = ROOT / "packaging/openbox.desktop"
     content = desktop.read_text(encoding="utf-8")
     assert "Name=OpenBox Game Launcher" in content
     assert "Icon=io.openbox.GameLauncher" in content
@@ -610,7 +610,7 @@ def test_desktop_entry():
 
 
 def test_metainfo():
-    xml = ROOT / "openbox.metainfo.xml"
+    xml = ROOT / "packaging/openbox.metainfo.xml"
     content = xml.read_text(encoding="utf-8")
     # The file must parse. appstreamcli and flatpak-builder are the CI gates
     # that catch malformed markup, but they only run on Linux runners, so the
@@ -655,7 +655,7 @@ def test_legal_policy():
 
 def test_version_consistency():
     from updates import VERSION
-    metainfo = ROOT / "openbox.metainfo.xml"
+    metainfo = ROOT / "packaging/openbox.metainfo.xml"
     content = metainfo.read_text(encoding="utf-8")
     assert f'version="{VERSION}"' in content, f"Version mismatch: updates={VERSION}"
     parity = (_doc_path("PARITY.md")).read_text(encoding="utf-8")

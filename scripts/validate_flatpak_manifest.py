@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = ROOT / "io.openbox.GameLauncher.yml"
+MANIFEST = ROOT / "packaging/io.openbox.GameLauncher.yml"
 
 REQUIRED_SNIPPETS = (
     "app-id: io.openbox.GameLauncher",

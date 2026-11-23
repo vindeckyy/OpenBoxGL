@@ -13,7 +13,7 @@ PYTHON_SOURCES = $(shell sed '/^[[:space:]]*#/d;/^[[:space:]]*$$/d' runtime_modu
 PYTHON ?= python3
 
 
-DATA_FILES = index.html openbox.svg openbox.metainfo.xml LICENSE assets/openbox-logo.png assets/placeholder-cover.svg assets/mame/scanlines.png assets/shaders/scanlines.slangp
+DATA_FILES = index.html openbox.svg LICENSE assets/openbox-logo.png assets/placeholder-cover.svg assets/mame/scanlines.png assets/shaders/scanlines.slangp
 STATIC_FILES = $(wildcard static/*.js) $(wildcard static/*.css) $(wildcard static/*.svg)
 LOCALE_FILES = $(wildcard locales/*.json)
 NATIVE_HOST = native_host
@@ -115,9 +115,10 @@ install: native-host
 	for f in $(STATIC_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in $(LOCALE_FILES); do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
 	for f in themes/*.css; do install -Dm644 "$$f" "$(DESTDIR)$(SHAREDIR)/$$f"; done
-	install -Dm644 openbox.desktop $(DESTDIR)$(DESKTOPDIR)/io.openbox.GameLauncher.desktop
+	install -Dm644 packaging/openbox.desktop $(DESTDIR)$(DESKTOPDIR)/io.openbox.GameLauncher.desktop
 	install -Dm644 openbox.svg $(DESTDIR)$(ICONDIR)/io.openbox.GameLauncher.svg
-	install -Dm644 openbox.metainfo.xml $(DESTDIR)$(METAINFODIR)/io.openbox.GameLauncher.metainfo.xml
+	install -Dm644 packaging/openbox.metainfo.xml $(DESTDIR)$(METAINFODIR)/io.openbox.GameLauncher.metainfo.xml
+	install -Dm644 packaging/openbox.metainfo.xml $(DESTDIR)$(SHAREDIR)/openbox.metainfo.xml
 	install -Dm644 LICENSE $(DESTDIR)$(LICENSEDIR)/LICENSE
 
 uninstall:

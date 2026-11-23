@@ -396,8 +396,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
-          desktop-file-validate openbox.desktop
-          appstreamcli validate --no-net openbox.metainfo.xml
+          desktop-file-validate packaging/openbox.desktop
+          appstreamcli validate --no-net packaging/openbox.metainfo.xml
 
   flatpak-validate:
     runs-on: ubuntu-latest
@@ -414,7 +414,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak-builder
           if flatpak-builder --help 2>&1 | grep -q -- '--dry-run'; then
-            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry packaging/io.openbox.GameLauncher.yml
           else
             python3 -B scripts/validate_flatpak_manifest.py
           fi

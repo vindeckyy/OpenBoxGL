@@ -66,7 +66,7 @@ def main() -> int:
         print(f"README.md: installer VERSION is {readme_version.group(1) if readme_version else 'missing'}, expected {version}")
         failures.append("README installer VERSION")
 
-    metainfo = (ROOT / "openbox.metainfo.xml").read_text(encoding="utf-8")
+    metainfo = (ROOT / "packaging/openbox.metainfo.xml").read_text(encoding="utf-8")
     latest = re.search(r'<release version="([0-9.]+)"', metainfo)
     if not latest or latest.group(1) != version:
         print(f"openbox.metainfo.xml: latest release is {latest.group(1) if latest else 'missing'}, expected {version}")

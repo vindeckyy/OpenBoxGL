@@ -55,14 +55,14 @@ jobs:
 
       - name: Validate packaging metadata
         run: |
-          desktop-file-validate openbox.desktop
-          if ! appstreamcli validate --no-net openbox.metainfo.xml; then
+          desktop-file-validate packaging/openbox.desktop
+          if ! appstreamcli validate --no-net packaging/openbox.metainfo.xml; then
             python3 -B scripts/validate_flatpak_manifest.py
-            grep -q 'type="homepage"' openbox.metainfo.xml
-            grep -q 'type="bugtracker"' openbox.metainfo.xml
+            grep -q 'type="homepage"' packaging/openbox.metainfo.xml
+            grep -q 'type="bugtracker"' packaging/openbox.metainfo.xml
           fi
           if flatpak-builder --help 2>&1 | grep -q -- '--dry-run'; then
-            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry io.openbox.GameLauncher.yml
+            flatpak-builder --dry-run --force-clean /tmp/ob-flatpak-dry packaging/io.openbox.GameLauncher.yml
           else
             python3 -B scripts/validate_flatpak_manifest.py
           fi
@@ -94,7 +94,7 @@ jobs:
 
       - name: Build Flatpak bundle
         run: |
-          flatpak-builder --force-clean --repo=repo build-dir io.openbox.GameLauncher.yml
+          flatpak-builder --force-clean --repo=repo build-dir packaging/io.openbox.GameLauncher.yml
           test -x build-dir/files/share/openbox/openbox-server
           flatpak build-bundle repo "OpenBox-x86_64.flatpak" io.openbox.GameLauncher --arch=x86_64
 
